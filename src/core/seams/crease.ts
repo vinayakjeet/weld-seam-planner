@@ -1,0 +1,39 @@
+import type { FaceData } from '../mesh/faces'
+import type { MeshModel } from '../mesh/model'
+
+export interface CreaseEdges {
+  edgeIds: Uint32Array
+  dihedralDeg: Float32Array
+}
+
+// Concave manifold edges whose faces turn by at least creaseAngleDeg. Boundary and non-manifold edges are never
+// returned. Concave means face B bends toward the side face A's normal points to: (cB - m) . nA > eps.
+export function extractCreaseEdges(model: MeshModel, faces: FaceData, creaseAngleDeg: number): CreaseEdges {
+  const { edges, mesh, bounds } = model
+  const { normals, centroids } = faces
+  const { positions } = mesh
+  const cosThreshold = Math.cos((creaseAngleDeg * Math.PI) / 180)
+  const epsilon = 1e-6 * bounds.diagonal
+
+  const edgeIds: number[] = []
+  const dihedral: number[] = []
+  for (let e = 0; e < edges.edgeCount; e++) {
+    if (edges.useCount[e] !== 2) continue
+    const fa = edges.faceA[e]! * 3
+    const fb = edges.faceB[e]! * 3
+    const cos = normals[fa]! * normals[fb]! + normals[fa + 1]! * normals[fb + 1]! + normals[fa + 2]! * normals[fb + 2]!
+    if (cos > cosThreshold) continue
+
+    const a = edges.edgeA[e]! * 3
+    const b = edges.edgeB[e]! * 3
+    const outward =
+      (centroids[fb]! - (positions[a]! + positions[b]!) / 2) * normals[fa]! +
+      (centroids[fb + 1]! - (positions[a + 1]! + positions[b + 1]!) / 2) * normals[fa + 1]! +
+      (centroids[fb + 2]! - (positions[a + 2]! + positions[b + 2]!) / 2) * normals[fa + 2]!
+    if (outward <= epsilon) continue
+
+    edgeIds.push(e)
+    dihedral.push((Math.acos(Math.max(-1, cos)) * 180) / Math.PI)
+  }
+  return { edgeIds: Uint32Array.from(edgeIds), dihedralDeg: Float32Array.from(dihedral) }
+}
