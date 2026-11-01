@@ -159,6 +159,41 @@ describe('importBuffer', () => {
   })
 })
 
+describe('unexpected failures are shown, never left on the loading bar', () => {
+  const unreadable = <T>() => (async () => undefined as unknown as T)
+
+  it('importBuffer: a result the app cannot read becomes an error, not a stuck bar', async () => {
+    await importBuffer(buffer(), 'a.stl', fakeClient({ loadStl: unreadable<LoadOutcome>() }))
+    expectErrorState()
+  })
+
+  it('chooseUnits: a result the app cannot read becomes an error', async () => {
+    useStore.setState({ importState: { phase: 'needs-units', fileName: 'x.stl', maxDimension: 7, guess: 'in' } })
+    await chooseUnits('in', fakeClient({ setUnits: unreadable<LoadOutcome>() }))
+    expectErrorState()
+  })
+
+  it('runDetect: a result the app cannot read becomes an error and clears the busy flag', async () => {
+    await runDetect({ creaseAngleDeg: 30 }, fakeClient({ detect: async () => ({ status: 'ok', ms: 1 }) as unknown as DetectOutcome }))
+    expectErrorState()
+    expect(state().detectBusy).toBe(false)
+  })
+
+  it('importFile and importSample: an unreadable result becomes an error', async () => {
+    const client = fakeClient({ loadStl: unreadable<LoadOutcome>() })
+    await importFile({ name: 'a.stl', arrayBuffer: async () => buffer() }, client)
+    expectErrorState()
+    resetStore()
+    await importSample(readManifest().samples[0]!, client, async () => new Response(buffer()))
+    expectErrorState()
+  })
+
+  it('names the problem as unexpected rather than blaming the worker', async () => {
+    await importBuffer(buffer(), 'a.stl', fakeClient({ loadStl: unreadable<LoadOutcome>() }))
+    expect(expectErrorState().what).toMatch(/unexpected/i)
+  })
+})
+
 describe('runDetect', () => {
   it('keeps the result of the newest call when an older call resolves last', async () => {
     const first = deferred<DetectOutcome>()

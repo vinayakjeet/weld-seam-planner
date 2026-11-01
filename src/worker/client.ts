@@ -1,25 +1,141 @@
 import { proxy, transfer, wrap, type Endpoint } from 'comlink'
-import type { GeometryApi } from './geometry.api'
+import type { DetectOutcome, GeometryApi, LoadOutcome, Progress, UserError } from './geometry.api'
 
 export type GeometryClient = GeometryApi
 
+export const DEFAULT_TIMEOUT_MS = 30_000
+
+export interface ClientOptions {
+  // A call fails when the worker sends nothing for this long. Progress counts as a reply, so a slow load is not cut off.
+  timeoutMs?: number
+  // Settles with the browser's description when the worker is dead (script failed to load, uncaught error).
+  failure?: Promise<string>
+  // Called when a call fails because the worker is silent or dead, so the owner can replace it.
+  onFailure?: () => void
+}
+
+type Failed = { status: 'error'; error: UserError }
+
+function failed(what: string, why: string, next: string): Failed {
+  return { status: 'error', error: { what, why, next } }
+}
+
+function duration(ms: number): string {
+  return ms >= 1000 ? `${Math.round(ms / 1000)} seconds` : `${ms} ms`
+}
+
+const SKIPPED = Symbol('skipped')
+
+// Always settles: with the worker's answer, or with a readable error if it is silent, dead or throws.
+function supervise<T>(options: ClientOptions, doing: string, run: (activity: () => void) => Promise<T>): Promise<T | Failed> {
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
+  return new Promise((resolve) => {
+    let done = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const finish = (value: T | Failed, workerLost = false) => {
+      if (done) return
+      done = true
+      clearTimeout(timer)
+      if (workerLost) options.onFailure?.()
+      resolve(value)
+    }
+    const activity = () => {
+      if (done) return
+      clearTimeout(timer)
+      timer = setTimeout(
+        () =>
+          finish(
+            failed(
+              'The geometry worker did not answer.',
+              `Nothing came back within ${duration(timeoutMs)} while ${doing}, so the background worker is stuck or has crashed.`,
+              'Load the file again. If it keeps happening, try a smaller file or reload the page.',
+            ),
+            true,
+          ),
+        timeoutMs,
+      )
+    }
+    activity()
+    void options.failure?.then((detail) =>
+      finish(
+        failed(
+          'The geometry worker stopped.',
+          `The browser reported an error in the background worker: ${detail}`,
+          'Reload the page and load the file again. If it keeps happening, try another browser.',
+        ),
+        true,
+      ),
+    )
+    Promise.resolve()
+      .then<T | typeof SKIPPED>(() => (done ? SKIPPED : run(activity)))
+      .then(
+        (value) => {
+          if (value !== SKIPPED) finish(value)
+        },
+        (error: unknown) =>
+          finish(
+            failed(
+              'The geometry worker reported an error.',
+              error instanceof Error ? error.message : String(error),
+              'Load the file again. If it keeps happening, reload the page.',
+            ),
+          ),
+      )
+  })
+}
+
+function watching(activity: () => void, onProgress: Progress): Progress {
+  return proxy<Progress>((stage, fraction) => {
+    activity()
+    onProgress(stage, fraction)
+  })
+}
+
 // loadStl moves the file's bytes to the worker, so the ArrayBuffer passed in is empty afterwards.
-export function wrapGeometryApi(endpoint: Endpoint): GeometryClient {
+export function wrapGeometryApi(endpoint: Endpoint, options: ClientOptions = {}): GeometryClient {
   const remote = wrap<GeometryApi>(endpoint)
   return {
-    loadStl: (buffer, name, onProgress) => remote.loadStl(transfer(buffer, [buffer]), name, proxy(onProgress)),
-    setUnits: (units, onProgress) => remote.setUnits(units, proxy(onProgress)),
-    detect: (settings, onProgress) => remote.detect(settings, proxy(onProgress)),
+    loadStl: (buffer, name, onProgress) =>
+      supervise<LoadOutcome>(options, 'reading the file', (activity) =>
+        remote.loadStl(transfer(buffer, [buffer]), name, watching(activity, onProgress)),
+      ),
+    setUnits: (units, onProgress) =>
+      supervise<LoadOutcome>(options, 'applying the unit choice', (activity) => remote.setUnits(units, watching(activity, onProgress))),
+    detect: (settings, onProgress) =>
+      supervise<DetectOutcome>(options, 'detecting seams', (activity) => remote.detect(settings, watching(activity, onProgress))),
   }
 }
 
-export function createGeometryClient(): GeometryClient {
-  return wrapGeometryApi(new Worker(new URL('./geometry.worker.ts', import.meta.url), { type: 'module' }))
+export function watchWorker(target: EventTarget): Promise<string> {
+  return new Promise((resolve) => {
+    target.addEventListener('error', (event) => {
+      const { message } = event as Partial<ErrorEvent>
+      resolve(message || 'the worker script could not be loaded or crashed without a message')
+    })
+    target.addEventListener('messageerror', () => resolve('the worker sent data the browser could not read'))
+  })
+}
+
+// A replaced worker starts empty: the part it held is gone, so the file has to be loaded again.
+export function createGeometryClient(onDead?: () => void): GeometryClient {
+  const worker = new Worker(new URL('./geometry.worker.ts', import.meta.url), { type: 'module' })
+  return wrapGeometryApi(worker, {
+    failure: watchWorker(worker),
+    onFailure: () => {
+      worker.terminate()
+      onDead?.()
+    },
+  })
 }
 
 let shared: GeometryClient | null = null
 
 export function getGeometryClient(): GeometryClient {
-  shared ??= createGeometryClient()
+  if (!shared) {
+    const client = createGeometryClient(() => {
+      if (shared === client) shared = null
+    })
+    shared = client
+  }
   return shared
 }

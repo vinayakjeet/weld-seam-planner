@@ -33,6 +33,25 @@ function workerFailure(error: unknown): UserError {
   }
 }
 
+function unexpectedFailure(error: unknown): UserError {
+  const detail = error instanceof Error ? error.message : String(error)
+  return {
+    what: 'Something unexpected went wrong while loading the part.',
+    why: `The app could not make sense of what happened next (${detail}).`,
+    next: 'Load the file again. If it keeps happening, reload the page.',
+  }
+}
+
+// Last line of defence: whatever a flow throws ends up in the error banner instead of a bar that never finishes.
+async function guarded(work: () => Promise<void>): Promise<void> {
+  try {
+    await work()
+  } catch (error) {
+    useStore.setState({ detectBusy: false })
+    showError(unexpectedFailure(error))
+  }
+}
+
 async function attempt<T extends { status: string }>(work: () => Promise<T>): Promise<T | { status: 'error'; error: UserError }> {
   try {
     return await work()
@@ -82,56 +101,64 @@ async function applyLoad(outcome: LoadOutcome, fileName: string, client: Geometr
 
 // The buffer is handed to the worker, so it is empty once this call returns.
 export async function importBuffer(buffer: ArrayBuffer, name: string, client: GeometryClient): Promise<void> {
-  const generation = ++importGeneration
-  useStore.setState({ importState: { phase: 'loading', label: STAGE_LABELS.read, fraction: 0 } })
-  const outcome = await attempt(() => client.loadStl(buffer, name, loadingProgress(generation)))
-  await applyLoad(outcome, name, client)
+  await guarded(async () => {
+    const generation = ++importGeneration
+    useStore.setState({ importState: { phase: 'loading', label: STAGE_LABELS.read, fraction: 0 } })
+    const outcome = await attempt(() => client.loadStl(buffer, name, loadingProgress(generation)))
+    await applyLoad(outcome, name, client)
+  })
 }
 
 // Reading a large file takes time, so the bar shows from the first moment rather than after the bytes arrive.
 export async function importFile(file: Pick<File, 'name' | 'arrayBuffer'>, client: GeometryClient): Promise<void> {
-  useStore.setState({ importState: { phase: 'loading', label: STAGE_LABELS.read, fraction: 0 } })
-  let buffer: ArrayBuffer
-  try {
-    buffer = await file.arrayBuffer()
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error)
-    showError({
-      what: `${file.name} could not be read.`,
-      why: `The browser refused to give the app the file's contents (${detail}).`,
-      next: 'Check that the file still exists and is not open in another program, then choose it again.',
-    })
-    return
-  }
-  await importBuffer(buffer, file.name, client)
+  await guarded(async () => {
+    useStore.setState({ importState: { phase: 'loading', label: STAGE_LABELS.read, fraction: 0 } })
+    let buffer: ArrayBuffer
+    try {
+      buffer = await file.arrayBuffer()
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      showError({
+        what: `${file.name} could not be read.`,
+        why: `The browser refused to give the app the file's contents (${detail}).`,
+        next: 'Check that the file still exists and is not open in another program, then choose it again.',
+      })
+      return
+    }
+    await importBuffer(buffer, file.name, client)
+  })
 }
 
 export async function chooseUnits(units: KnownUnits, client: GeometryClient): Promise<void> {
-  const { importState } = useStore.getState()
-  if (importState.phase !== 'needs-units') return
-  const generation = ++importGeneration
-  useStore.setState({ importState: { phase: 'loading', label: STAGE_LABELS.weld, fraction: 0 } })
-  const outcome = await attempt(() => client.setUnits(units, loadingProgress(generation)))
-  await applyLoad(outcome, importState.fileName, client)
+  await guarded(async () => {
+    const { importState } = useStore.getState()
+    if (importState.phase !== 'needs-units') return
+    const generation = ++importGeneration
+    useStore.setState({ importState: { phase: 'loading', label: STAGE_LABELS.weld, fraction: 0 } })
+    const outcome = await attempt(() => client.setUnits(units, loadingProgress(generation)))
+    await applyLoad(outcome, importState.fileName, client)
+  })
 }
 
 // Never touches statusById: accepted seams that this result lacks stay accepted and return with the settings.
 export async function runDetect(settings: DetectSettings, client: GeometryClient): Promise<void> {
-  const request = ++detectRequest
-  useStore.setState({ detectBusy: true })
-  const outcome = await attempt(() => client.detect(settings, () => {}))
-  if (request !== detectRequest) return
-  if (outcome.status === 'error') {
-    useStore.setState({ detectBusy: false, importState: { phase: 'error', error: outcome.error } })
-    return
-  }
-  const { selectedId, hoverId } = useStore.getState()
-  const ids = new Set(outcome.seams.map((seam) => seam.id))
-  useStore.setState({
-    seams: outcome.seams,
-    detectBusy: false,
-    selectedId: selectedId !== null && ids.has(selectedId) ? selectedId : null,
-    hoverId: hoverId !== null && ids.has(hoverId) ? hoverId : null,
+  await guarded(async () => {
+    const request = ++detectRequest
+    useStore.setState({ detectBusy: true })
+    const outcome = await attempt(() => client.detect(settings, () => {}))
+    if (request !== detectRequest) return
+    if (outcome.status === 'error') {
+      useStore.setState({ detectBusy: false, importState: { phase: 'error', error: outcome.error } })
+      return
+    }
+    const { selectedId, hoverId } = useStore.getState()
+    const ids = new Set(outcome.seams.map((seam) => seam.id))
+    useStore.setState({
+      seams: outcome.seams,
+      detectBusy: false,
+      selectedId: selectedId !== null && ids.has(selectedId) ? selectedId : null,
+      hoverId: hoverId !== null && ids.has(hoverId) ? hoverId : null,
+    })
   })
 }
 
@@ -193,28 +220,30 @@ export async function fetchManifest(fetchFn: FetchFn): Promise<ManifestOutcome> 
 }
 
 export async function importSample(entry: SampleEntry, client: GeometryClient, fetchFn: FetchFn): Promise<void> {
-  useStore.setState({ importState: { phase: 'loading', label: 'Downloading sample', fraction: 0 } })
-  const url = `${SAMPLES_URL}${entry.file}`
-  let buffer: ArrayBuffer
-  try {
-    const response = await fetchFn(url)
-    if (!response.ok) {
+  await guarded(async () => {
+    useStore.setState({ importState: { phase: 'loading', label: 'Downloading sample', fraction: 0 } })
+    const url = `${SAMPLES_URL}${entry.file}`
+    let buffer: ArrayBuffer
+    try {
+      const response = await fetchFn(url)
+      if (!response.ok) {
+        showError({
+          what: `The sample "${entry.name}" could not be downloaded.`,
+          why: `The server answered ${response.status} for ${url}.`,
+          next: 'Reload the page and try again, or choose your own STL file.',
+        })
+        return
+      }
+      buffer = await response.arrayBuffer()
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
       showError({
         what: `The sample "${entry.name}" could not be downloaded.`,
-        why: `The server answered ${response.status} for ${url}.`,
-        next: 'Reload the page and try again, or choose your own STL file.',
+        why: `The request for ${url} failed (${detail}).`,
+        next: 'Check your connection, then try again or choose your own STL file.',
       })
       return
     }
-    buffer = await response.arrayBuffer()
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error)
-    showError({
-      what: `The sample "${entry.name}" could not be downloaded.`,
-      why: `The request for ${url} failed (${detail}).`,
-      next: 'Check your connection, then try again or choose your own STL file.',
-    })
-    return
-  }
-  await importBuffer(buffer, entry.file, client)
+    await importBuffer(buffer, entry.file, client)
+  })
 }
