@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "samples": [
+    {
+      "id": "t-joint-merged",
+      "file": "t-joint-merged.stl",
+      "name": "T-joint (merged)",
+      "description": "T-joint as one merged body: plate and web fused, two concave seams",
+      "units": "mm",
+      "bodies": 1,
+      "expectedCreaseSeams": 2
+    },
+    {
+      "id": "t-joint-assembly",
+      "file": "t-joint-assembly.stl",
+      "name": "T-joint (assembly)",
+      "description": "T-joint as two separate touching bodies: no creases until contact detection exists",
+      "units": "mm",
+      "bodies": 2,
+      "expectedCreaseSeams": 0
+    },
+    {
+      "id": "t-joint-inch",
+      "file": "t-joint-inch.stl",
+      "name": "T-joint (inch)",
+      "description": "T-joint modelled in inches: triggers the units prompt",
+      "units": "in",
+      "bodies": 1,
+      "expectedCreaseSeams": 2
+    },
+    {
+      "id": "t-joint-ascii",
+      "file": "t-joint-ascii.stl",
+      "name": "T-joint (ASCII)",
+      "description": "T-joint saved as an ASCII STL file",
+      "units": "mm",
+      "bodies": 1,
+      "expectedCreaseSeams": 2
+    },
+    {
+      "id": "l-bracket-gussets",
+      "file": "l-bracket-gussets.stl",
+      "name": "L-bracket with gussets",
+      "description": "L-bracket with three triangular gussets: many short seams",
+      "units": "mm",
+      "bodies": 1,
+      "expectedCreaseSeams": 16
+    },
+    {
+      "id": "box-beam",
+      "file": "box-beam.stl",
+      "name": "Box girder",
+      "description": "Welded box girder: 4 outside fillets, 4 inside corners only reachable from the open ends",
+      "units": "mm",
+      "bodies": 1,
+      "expectedCreaseSeams": 8
+    },
+    {
+      "id": "pipe-on-plate",
+      "file": "pipe-on-plate.stl",
+      "name": "Pipe on plate",
+      "description": "Hollow pipe welded to a plate: one outer loop and one bore loop",
+      "units": "mm",
+      "bodies": 1,
+      "expectedCreaseSeams": 2
+    },
+    {
+      "id": "double-bottom-cell",
+      "file": "double-bottom-cell.stl",
+      "name": "Double-bottom cell",
+      "description": "Seven separate plates, girders and stiffened floors in exact contact: most seams need contact detection",
+      "units": "mm",
+      "bodies": 7,
+      "expectedCreaseSeams": 6
+    }
+  ]
+}
