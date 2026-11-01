@@ -1,0 +1,104 @@
+import { describe, expect, it } from 'vitest'
+import { buildMeshModel } from '../../../src/core/mesh/model'
+import { DEFAULT_DETECT_SETTINGS, detectSeams } from '../../../src/core/seams/detect'
+import { loadSampleModel, loadSoup, transformSoup } from '../helpers/models'
+import { readManifest } from '../helpers/samples'
+
+const detect = (id: string, creaseAngleDeg = DEFAULT_DETECT_SETTINGS.creaseAngleDeg) =>
+  detectSeams(loadSampleModel(id), { creaseAngleDeg })
+
+describe('detectSeams against the hand-derived manifest', () => {
+  it.each(readManifest().samples.map((s) => [s.id, s.expectedCreaseSeams] as const))(
+    '%s yields %i crease seams',
+    (id, expected) => {
+      expect(detect(id)).toHaveLength(expected)
+    },
+  )
+})
+
+describe('detectSeams on single samples', () => {
+  it('gives the T-joint two 200 mm fillets at 90 degrees, labelled by length', () => {
+    const seams = detect('t-joint-merged')
+    expect(seams.map((s) => s.label)).toEqual(['S1', 'S2'])
+    for (const seam of seams) {
+      expect(seam.source).toBe('crease')
+      expect(seam.jointType).toBe('fillet')
+      expect(seam.closed).toBe(false)
+      expect(seam.lengthMm).toBeCloseTo(200, 0)
+      expect(Math.abs(seam.lengthMm - 200)).toBeLessThan(0.5)
+      expect(Math.abs(seam.openingAngleDeg - 90)).toBeLessThan(1)
+      expect(seam.confidence).toBeGreaterThan(0.95)
+      expect(seam.points[0]!.s).toBe(0)
+    }
+  })
+
+  it('gives the box girder 8 open seams of 600 mm at 90 degrees', () => {
+    const seams = detect('box-beam')
+    expect(seams).toHaveLength(8)
+    for (const seam of seams) {
+      expect(seam.closed).toBe(false)
+      expect(Math.abs(seam.lengthMm - 600)).toBeLessThan(0.5)
+      expect(Math.abs(seam.openingAngleDeg - 90)).toBeLessThan(1)
+    }
+  })
+
+  it('gives the pipe an outer and a bore loop within 1% of 2 pi r', () => {
+    const [outer, bore] = detect('pipe-on-plate')
+    expect(outer!.closed).toBe(true)
+    expect(bore!.closed).toBe(true)
+    expect(Math.abs(outer!.lengthMm / (2 * Math.PI * 25) - 1)).toBeLessThan(0.01)
+    expect(Math.abs(bore!.lengthMm / (2 * Math.PI * 19) - 1)).toBeLessThan(0.01)
+    for (const seam of [outer!, bore!]) expect(Math.abs(seam.openingAngleDeg - 90)).toBeLessThan(1)
+  })
+
+  it('keeps the gusseted bracket at 16 seams across the whole slider range', () => {
+    for (const angle of [15, 30, 60]) expect(detect('l-bracket-gussets', angle)).toHaveLength(16)
+    const lengths = detect('l-bracket-gussets').map((s) => Math.round(s.lengthMm))
+    expect(lengths).toEqual([...Array(12).fill(50), 28, 28, 20, 20])
+  })
+
+  it('drops seams shorter than 10 mm', () => {
+    const tiny = buildMeshModel(transformSoup(loadSoup('t-joint-merged'), { scale: 0.04 }), 1)
+    expect(detectSeams(tiny, DEFAULT_DETECT_SETTINGS)).toHaveLength(0)
+  })
+
+  it('finds nothing on separate convex bodies', () => {
+    expect(detect('t-joint-assembly')).toEqual([])
+  })
+})
+
+describe('detectSeams ids', () => {
+  it('are unique, prefixed and identical across runs', () => {
+    const first = detect('l-bracket-gussets').map((s) => s.id)
+    expect(new Set(first).size).toBe(first.length)
+    expect(first.every((id) => id.startsWith('crease-'))).toBe(true)
+    expect(detect('l-bracket-gussets').map((s) => s.id)).toEqual(first)
+  })
+
+  it('survive a change of crease angle that does not change the seam', () => {
+    expect(detect('t-joint-merged', 25).map((s) => s.id)).toEqual(detect('t-joint-merged', 30).map((s) => s.id))
+  })
+})
+
+describe('detectSeams under transforms', () => {
+  const soup = loadSoup('t-joint-merged')
+  const reference = detectSeams(buildMeshModel(soup, 1), DEFAULT_DETECT_SETTINGS)
+
+  it('still finds 2 seams on a part modelled in metres', () => {
+    const metres = buildMeshModel(transformSoup(soup, { scale: 0.001 }), 1000)
+    expect(detectSeams(metres, DEFAULT_DETECT_SETTINGS)).toHaveLength(2)
+  })
+
+  it('gives the same seams after a 37 degree turn about an arbitrary axis and a 100000 mm move', () => {
+    const moved = transformSoup(soup, {
+      rotate: { axis: [1, 2, 3], angleDeg: 37 },
+      translate: [100000, 100000, 100000],
+    })
+    const seams = detectSeams(buildMeshModel(moved, 1), DEFAULT_DETECT_SETTINGS)
+    expect(seams).toHaveLength(reference.length)
+    seams.forEach((seam, i) => {
+      expect(Math.abs(seam.lengthMm - reference[i]!.lengthMm)).toBeLessThan(0.1)
+      expect(Math.abs(seam.openingAngleDeg - 90)).toBeLessThan(1)
+    })
+  })
+})
