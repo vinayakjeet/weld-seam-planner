@@ -23,6 +23,9 @@ const STAGE_LABELS: Record<Stage, string> = {
 let importGeneration = 0
 // Each detect call takes a number; only the newest call's result is applied.
 let detectRequest = 0
+let scheduledDetect: ReturnType<typeof setTimeout> | undefined
+
+export const DETECT_DEBOUNCE_MS = 250
 
 function workerFailure(error: unknown): UserError {
   const detail = error instanceof Error ? error.message : String(error)
@@ -96,6 +99,8 @@ async function applyLoad(outcome: LoadOutcome, fileName: string, client: Geometr
     activeStep: 'seams',
   })
   useStore.temporal.getState().clear()
+  // A slider change still waiting would run the old angle on the new part.
+  clearTimeout(scheduledDetect)
   await runDetect(DEFAULT_DETECT_SETTINGS, client)
 }
 
@@ -172,6 +177,14 @@ export async function runDetect(settings: DetectSettings, client: GeometryClient
       hoverId: hoverId !== null && ids.has(hoverId) ? hoverId : null,
     })
   })
+}
+
+// For a slider: the readout follows every change, detection runs once the slider has been still for the delay.
+export function scheduleDetect(settings: DetectSettings, client: GeometryClient, delayMs = DETECT_DEBOUNCE_MS): void {
+  if (useStore.getState().part === null) return
+  useStore.getState().setDetectSettings(settings)
+  clearTimeout(scheduledDetect)
+  scheduledDetect = setTimeout(() => void runDetect(settings, client), delayMs)
 }
 
 const MANIFEST_NEXT = 'Reload the page. You can still choose your own STL file.'

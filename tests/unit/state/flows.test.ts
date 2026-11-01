@@ -1,6 +1,16 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SampleEntry } from '../../../src/core/samples/manifest'
-import { chooseUnits, dropFile, fetchManifest, importBuffer, importFile, importSample, runDetect } from '../../../src/state/flows'
+import {
+  chooseUnits,
+  DETECT_DEBOUNCE_MS,
+  dropFile,
+  fetchManifest,
+  importBuffer,
+  importFile,
+  importSample,
+  runDetect,
+  scheduleDetect,
+} from '../../../src/state/flows'
 import { selectStats } from '../../../src/state/selectors'
 import { useStore } from '../../../src/state/store'
 import type { DetectOutcome, LoadOutcome, Progress } from '../../../src/worker/geometry.api'
@@ -445,6 +455,85 @@ describe('dropFile', () => {
     dropFile(undefined, client)
     await Promise.resolve()
     expect(loaded).toEqual([])
+    expect(state().importState).toEqual({ phase: 'idle' })
+  })
+})
+
+describe('scheduleDetect', () => {
+  afterEach(() => vi.useRealTimers())
+
+  function detectRecorder() {
+    const angles: number[] = []
+    const client = fakeClient({
+      loadStl: async () => readyOutcome(),
+      detect: async (settings) => {
+        angles.push(settings.creaseAngleDeg)
+        return detected([seam(`at-${settings.creaseAngleDeg}`)])
+      },
+    })
+    return { client, angles }
+  }
+
+  it('waits 250 ms', () => {
+    expect(DETECT_DEBOUNCE_MS).toBe(250)
+  })
+
+  it('shows the new angle at once and detects once, after the last change settles', async () => {
+    vi.useFakeTimers()
+    const { client, angles } = detectRecorder()
+    useStore.setState({ part: partInfo() })
+
+    scheduleDetect({ creaseAngleDeg: 40 }, client)
+    expect(state().detectSettings.creaseAngleDeg).toBe(40)
+    await vi.advanceTimersByTimeAsync(200)
+    scheduleDetect({ creaseAngleDeg: 45 }, client)
+    expect(state().detectSettings.creaseAngleDeg).toBe(45)
+
+    await vi.advanceTimersByTimeAsync(DETECT_DEBOUNCE_MS - 1)
+    expect(angles).toEqual([])
+    await vi.advanceTimersByTimeAsync(1)
+    expect(angles).toEqual([45])
+    expect(state().seams.map((s) => s.id)).toEqual(['at-45'])
+  })
+
+  it('keeps accepted seams through a round trip of the angle', async () => {
+    vi.useFakeTimers()
+    const client = fakeClient({
+      detect: async (settings) => detected(settings.creaseAngleDeg === 30 ? [seam('a'), seam('b')] : [seam('a')]),
+    })
+    useStore.setState({ part: partInfo(), seams: [seam('a'), seam('b')], statusById: { b: 'accepted' } })
+
+    scheduleDetect({ creaseAngleDeg: 50 }, client)
+    await vi.advanceTimersByTimeAsync(DETECT_DEBOUNCE_MS)
+    expect(state().seams.map((s) => s.id)).toEqual(['a'])
+    expect(selectStats(state()).hiddenAccepted).toBe(1)
+
+    scheduleDetect({ creaseAngleDeg: 30 }, client)
+    await vi.advanceTimersByTimeAsync(DETECT_DEBOUNCE_MS)
+    expect(selectStats(state())).toMatchObject({ accepted: 1, candidates: 1, hiddenAccepted: 0 })
+  })
+
+  it('is cancelled when a new part is loaded, so the old angle is not applied to it', async () => {
+    vi.useFakeTimers()
+    const { client, angles } = detectRecorder()
+    useStore.setState({ part: partInfo() })
+
+    scheduleDetect({ creaseAngleDeg: 55 }, client)
+    await importBuffer(buffer(), 'next.stl', client)
+    expect(angles).toEqual([30])
+    await vi.advanceTimersByTimeAsync(DETECT_DEBOUNCE_MS * 2)
+
+    expect(angles).toEqual([30])
+    expect(state().detectSettings.creaseAngleDeg).toBe(30)
+    expect(state().seams.map((s) => s.id)).toEqual(['at-30'])
+  })
+
+  it('does nothing without a part, because there is nothing to detect on', async () => {
+    vi.useFakeTimers()
+    const { client, angles } = detectRecorder()
+    scheduleDetect({ creaseAngleDeg: 40 }, client)
+    await vi.advanceTimersByTimeAsync(DETECT_DEBOUNCE_MS * 2)
+    expect(angles).toEqual([])
     expect(state().importState).toEqual({ phase: 'idle' })
   })
 })
