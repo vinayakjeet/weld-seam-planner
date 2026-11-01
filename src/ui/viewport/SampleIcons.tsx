@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { ComponentType, ReactNode } from 'react'
 
 // Part outlines are neutral; the weld bead is the only brand-coloured mark,
 // the same rule the viewport uses for accepted seams.
@@ -78,4 +78,26 @@ export function DoubleBottomCellIcon() {
       ])}
     </Frame>
   )
+}
+
+export function GenericPartIcon() {
+  return (
+    <Frame>
+      <rect x="14" y="14" width="68" height="36" />
+      <Bead x={14} y={50} dx={1} dy={-1} size={10} />
+    </Frame>
+  )
+}
+
+// Matched by id prefix so variants of one part (merged, assembly, inch, ascii) share an icon.
+const ICONS_BY_PREFIX: [string, ComponentType][] = [
+  ['t-joint', TJointIcon],
+  ['l-bracket', LBracketIcon],
+  ['box-beam', BoxBeamIcon],
+  ['pipe-on-plate', PipeOnPlateIcon],
+  ['double-bottom-cell', DoubleBottomCellIcon],
+]
+
+export function iconForSample(id: string): ComponentType {
+  return ICONS_BY_PREFIX.find(([prefix]) => id.startsWith(prefix))?.[1] ?? GenericPartIcon
 }

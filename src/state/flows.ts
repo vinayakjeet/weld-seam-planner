@@ -88,6 +88,24 @@ export async function importBuffer(buffer: ArrayBuffer, name: string, client: Ge
   await applyLoad(outcome, name, client)
 }
 
+// Reading a large file takes time, so the bar shows from the first moment rather than after the bytes arrive.
+export async function importFile(file: Pick<File, 'name' | 'arrayBuffer'>, client: GeometryClient): Promise<void> {
+  useStore.setState({ importState: { phase: 'loading', label: STAGE_LABELS.read, fraction: 0 } })
+  let buffer: ArrayBuffer
+  try {
+    buffer = await file.arrayBuffer()
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    showError({
+      what: `${file.name} could not be read.`,
+      why: `The browser refused to give the app the file's contents (${detail}).`,
+      next: 'Check that the file still exists and is not open in another program, then choose it again.',
+    })
+    return
+  }
+  await importBuffer(buffer, file.name, client)
+}
+
 export async function chooseUnits(units: KnownUnits, client: GeometryClient): Promise<void> {
   const { importState } = useStore.getState()
   if (importState.phase !== 'needs-units') return

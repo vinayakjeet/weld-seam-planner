@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { SampleEntry } from '../../../src/core/samples/manifest'
-import { chooseUnits, fetchManifest, importBuffer, importSample, runDetect } from '../../../src/state/flows'
+import { chooseUnits, fetchManifest, importBuffer, importFile, importSample, runDetect } from '../../../src/state/flows'
 import { selectStats } from '../../../src/state/selectors'
 import { useStore } from '../../../src/state/store'
 import type { DetectOutcome, LoadOutcome, Progress } from '../../../src/worker/geometry.api'
@@ -310,5 +310,38 @@ describe('importSample', () => {
       throw new TypeError('offline')
     })
     expectErrorState()
+  })
+})
+
+describe('importFile', () => {
+  it('shows the loading bar while the file is read, then loads it under its own name', async () => {
+    const gate = deferred<ArrayBuffer>()
+    let received: [number, string] | undefined
+    const client = fakeClient({
+      loadStl: async (b, name) => {
+        received = [b.byteLength, name]
+        return readyOutcome({ name })
+      },
+    })
+    const done = importFile({ name: 'bracket.stl', arrayBuffer: () => gate.promise }, client)
+    expect(state().importState).toMatchObject({ phase: 'loading', fraction: 0 })
+    gate.resolve(new ArrayBuffer(3))
+    await done
+    expect(received).toEqual([3, 'bracket.stl'])
+    expect(state().part?.name).toBe('bracket.stl')
+  })
+
+  it('shows a readable error naming the file when it cannot be read', async () => {
+    const file = {
+      name: 'gone.stl',
+      arrayBuffer: async (): Promise<ArrayBuffer> => {
+        throw new DOMException('permission denied', 'NotReadableError')
+      },
+    }
+    await importFile(file, fakeClient())
+    const error = expectErrorState()
+    expect(error.what).toContain('gone.stl')
+    expect(error.why).toContain('permission denied')
+    expect(state().part).toBeNull()
   })
 })
