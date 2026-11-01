@@ -1,3 +1,5 @@
+import { AppShell } from './ui/shell/AppShell'
+
 export function App() {
-  return <main>Weld Seam Planner</main>
+  return <AppShell />
 }
