@@ -1,0 +1,74 @@
+import type { SeamCandidate } from '../../../src/core/seams/detect'
+import { useStore } from '../../../src/state/store'
+import type { DetectOutcome, DisplayData, GeometryApi, LoadOutcome, PartInfo } from '../../../src/worker/geometry.api'
+
+export function resetStore(): void {
+  useStore.setState(useStore.getInitialState(), true)
+  useStore.temporal.getState().clear()
+}
+
+export function seam(id: string, confidence = 0.9, lengthMm = 200): SeamCandidate {
+  return {
+    id,
+    label: id.toUpperCase(),
+    source: 'crease',
+    jointType: 'fillet',
+    confidence,
+    closed: false,
+    lengthMm,
+    openingAngleDeg: 90,
+    points: [],
+  }
+}
+
+export function partInfo(overrides: Partial<PartInfo> = {}): PartInfo {
+  return {
+    name: 'a.stl',
+    triangles: 44,
+    bodies: 1,
+    bbox: { min: [0, 0, 0], max: [200, 120, 90] },
+    sourceUnits: 'mm',
+    scaleToMm: 1,
+    boundaryEdges: 0,
+    nonManifoldEdges: 0,
+    droppedDegenerate: 0,
+    ...overrides,
+  }
+}
+
+export function displayStub(): DisplayData {
+  return {
+    positions: new Float32Array(9),
+    indices: new Uint32Array(3),
+    bvh: { roots: [], index: null, indirectBuffer: null },
+  }
+}
+
+export function readyOutcome(overrides: Partial<PartInfo> = {}): LoadOutcome {
+  return { status: 'ready', part: partInfo(overrides), display: displayStub() }
+}
+
+export function detected(seams: SeamCandidate[]): DetectOutcome {
+  return { status: 'ok', seams, ms: 1 }
+}
+
+export function fakeClient(impl: Partial<GeometryApi> = {}): GeometryApi {
+  return {
+    loadStl: async () => {
+      throw new Error('unexpected loadStl')
+    },
+    setUnits: async () => {
+      throw new Error('unexpected setUnits')
+    },
+    detect: async () => detected([]),
+    ...impl,
+  }
+}
+
+export function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((r) => {
+    resolve = r
+  })
+  return { promise, resolve }
+}
