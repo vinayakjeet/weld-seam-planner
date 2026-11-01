@@ -1,6 +1,5 @@
 import './zUp'
 import { Canvas } from '@react-three/fiber'
-import type { DragEvent } from 'react'
 import { useStore } from '../../state/store'
 import { ErrorBanner } from '../shell/ErrorBanner'
 import { ProgressBar } from '../shell/ProgressBar'
@@ -10,23 +9,10 @@ import { UnitsDialog } from './UnitsDialog'
 
 export function Viewport() {
   const showImport = useStore((s) => s.part === null || s.activeStep === 'import')
-  const setActiveStep = useStore((s) => s.setActiveStep)
-
-  // With the import panel hidden, a dropped file would make the browser navigate away and lose the work. Swallow the
-  // drop and open the panel, which warns before anything is replaced.
-  const onDragOver = (e: DragEvent) => e.preventDefault()
-  const onDrop = (e: DragEvent) => {
-    e.preventDefault()
-    setActiveStep('import')
-  }
+  const overSeam = useStore((s) => s.hoverId !== null)
 
   return (
-    <main
-      aria-label="3D viewport"
-      className="relative min-w-0 flex-1 bg-viewport"
-      onDragOver={showImport ? undefined : onDragOver}
-      onDrop={showImport ? undefined : onDrop}
-    >
+    <main aria-label="3D viewport" className={`relative min-w-0 flex-1 bg-viewport ${overSeam ? 'cursor-pointer' : ''}`}>
       <Canvas
         frameloop="demand"
         camera={{ position: [350, -450, 300], up: [0, 0, 1], near: 1, far: 100000, fov: 40 }}

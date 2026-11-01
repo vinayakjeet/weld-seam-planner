@@ -129,6 +129,18 @@ export async function importFile(file: Pick<File, 'name' | 'arrayBuffer'>, clien
   })
 }
 
+// A file dropped outside the import panel. With a part open the Import step opens instead of loading, because that is
+// where the warning about discarding accepted seams is shown. Nothing starts while a load or a unit question is open.
+export function dropFile(file: Pick<File, 'name' | 'arrayBuffer'> | undefined, client: GeometryClient): void {
+  const { part, activeStep, importState, setActiveStep } = useStore.getState()
+  if (!file || importState.phase === 'loading' || importState.phase === 'needs-units') return
+  if (part !== null && activeStep !== 'import') {
+    setActiveStep('import')
+    return
+  }
+  void importFile(file, client)
+}
+
 export async function chooseUnits(units: KnownUnits, client: GeometryClient): Promise<void> {
   await guarded(async () => {
     const { importState } = useStore.getState()

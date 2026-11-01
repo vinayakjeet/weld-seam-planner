@@ -4,8 +4,10 @@ import { SeamPanel } from '../panels/SeamPanel'
 import { Viewport } from '../viewport/Viewport'
 import { StatusBar } from './StatusBar'
 import { TopBar } from './TopBar'
+import { useDropGuard } from './useDropGuard'
 
 export function AppShell() {
+  useDropGuard()
   return (
     <TooltipProvider>
       <div className="flex h-full flex-col">

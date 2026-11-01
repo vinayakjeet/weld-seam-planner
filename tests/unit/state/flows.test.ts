@@ -1,11 +1,11 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SampleEntry } from '../../../src/core/samples/manifest'
-import { chooseUnits, fetchManifest, importBuffer, importFile, importSample, runDetect } from '../../../src/state/flows'
+import { chooseUnits, dropFile, fetchManifest, importBuffer, importFile, importSample, runDetect } from '../../../src/state/flows'
 import { selectStats } from '../../../src/state/selectors'
 import { useStore } from '../../../src/state/store'
 import type { DetectOutcome, LoadOutcome, Progress } from '../../../src/worker/geometry.api'
 import { readManifest, readSample } from '../helpers/samples'
-import { deferred, detected, fakeClient, readyOutcome, resetStore, seam } from '../helpers/state'
+import { deferred, detected, fakeClient, partInfo, readyOutcome, resetStore, seam } from '../helpers/state'
 
 const state = () => useStore.getState()
 const buffer = () => new ArrayBuffer(16)
@@ -378,5 +378,73 @@ describe('importFile', () => {
     expect(error.what).toContain('gone.stl')
     expect(error.why).toContain('permission denied')
     expect(state().part).toBeNull()
+  })
+})
+
+describe('dropFile', () => {
+  const file = { name: 'dropped.stl', arrayBuffer: async () => new ArrayBuffer(4) }
+
+  function loadingClient() {
+    const loaded: string[] = []
+    const client = fakeClient({
+      loadStl: async (_b, name) => {
+        loaded.push(name)
+        return readyOutcome({ name })
+      },
+    })
+    return { client, loaded }
+  }
+
+  it('loads the file when no part is open', async () => {
+    const { client, loaded } = loadingClient()
+    dropFile(file, client)
+    await vi.waitFor(() => expect(state().part?.name).toBe('dropped.stl'))
+    expect(loaded).toEqual(['dropped.stl'])
+  })
+
+  it('opens the Import step instead of replacing a part the user is working on', async () => {
+    const { client, loaded } = loadingClient()
+    useStore.setState({ part: partInfo(), activeStep: 'seams' })
+    dropFile(file, client)
+    await Promise.resolve()
+    expect(state().activeStep).toBe('import')
+    expect(loaded).toEqual([])
+    expect(state().part?.name).toBe('a.stl')
+  })
+
+  it('loads the file when the Import step is already open', async () => {
+    const { client, loaded } = loadingClient()
+    useStore.setState({ part: partInfo(), activeStep: 'import' })
+    dropFile(file, client)
+    await vi.waitFor(() => expect(state().part?.name).toBe('dropped.stl'))
+    expect(loaded).toEqual(['dropped.stl'])
+  })
+
+  it('loads the file when the last import ended in an error', async () => {
+    const { client, loaded } = loadingClient()
+    useStore.setState({ importState: { phase: 'error', error: { what: 'a', why: 'b', next: 'c' } } })
+    dropFile(file, client)
+    await vi.waitFor(() => expect(state().part?.name).toBe('dropped.stl'))
+    expect(loaded).toEqual(['dropped.stl'])
+  })
+
+  it.each([
+    ['loading', { phase: 'loading', label: 'Reading file', fraction: 0.2 }],
+    ['waiting for a unit answer', { phase: 'needs-units', fileName: 'x.stl', maxDimension: 7, guess: 'in' }],
+  ] as const)('ignores a drop while %s', async (_name, importState) => {
+    const { client, loaded } = loadingClient()
+    useStore.setState({ importState })
+    dropFile(file, client)
+    await Promise.resolve()
+    expect(loaded).toEqual([])
+    expect(state().importState).toEqual(importState)
+  })
+
+  it('does nothing for a drop without a file', async () => {
+    const { client, loaded } = loadingClient()
+    dropFile(undefined, client)
+    await Promise.resolve()
+    expect(loaded).toEqual([])
+    expect(state().importState).toEqual({ phase: 'idle' })
   })
 })

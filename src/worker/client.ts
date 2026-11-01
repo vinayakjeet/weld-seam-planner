@@ -1,5 +1,6 @@
 import { proxy, transfer, wrap, type Endpoint } from 'comlink'
 import type { DetectOutcome, GeometryApi, LoadOutcome, Progress, UserError } from './geometry.api'
+import { createRecoveringClient } from './recovery'
 
 export type GeometryClient = GeometryApi
 
@@ -116,7 +117,7 @@ export function watchWorker(target: EventTarget): Promise<string> {
   })
 }
 
-// A replaced worker starts empty: the part it held is gone, so the file has to be loaded again.
+// One browser worker. When it stops answering it is terminated and onDead is called; it does not come back by itself.
 export function createGeometryClient(onDead?: () => void): GeometryClient {
   const worker = new Worker(new URL('./geometry.worker.ts', import.meta.url), { type: 'module' })
   return wrapGeometryApi(worker, {
@@ -130,12 +131,8 @@ export function createGeometryClient(onDead?: () => void): GeometryClient {
 
 let shared: GeometryClient | null = null
 
+// Replaces dead workers and re-sends the loaded file to the new one, so the part survives a crash or timeout.
 export function getGeometryClient(): GeometryClient {
-  if (!shared) {
-    const client = createGeometryClient(() => {
-      if (shared === client) shared = null
-    })
-    shared = client
-  }
+  shared ??= createRecoveringClient(createGeometryClient)
   return shared
 }
