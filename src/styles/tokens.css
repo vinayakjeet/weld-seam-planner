@@ -1,0 +1,13 @@
+:root {
+  --brand-primary: #3B82F6;    /* selection, active step, primary button */
+  --brand-secondary: #93C5FD;  /* rare highlights only */
+  --brand-font-display: system-ui, sans-serif;  /* logo area, headings */
+  --brand-font-ui: system-ui, sans-serif;       /* only if legible at 13px */
+
+  --bg-0: #0E1116;  --bg-1: #151A21;  --bg-2: #1C232C;   /* app chrome, panels, inputs */
+  --line: #2A333F;  --text-0: #E6EAF0; --text-1: #A7B0BC; --text-2: #6B7685;
+  --viewport-bg: #10141A; --part: #8A939E; --part-edge: #3B4552;
+  --seam-candidate: #6B7685; --seam-accepted: var(--brand-primary); --seam-hover: #FFFFFF;
+  --ok: #3FB950; --warn: #D29922; --err: #F85149; --info: #58A6FF;
+  --num: 'JetBrains Mono', ui-monospace, monospace;    /* tabular numbers */
+}

@@ -1,0 +1,51 @@
+@import "tailwindcss";
+@import "./tokens.css";
+
+@theme inline {
+  --color-brand: var(--brand-primary);
+  --color-brand-secondary: var(--brand-secondary);
+  --color-surface-0: var(--bg-0);
+  --color-surface-1: var(--bg-1);
+  --color-surface-2: var(--bg-2);
+  --color-line: var(--line);
+  --color-ink-0: var(--text-0);
+  --color-ink-1: var(--text-1);
+  --color-ink-2: var(--text-2);
+  --color-viewport: var(--viewport-bg);
+  --color-part: var(--part);
+  --color-part-edge: var(--part-edge);
+  --color-seam-candidate: var(--seam-candidate);
+  --color-seam-accepted: var(--seam-accepted);
+  --color-seam-hover: var(--seam-hover);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-err: var(--err);
+  --color-info: var(--info);
+  --font-display: var(--brand-font-display);
+  --font-sans: var(--brand-font-ui);
+  --font-mono: var(--num);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--bg-0);
+    color: var(--text-0);
+    font-family: var(--brand-font-ui);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+
+  .num {
+    font-family: var(--num);
+    font-variant-numeric: tabular-nums;
+  }
+}
