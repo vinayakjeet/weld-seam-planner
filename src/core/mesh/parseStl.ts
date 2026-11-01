@@ -1,4 +1,11 @@
-export type StlErrorCode = 'empty' | 'too-short' | 'size-mismatch' | 'not-stl' | 'no-triangles' | 'non-finite'
+export type StlErrorCode =
+  | 'empty'
+  | 'too-short'
+  | 'size-mismatch'
+  | 'not-stl'
+  | 'no-triangles'
+  | 'non-finite'
+  | 'no-valid-triangles'
 
 export class StlError extends Error {
   code: StlErrorCode

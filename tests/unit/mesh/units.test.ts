@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { guessUnits } from '../../../src/core/mesh/units'
+import { guessUnits, scaleToMm } from '../../../src/core/mesh/units'
+
+describe('scaleToMm', () => {
+  it('converts millimetres, inches and metres to millimetres', () => {
+    expect(scaleToMm('mm')).toBe(1)
+    expect(scaleToMm('in')).toBe(25.4)
+    expect(scaleToMm('m')).toBe(1000)
+  })
+})
 
 describe('guessUnits', () => {
   it('treats parts of 10 or more across as millimetres', () => {
