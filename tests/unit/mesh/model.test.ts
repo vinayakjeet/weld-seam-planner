@@ -58,4 +58,17 @@ describe('buildMeshModel', () => {
     expect(stl.code).toBe('no-valid-triangles')
     for (const part of [stl.what, stl.why, stl.next]) expect(part.length).toBeGreaterThan(0)
   })
+
+  it('announces the weld stage, then the topology stage, each before its work starts', () => {
+    const stages: string[] = []
+    const soup = soupOf(cubeTriangles([0, 0, 0], [10, 10, 10]))
+    buildMeshModel(soup, 1, (stage) => stages.push(stage))
+    expect(stages).toEqual(['weld', 'topology'])
+  })
+
+  it('announces only the weld stage when nothing survives welding', () => {
+    const stages: string[] = []
+    expect(() => buildMeshModel(soupOf([[1, 1, 1, 1, 1, 1, 1, 1, 1]]), 1, (stage) => stages.push(stage))).toThrow(StlError)
+    expect(stages).toEqual(['weld'])
+  })
 })

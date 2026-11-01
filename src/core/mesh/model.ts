@@ -12,8 +12,12 @@ export interface MeshModel {
   droppedDegenerate: number
 }
 
+export type ModelStage = 'weld' | 'topology'
+
 // soup is the parsed triangle soup in file units; scaleToMm converts it before anything is measured.
-export function buildMeshModel(soup: Float32Array, scaleToMm: number): MeshModel {
+// onStage fires before each slow step so a caller can show honest progress.
+export function buildMeshModel(soup: Float32Array, scaleToMm: number, onStage?: (stage: ModelStage) => void): MeshModel {
+  onStage?.('weld')
   const scaled = scaleToMm === 1 ? soup : soup.map((x) => x * scaleToMm)
   const { mesh, droppedDegenerate } = weldVertices(scaled)
   if (mesh.triangleCount === 0) {
@@ -24,6 +28,7 @@ export function buildMeshModel(soup: Float32Array, scaleToMm: number): MeshModel
       'Check the part for zero thickness geometry in your CAD tool, then export it again.',
     )
   }
+  onStage?.('topology')
   return {
     mesh,
     bounds: computeBounds(mesh.positions),
