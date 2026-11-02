@@ -8,6 +8,7 @@ import { contactTolerance, findContactEdges } from './contact'
 import { extractCreaseEdges, type CreaseEdges } from './crease'
 import { buildSeamPoints, pointsFromPolyline, type NormalsOf, type SeamPoint } from './frames'
 import { chainSegments, findIntersectionSegments } from './intersect'
+import { extractNonManifoldWedges } from './nonManifold'
 
 export interface DetectSettings {
   creaseAngleDeg: number
@@ -49,6 +50,8 @@ export function detectSeams(model: MeshModel, settings: DetectSettings, context:
   const creases = extractCreaseEdges(model, faces, settings.creaseAngleDeg)
   const found: RawSeam[] = seamsFromEdges('crease', creases, model, faces, minLength)
 
+  found.push(...nonManifoldSeams(model, faces, settings, minLength))
+
   if (model.bodies.count > 1) {
     const bvhs = context.bodyBvhs ?? buildBodyBvhs(model)
     found.push(...contactSeams(model, faces, bvhs, settings, minLength), ...intersectionSeams(model, bvhs, minLength))
@@ -84,6 +87,23 @@ function contactSeams(model: MeshModel, faces: FaceData, bvhs: BodyBvh[], settin
   })
   const unknown = new Uint8Array(contact.edgeIds.length)
   return seamsFromEdges('contact', { edgeIds: contact.edgeIds, dihedralDeg, unknown }, model, faces, minLength, normalsOfEdge)
+}
+
+// Wedges of one edge run along the same line, so each rank is chained on its own; chaining them together would
+// join the two coincident seams of a fused T into a loop.
+function nonManifoldSeams(model: MeshModel, faces: FaceData, settings: DetectSettings, minLength: number): RawSeam[] {
+  const wedges = extractNonManifoldWedges(model, settings.creaseAngleDeg)
+  const seams: RawSeam[] = []
+  for (let rank = 0; wedges.some((w) => w.rank >= rank); rank++) {
+    const group = wedges.filter((w) => w.rank === rank)
+    const edges: CreaseEdges = {
+      edgeIds: Uint32Array.from(group, (w) => w.edge),
+      dihedralDeg: Float32Array.from(group, (w) => 180 - w.openingDeg),
+      unknown: new Uint8Array(group.length),
+    }
+    seams.push(...seamsFromEdges('nonmanifold', edges, model, faces, minLength, (k) => [group[k]!.n1, group[k]!.n2]))
+  }
+  return seams
 }
 
 const WELD_FRACTION = 1e-4

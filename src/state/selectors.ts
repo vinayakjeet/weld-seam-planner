@@ -1,3 +1,4 @@
+import { meshWarnings, type MeshWarning } from '../core/mesh/health'
 import type { AppState } from './store'
 
 export interface Stats {
@@ -38,4 +39,8 @@ export function selectStats(state: Pick<AppState, 'part' | 'seams' | 'statusById
     acceptedLengthMm,
     hiddenAccepted,
   }
+}
+
+export function selectPartWarnings(state: Pick<AppState, 'part'>): MeshWarning[] {
+  return state.part ? meshWarnings(state.part) : []
 }

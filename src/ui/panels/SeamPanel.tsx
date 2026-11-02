@@ -3,6 +3,7 @@ import { useStore } from '../../state/store'
 import { Button } from '../kit/Button'
 import { Tab, TabList, TabPanel, Tabs } from '../kit/Tabs'
 import { DetectionSettings } from './DetectionSettings'
+import { PartWarnings } from './PartWarnings'
 import { seamRows } from './seamRows'
 import { acceptAllLabel } from './seamText'
 
@@ -172,6 +173,7 @@ export function SeamPanel() {
               </span>
             ))}
           </div>
+          <PartWarnings />
           <AcceptAll />
           <SeamTable />
         </TabPanel>
