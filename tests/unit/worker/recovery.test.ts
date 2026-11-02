@@ -1,5 +1,6 @@
 import * as Comlink from 'comlink'
 import { afterEach, describe, expect, it } from 'vitest'
+import { DEFAULT_TORCH } from '../../../src/core/torch/frames'
 import { DEFAULT_DETECT_SETTINGS } from '../../../src/core/seams/detect'
 import { wrapGeometryApi, type GeometryClient } from '../../../src/worker/client'
 import { createGeometryApi, type DetectOutcome, type GeometryApi } from '../../../src/worker/geometry.api'
@@ -37,6 +38,8 @@ function harness() {
       },
       detect: (settings, onProgress) => real.detect(settings, onProgress),
       snapDraw: (clicks, radius) => real.snapDraw(clicks, radius),
+      torchPositions: (seams, gravity) => real.torchPositions(seams, gravity),
+      torchPoses: (seam, params) => real.torchPoses(seam, params),
     }
     const { port1, port2 } = new MessageChannel()
     ports.push(port1, port2)
@@ -84,6 +87,23 @@ describe('recovering client', () => {
     if (outcome.status === 'ok') expect(outcome.seam.lengthMm).toBeGreaterThan(198.5)
     expect(spawned).toHaveLength(2)
     expect(spawned[1]!.loads).toHaveLength(1)
+  })
+
+  it('answers the torch calls from a replacement worker without sending the file again', async () => {
+    const { client, spawned } = harness()
+    await client.loadStl(readSample('t-joint-merged'), 'a.stl', noop)
+    const found = await client.detect(DEFAULT_DETECT_SETTINGS, noop)
+    if (found.status !== 'ok') throw new Error('expected ok')
+
+    spawned[0]!.die('boom')
+    expect((await client.torchPositions(found.seams, [0, 0, -1])).status).toBe('error')
+    const positions = await client.torchPositions(found.seams, [0, 0, -1])
+    const poses = await client.torchPoses(found.seams[0]!, DEFAULT_TORCH)
+
+    expect(positions.status).toBe('ok')
+    expect(poses.status).toBe('ok')
+    expect(spawned).toHaveLength(2)
+    expect(spawned[1]!.loads).toHaveLength(0)
   })
 
   it('keeps the unit choice, so an inch part is not rebuilt as millimetres', async () => {

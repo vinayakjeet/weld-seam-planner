@@ -4,10 +4,13 @@ import { DEFAULT_DETECT_SETTINGS, type DetectSettings } from '../core/seams/dete
 import type { ManualError } from '../core/seams/manual'
 import type { GeometryClient } from '../worker/client'
 import type { DrawClick, LoadOutcome, Progress, Stage, UserError } from '../worker/geometry.api'
+import { DEFAULT_TORCH } from '../core/torch/frames'
+import { type Gravity } from '../core/torch/positions'
 import { needSeamSelected, parseTrimInput, type NeedsSeam } from '../ui/panels/manualText'
 import { initialTool, reduceTool, type ToolEffect, type ToolEvent, type ToolName } from '../ui/tools/toolMachine'
 import { selectAllSeams } from './selectors'
-import { useStore } from './store'
+import { useStore, type AppState } from './store'
+import type { PositionEntry } from './torchSlice'
 
 export type FetchFn = (url: string) => Promise<Response>
 
@@ -381,4 +384,88 @@ export function undoEdit(): void {
 export function redoEdit(): void {
   useStore.temporal.getState().redo()
   dropStaleSelection()
+}
+
+// Torch work reads only seams, so it never waits for the part. Each call takes a number and only the newest answer is
+// applied; anything older is dropped, so a slow answer for the previous gravity or seam never lands on top of a newer one.
+let positionsRequest = 0
+let posesRequest = 0
+
+export async function refreshPositions(client: GeometryClient): Promise<void> {
+  const request = ++positionsRequest
+  const { gravity } = useStore.getState()
+  const seams = selectAllSeams(useStore.getState())
+  if (seams.length === 0) {
+    if (Object.keys(useStore.getState().positionsById).length > 0) useStore.getState().setPositions({})
+    return
+  }
+  const outcome = await attempt(() => client.torchPositions(seams, gravity))
+  if (request !== positionsRequest) return
+  if (outcome.status === 'error') {
+    setNotice(outcome.error)
+    return
+  }
+  const entries: Record<string, PositionEntry> = {}
+  for (const seam of seams) {
+    const position = outcome.positions[seam.id]
+    if (position) entries[seam.id] = { seam, gravity, position }
+  }
+  useStore.getState().setPositions(entries)
+}
+
+function selectedSeam(state: AppState) {
+  return state.selectedId === null ? undefined : selectAllSeams(state).find((seam) => seam.id === state.selectedId)
+}
+
+export async function refreshPoses(client: GeometryClient): Promise<void> {
+  const request = ++posesRequest
+  const state = useStore.getState()
+  const seam = selectedSeam(state)
+  if (!seam) {
+    if (state.posesForSelected !== null) state.setPoses(null)
+    return
+  }
+  const outcome = await attempt(() => client.torchPoses(seam, DEFAULT_TORCH))
+  if (request !== posesRequest) return
+  if (outcome.status === 'error') {
+    setNotice(outcome.error)
+    return
+  }
+  useStore.getState().setPoses({ seam, poses: outcome.poses })
+}
+
+// Keeps positions and poses current as seams, gravity and selection change, whoever changes them: detection, a manual
+// edit, an undo or the gravity selector. Returns a function that stops it.
+export function startTorchSync(client: GeometryClient): () => void {
+  const read = (state: AppState) => ({
+    seams: state.seams,
+    manualSeams: state.manualSeams,
+    supersededIds: state.supersededIds,
+    gravity: state.gravity,
+    selected: selectedSeam(state),
+  })
+  let last = read(useStore.getState())
+  void refreshPositions(client)
+  void refreshPoses(client)
+  return useStore.subscribe((state) => {
+    const next = read(state)
+    const before = last
+    // Recorded first: the scrub reset below changes the store and runs this callback again.
+    last = next
+    if (next.seams !== before.seams || next.manualSeams !== before.manualSeams || next.supersededIds !== before.supersededIds || next.gravity !== before.gravity) {
+      void refreshPositions(client)
+    }
+    if (next.selected !== before.selected) {
+      state.setScrub(0)
+      void refreshPoses(client)
+    }
+  })
+}
+
+// Returns what was wrong with the vector, or null. The gravity stays as it was when the vector is refused.
+export function changeGravity(gravity: Gravity): ManualError | null {
+  setNotice(null)
+  const problem = useStore.getState().setGravity(gravity)
+  if (problem) setNotice(problem)
+  return problem
 }

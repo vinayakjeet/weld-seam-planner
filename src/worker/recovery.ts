@@ -104,5 +104,10 @@ export function createRecoveringClient(spawn: (onDead: () => void) => GeometryCl
       const lost = await restoreFailure(target)
       return lost ?? target.snapDraw(clicks, snapRadiusMm)
     },
+
+    // These read only the seams they are given, so a replacement worker does not need the part back first.
+    torchPositions: (seams, gravity) => current().torchPositions(seams, gravity),
+
+    torchPoses: (seam, params) => current().torchPoses(seam, params),
   }
 }

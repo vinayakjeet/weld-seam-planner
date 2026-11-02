@@ -10,6 +10,7 @@ import { GIZMO_MARGIN } from './gizmo'
 import { PartMesh } from './PartMesh'
 import { SeamLines } from './SeamLines'
 import { SplitTool } from './SplitTool'
+import { TorchPreview } from './TorchPreview'
 
 // Face order is +X, -X, +Y, -Y, +Z, -Z; the camera looks along +Y from the front.
 const Z_UP_FACES = ['Right', 'Left', 'Back', 'Front', 'Top', 'Bottom']
@@ -64,6 +65,7 @@ export function Scene() {
       <SeamLines partRef={partMesh} />
       <DrawTool partRef={partMesh} />
       <SplitTool />
+      <TorchPreview />
       <GizmoHelper alignment="top-right" margin={[GIZMO_MARGIN, GIZMO_MARGIN]}>
         <GizmoViewcube
           faces={Z_UP_FACES}

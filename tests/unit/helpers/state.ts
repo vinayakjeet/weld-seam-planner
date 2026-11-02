@@ -75,6 +75,12 @@ export function fakeClient(impl: Partial<GeometryApi> = {}): GeometryApi {
     snapDraw: async () => {
       throw new Error('unexpected snapDraw')
     },
+    torchPositions: async () => {
+      throw new Error('unexpected torchPositions')
+    },
+    torchPoses: async () => {
+      throw new Error('unexpected torchPoses')
+    },
     ...impl,
   }
 }

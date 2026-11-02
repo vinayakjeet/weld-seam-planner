@@ -16,6 +16,23 @@ const SECOND_POSITION_SHARE = 0.1
 const ISO_ORDER: IsoPosition[] = ['PA', 'PB', 'PF', 'PG', 'PD']
 const AWS: Record<IsoPosition, AwsPosition> = { PA: '1F', PB: '2F', PF: '3F', PG: '3F', PD: '4F' }
 
+// null when upFromGravity can use the vector, otherwise what to tell the user.
+export function gravityProblem(gravity: Gravity): { what: string; why: string; next: string } | null {
+  const n = length(gravity)
+  if (Number.isFinite(n) && n > 0) return null
+  return {
+    what: 'The welding positions were not recalculated.',
+    why: `Gravity [${gravity.join(', ')}] is not a direction: it has to be a finite vector that is not zero.`,
+    next: 'Enter the way a dropped bead would fall, for example 0, 0, -1, or choose one of the axis presets.',
+  }
+}
+
+// The AWS position of a seam position code as seamPosition writes it (with or without the mixed plus), or null.
+export function awsFor(code: string): AwsPosition | null {
+  const iso = code.replace(/\+$/, '') as IsoPosition
+  return AWS[iso] ?? null
+}
+
 // Unit vector pointing against gravity.
 export function upFromGravity(gravity: Gravity): Vec3 {
   const n = length(gravity)

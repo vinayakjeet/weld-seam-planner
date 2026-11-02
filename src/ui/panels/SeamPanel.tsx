@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { positionFor } from '../../state/torchSlice'
 import { useStore } from '../../state/store'
 import { useVisibleSeams } from '../../state/useVisibleSeams'
 import { Button } from '../kit/Button'
 import { Tab, TabList, TabPanel, Tabs } from '../kit/Tabs'
 import { DetectionSettings } from './DetectionSettings'
 import { ManualTools } from './ManualTools'
+import { PositionChip } from './PositionChip'
 import { PartWarnings } from './PartWarnings'
 import { seamRows } from './seamRows'
 import { acceptAllLabel, noSeamsMessage } from './seamText'
@@ -21,7 +23,7 @@ const COLUMNS = [
   { key: 'status', label: '', title: 'Status' },
 ]
 
-const GRID = 'grid grid-cols-[22px_minmax(0,1fr)_46px_30px_28px_28px_28px_16px] items-center gap-x-1.5 px-3'
+const GRID = 'grid grid-cols-[22px_minmax(0,1fr)_46px_30px_28px_34px_28px_16px] items-center gap-x-1.5 px-3'
 
 const STATUS_DOT = {
   accepted: 'bg-seam-accepted',
@@ -78,7 +80,12 @@ function SeamTable() {
   const select = useStore((s) => s.select)
   const hover = useStore((s) => s.hover)
   const toggleAccepted = useStore((s) => s.toggleAccepted)
-  const rows = useMemo(() => seamRows(seams, statusById, typeById), [seams, statusById, typeById])
+  const positionsById = useStore((s) => s.positionsById)
+  const gravity = useStore((s) => s.gravity)
+  const rows = useMemo(
+    () => seamRows(seams, statusById, typeById, (seam) => positionFor({ positionsById, gravity }, seam)),
+    [seams, statusById, typeById, positionsById, gravity],
+  )
   const body = useRef<HTMLDivElement>(null)
 
   // A seam picked in the viewport may be a row that is scrolled out of sight.
@@ -135,11 +142,15 @@ function SeamTable() {
               <span role="cell" className="num text-right">
                 {row.length}
               </span>
-              {['WPS', 'Pos', 'Acc'].map((column) => (
-                <span key={column} role="cell" aria-label={`${column} not set`} className="text-ink-2">
-                  -
-                </span>
-              ))}
+              <span role="cell" aria-label="WPS not set" className="text-ink-2">
+                -
+              </span>
+              <span role="cell" aria-label={row.position ? `Position ${row.pos}` : 'Position not set'}>
+                <PositionChip position={row.position} />
+              </span>
+              <span role="cell" aria-label="Acc not set" className="text-ink-2">
+                -
+              </span>
               <span role="cell">
                 <button
                   type="button"

@@ -5,9 +5,11 @@ import { Viewport } from '../viewport/Viewport'
 import { StatusBar } from './StatusBar'
 import { TopBar } from './TopBar'
 import { useDropGuard } from './useDropGuard'
+import { useTorchSync } from './useTorchSync'
 
 export function AppShell() {
   useDropGuard()
+  useTorchSync()
   return (
     <TooltipProvider>
       <div className="flex h-full flex-col">

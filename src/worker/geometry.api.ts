@@ -11,6 +11,8 @@ import { buildBodyBvhs, type BodyBvh } from '../core/seams/bodyBvh'
 import { detectSeams, type DetectSettings, type SeamCandidate } from '../core/seams/detect'
 import { buildSnapContext, snapPolyline, type DrawClick, type SnapContext } from '../core/seams/draw'
 import { isManualError } from '../core/seams/manual'
+import { torchPoses, type TorchParams, type TorchPose } from '../core/torch/frames'
+import { gravityProblem, seamPosition, type Gravity, type SeamPosition } from '../core/torch/positions'
 
 export type { DetectSettings, DrawClick, SeamCandidate, Units }
 
@@ -55,12 +57,21 @@ export type DetectOutcome = { status: 'ok'; seams: SeamCandidate[]; ms: number }
 
 export type SnapOutcome = { status: 'ok'; seam: SeamCandidate } | { status: 'error'; error: UserError }
 
+export type TorchPositionsOutcome = { status: 'ok'; positions: Record<string, SeamPosition> } | { status: 'error'; error: UserError }
+
+export type TorchPosesOutcome = { status: 'ok'; poses: TorchPose[] } | { status: 'error'; error: UserError }
+
 export interface GeometryApi {
   loadStl(buffer: ArrayBuffer, name: string, onProgress: Progress): Promise<LoadOutcome>
   setUnits(units: KnownUnits, onProgress: Progress): Promise<LoadOutcome>
   detect(settings: DetectSettings, onProgress: Progress): Promise<DetectOutcome>
   // Turns the user's clicks on the part into one seam snapped to its edges.
   snapDraw(clicks: DrawClick[], snapRadiusMm: number): Promise<SnapOutcome>
+  // Welding position of every seam under one gravity, keyed by seam id. Needs no part: it reads the seams alone.
+  // A seam without points is left out.
+  torchPositions(seams: SeamCandidate[], gravity: Gravity): Promise<TorchPositionsOutcome>
+  // Torch poses along one seam; the main thread scrubs between them with poseAt.
+  torchPoses(seam: SeamCandidate, params: TorchParams): Promise<TorchPosesOutcome>
 }
 
 // Where each load stage starts on the overall bar; the index stage runs to 1.
@@ -233,6 +244,26 @@ export function createGeometryApi(): GeometryApi {
         snapContext ??= buildSnapContext(current, computeFaceData(current.mesh))
         const result = snapPolyline(clicks, snapContext, snapRadiusMm)
         return isManualError(result) ? { status: 'error', error: result } : { status: 'ok', seam: result }
+      } catch (error) {
+        return { status: 'error', error: toUserError(error) }
+      }
+    },
+
+    async torchPositions(seams, gravity) {
+      const problem = gravityProblem(gravity)
+      if (problem) return { status: 'error', error: problem }
+      try {
+        const positions: Record<string, SeamPosition> = {}
+        for (const seam of seams) if (seam.points.length > 0) positions[seam.id] = seamPosition(seam.points, gravity)
+        return { status: 'ok', positions }
+      } catch (error) {
+        return { status: 'error', error: toUserError(error) }
+      }
+    },
+
+    async torchPoses(seam, params) {
+      try {
+        return { status: 'ok', poses: torchPoses(seam.points, seam.closed, params) }
       } catch (error) {
         return { status: 'error', error: toUserError(error) }
       }

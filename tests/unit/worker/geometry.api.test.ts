@@ -11,7 +11,9 @@ import {
   type UserError,
 } from '../../../src/worker/geometry.api'
 import { DEFAULT_DETECT_SETTINGS } from '../../../src/core/seams/detect'
-import { shown } from '../helpers/state'
+import { seam, shown } from '../helpers/state'
+import { pointsFromPolyline } from '../../../src/core/seams/frames'
+import { DEFAULT_TORCH, poseAt } from '../../../src/core/torch/frames'
 import { readSample } from '../helpers/samples'
 import { makeBinaryStl, TRIANGLES } from '../helpers/stl'
 
@@ -323,3 +325,58 @@ describe('geometry api: snapDraw', () => {
     expect(outcome.status === 'ok' && outcome.seam.approximateNormals).toBe(true)
   })
 })
+
+describe('geometry api: torch', () => {
+  const along = (id: string, to: [number, number, number]) => {
+    const { points, lengthMm } = pointsFromPolyline([[0, 0, 0], to], false, () => [[0, 0, 1], [0, 1, 0]])
+    return seam(id, 0.9, lengthMm, { points })
+  }
+
+  it('needs no loaded part: positions and poses depend on the seams alone', async () => {
+    const api = createGeometryApi()
+    const outcome = await api.torchPositions([along('a', [100, 0, 0])], [0, 0, -1])
+    expect(outcome.status).toBe('ok')
+  })
+
+  it('gives one position summary per seam, keyed by id, and follows the gravity it is given', async () => {
+    const api = createGeometryApi()
+    const flat = along('flat', [100, 0, 0])
+    const upright = along('upright', [0, 0, 100])
+    const zUp = await api.torchPositions([flat, upright], [0, 0, -1])
+    if (zUp.status !== 'ok') throw new Error('expected ok')
+    expect(Object.keys(zUp.positions)).toEqual(['flat', 'upright'])
+    expect(zUp.positions.flat!.code).toBe('PB')
+    expect(zUp.positions.upright!.code).toBe('PF')
+    const xUp = await api.torchPositions([flat, upright], [-1, 0, 0])
+    if (xUp.status !== 'ok') throw new Error('expected ok')
+    expect(xUp.positions.flat!.code).not.toBe(zUp.positions.flat!.code)
+  })
+
+  it('leaves out a seam with no points rather than failing the others', async () => {
+    const outcome = await createGeometryApi().torchPositions([seam('empty'), along('a', [100, 0, 0])], [0, 0, -1])
+    if (outcome.status !== 'ok') throw new Error('expected ok')
+    expect(Object.keys(outcome.positions)).toEqual(['a'])
+  })
+
+  it('refuses a gravity that is zero or not finite, in the what, why, next form', async () => {
+    for (const gravity of [[0, 0, 0], [Number.NaN, 0, -1], [Infinity, 0, 0]] as Array<[number, number, number]>) {
+      const outcome = await createGeometryApi().torchPositions([along('a', [100, 0, 0])], gravity)
+      expect(outcome.status).toBe('error')
+      if (outcome.status === 'error') expectUserError(outcome.error)
+    }
+  })
+
+  it('gives the torch poses of a seam, the same ones poseAt reads', async () => {
+    const outcome = await createGeometryApi().torchPoses(along('a', [100, 0, 0]), DEFAULT_TORCH)
+    if (outcome.status !== 'ok') throw new Error('expected ok')
+    expect(outcome.poses.length).toBeGreaterThan(1)
+    const mid = poseAt(outcome.poses, 50, false)
+    for (const v of [...mid.p, ...mid.q]) expect(Number.isFinite(v)).toBe(true)
+  })
+
+  it('says so when a seam has no points to pose', async () => {
+    const outcome = await createGeometryApi().torchPoses(seam('empty'), DEFAULT_TORCH)
+    expect(outcome.status === 'ok' && outcome.poses).toEqual([])
+  })
+})
+

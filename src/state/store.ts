@@ -4,6 +4,7 @@ import type { ManualError } from '../core/seams/manual'
 import { initialTool, type ToolState } from '../ui/tools/toolMachine'
 import { createPartSlice, type PartSlice } from './partSlice'
 import { createSeamsSlice, type SeamsSlice } from './seamsSlice'
+import { createTorchSlice, type TorchSlice } from './torchSlice'
 
 export const STEPS = [
   { id: 'import', label: 'Import' },
@@ -26,7 +27,7 @@ interface UiSlice {
   setNotice: (notice: ManualError | null) => void
 }
 
-export type AppState = UiSlice & PartSlice & SeamsSlice
+export type AppState = UiSlice & PartSlice & SeamsSlice & TorchSlice
 
 const createUiSlice: StateCreator<AppState, [], [], UiSlice> = (set) => ({
   activeStep: 'import',
@@ -48,6 +49,7 @@ export const useStore = create<AppState>()(
       ...createUiSlice(...args),
       ...createPartSlice(...args),
       ...createSeamsSlice(...args),
+      ...createTorchSlice(...args),
     }),
     {
       partialize: (state) => ({

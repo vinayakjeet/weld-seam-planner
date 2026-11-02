@@ -4,10 +4,13 @@ import { DEFAULT_DETECT_SETTINGS, detectSeams } from '../../../src/core/seams/de
 import { pointsFromPolyline, type SeamPoint } from '../../../src/core/seams/frames'
 import {
   DEFAULT_GRAVITY,
+  awsFor,
   classifyPosition,
   faceRotationDeg,
+  gravityProblem,
   inclinationDeg,
   seamPosition,
+  upFromGravity,
 } from '../../../src/core/torch/positions'
 import { loadSampleModel } from '../helpers/models'
 import { shown } from '../helpers/state'
@@ -228,3 +231,49 @@ describe('seamPosition on the samples', () => {
     for (const seam of bottom) expect(seamPosition(seam.points, DEFAULT_GRAVITY).code).toBe('PB')
   })
 })
+
+describe('awsFor', () => {
+  it('names the AWS position of each ISO position, with or without the mixed plus', () => {
+    expect(awsFor('PA')).toBe('1F')
+    expect(awsFor('PB')).toBe('2F')
+    expect(awsFor('PB+')).toBe('2F')
+    expect(awsFor('PF')).toBe('3F')
+    expect(awsFor('PG+')).toBe('3F')
+    expect(awsFor('PD')).toBe('4F')
+  })
+
+  it('gives null for a code that is not a position', () => {
+    expect(awsFor('PX')).toBeNull()
+    expect(awsFor('')).toBeNull()
+  })
+})
+
+describe('gravityProblem', () => {
+  it('accepts any finite vector that is not zero, whatever its length', () => {
+    expect(gravityProblem([0, 0, -1])).toBeNull()
+    expect(gravityProblem([3, -4, 12])).toBeNull()
+    expect(gravityProblem([0, 0, -1e-9])).toBeNull()
+  })
+
+  it('refuses zero and anything not finite, saying what happened, why and what to do next', () => {
+    for (const bad of [[0, 0, 0], [Number.NaN, 0, -1], [0, Infinity, 0], [-Infinity, 0, 0]] as Array<[number, number, number]>) {
+      const problem = gravityProblem(bad)
+      expect(problem).not.toBeNull()
+      for (const part of [problem!.what, problem!.why, problem!.next]) expect(part.trim().length).toBeGreaterThan(10)
+      expect(`${problem!.what} ${problem!.why} ${problem!.next}`).not.toMatch(new RegExp('[\\u2013\\u2014]'))
+    }
+  })
+
+  it('agrees with upFromGravity: whatever it accepts, upFromGravity can use', () => {
+    for (const g of [[0, 0, -1], [1, 1, 1], [0, 0, 0]] as Array<[number, number, number]>) {
+      let threw = false
+      try {
+        upFromGravity(g)
+      } catch {
+        threw = true
+      }
+      expect(gravityProblem(g) !== null).toBe(threw)
+    }
+  })
+})
+

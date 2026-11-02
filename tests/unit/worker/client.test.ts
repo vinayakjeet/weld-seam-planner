@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_TIMEOUT_MS, watchWorker, wrapGeometryApi } from '../../../src/worker/client'
 import type { GeometryApi } from '../../../src/worker/geometry.api'
 import { DEFAULT_DETECT_SETTINGS } from '../../../src/core/seams/detect'
-import { detected, fakeClient, readyOutcome } from '../helpers/state'
+import { DEFAULT_TORCH } from '../../../src/core/torch/frames'
+import { detected, fakeClient, readyOutcome, seam } from '../helpers/state'
 
 const ports: MessagePort[] = []
 afterEach(() => {
@@ -55,6 +56,12 @@ describe('worker call timeout', () => {
   it('covers snapDraw too', async () => {
     const client = wrapGeometryApi(channel(), { timeoutMs: 30 })
     expectReadable(await client.snapDraw([], 3))
+  })
+
+  it('covers the torch calls too', async () => {
+    const client = wrapGeometryApi(channel(), { timeoutMs: 30 })
+    expectReadable(await client.torchPositions([], [0, 0, -1]))
+    expectReadable(await client.torchPoses(seam('a'), DEFAULT_TORCH))
   })
 
   it('counts progress as a reply, so a slow but working load is not cut off', async () => {

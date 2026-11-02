@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SampleEntry } from '../../../src/core/samples/manifest'
 import { pointsFromPolyline } from '../../../src/core/seams/frames'
+import { positionFor, posesFor } from '../../../src/state/torchSlice'
 import type { SeamCandidate } from '../../../src/core/seams/detect'
 import {
+  changeGravity,
   chooseTool,
   chooseUnits,
   DETECT_DEBOUNCE_MS,
@@ -14,17 +16,20 @@ import {
   importFile,
   importSample,
   redoEdit,
+  refreshPoses,
+  refreshPositions,
   removeSelected,
   reverseSelected,
   runDetect,
   scheduleDetect,
+  startTorchSync,
   toolEvent,
   trimSelected,
   undoEdit,
 } from '../../../src/state/flows'
 import { selectAllSeams, selectStats } from '../../../src/state/selectors'
 import { useStore } from '../../../src/state/store'
-import type { DetectOutcome, LoadOutcome, Progress } from '../../../src/worker/geometry.api'
+import { createGeometryApi, type DetectOutcome, type GeometryApi, type LoadOutcome, type Progress } from '../../../src/worker/geometry.api'
 import { readManifest, readSample } from '../helpers/samples'
 import { deferred, detected, fakeClient, partInfo, readyOutcome, resetStore, seam } from '../helpers/state'
 
@@ -853,6 +858,273 @@ describe('manual tool flows', () => {
       await importBuffer(buffer(), 'b.stl', fakeClient({ loadStl: async () => readyOutcome(), detect: async () => detected([]) }))
       expect(state().tool).toEqual({ tool: 'select' })
       expect(state().notice).toBeNull()
+    })
+  })
+})
+
+describe('torch flows', () => {
+  const real = createGeometryApi()
+  const torchClient = (overrides: Partial<GeometryApi> = {}) =>
+    fakeClient({ torchPositions: real.torchPositions, torchPoses: real.torchPoses, ...overrides })
+  // Normals chosen so that n1 x n2 runs along the travel direction, as detection writes them.
+  const lineSeam = (id: string, from: [number, number, number], to: [number, number, number], n1: [number, number, number], n2: [number, number, number]): SeamCandidate => {
+    const { points, lengthMm } = pointsFromPolyline([from, to], false, () => [n1, n2])
+    return seam(id, 0.8, lengthMm, { points })
+  }
+  const flat = () => lineSeam('flat', [0, 0, 0], [100, 0, 0], [0, 0, 1], [0, -1, 0])
+  const upright = () => lineSeam('upright', [0, 0, 0], [0, 0, 100], [1, 0, 0], [0, 1, 0])
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
+  let stop: () => void = () => {}
+  afterEach(() => stop())
+
+  describe('refreshPositions', () => {
+    it('stores a summary for every seam, tied to the seam and the gravity it was worked out for', async () => {
+      const seams = [flat(), upright()]
+      useStore.setState({ seams })
+      await refreshPositions(torchClient())
+      expect(Object.keys(state().positionsById)).toEqual(['flat', 'upright'])
+      expect(positionFor(state(), seams[1]!)?.code).toBe('PF')
+      expect(state().positionsById.flat!.seam).toBe(seams[0])
+    })
+
+    it('includes manual seams and leaves out superseded detected ones', async () => {
+      useStore.setState({ seams: [flat(), upright()], manualSeams: [seam('m', 0.8, 10, { points: flat().points })], supersededIds: ['upright'] })
+      await refreshPositions(torchClient())
+      expect(Object.keys(state().positionsById)).toEqual(['flat', 'm'])
+    })
+
+    it('clears the positions when there are no seams', async () => {
+      useStore.setState({ seams: [flat()] })
+      await refreshPositions(torchClient())
+      useStore.setState({ seams: [] })
+      await refreshPositions(torchClient())
+      expect(state().positionsById).toEqual({})
+    })
+
+    it('shows the worker error and keeps what it had', async () => {
+      useStore.setState({ seams: [flat()] })
+      await refreshPositions(torchClient())
+      const before = state().positionsById
+      const error = { what: 'Welding positions failed.', why: 'The worker stopped.', next: 'Reload the page.' }
+      await refreshPositions(torchClient({ torchPositions: async () => ({ status: 'error', error }) }))
+      expect(state().notice).toEqual(error)
+      expect(state().positionsById).toBe(before)
+    })
+
+    it('turns a throwing worker into a readable notice', async () => {
+      useStore.setState({ seams: [flat()] })
+      await refreshPositions(
+        torchClient({
+          torchPositions: async () => {
+            throw new Error('boom')
+          },
+        }),
+      )
+      expect(state().notice?.what).toBeTruthy()
+    })
+
+    it('ignores an older answer that arrives after a newer one', async () => {
+      const slow = deferred<Awaited<ReturnType<GeometryApi['torchPositions']>>>()
+      let calls = 0
+      const client = torchClient({
+        torchPositions: (seams, gravity) => (++calls === 1 ? slow.promise : real.torchPositions(seams, gravity)),
+      })
+      const seams = [flat()]
+      useStore.setState({ seams })
+      const first = refreshPositions(client)
+      state().setGravity([-1, 0, 0])
+      await refreshPositions(client)
+      const newest = state().positionsById.flat!.position.code
+      slow.resolve({ status: 'ok', positions: { flat: { code: 'STALE', inclinationDeg: 0, rotationDeg: 0, shares: {} } } })
+      await first
+      expect(state().positionsById.flat!.position.code).toBe(newest)
+      expect(positionFor(state(), seams[0]!)?.code).not.toBe('STALE')
+    })
+  })
+
+  describe('startTorchSync', () => {
+    it('works out positions when detection delivers seams', async () => {
+      stop = startTorchSync(torchClient())
+      useStore.setState({ seams: [flat(), upright()] })
+      await vi.waitFor(() => expect(Object.keys(state().positionsById)).toEqual(['flat', 'upright']))
+    })
+
+    it('changes the positions with the gravity and does not detect again', async () => {
+      let detects = 0
+      const client = torchClient({
+        detect: async () => {
+          detects++
+          return detected([])
+        },
+      })
+      useStore.setState({ seams: [upright()] })
+      stop = startTorchSync(client)
+      await vi.waitFor(() => expect(state().positionsById.upright?.position.code).toBe('PF'))
+      expect(changeGravity([-1, 0, 0])).toBeNull()
+      await vi.waitFor(() => expect(state().positionsById.upright?.position.code).not.toBe('PF'))
+      expect(detects).toBe(0)
+    })
+
+    it('never shows an answer for the old gravity once a second change is made, whichever answer comes last', async () => {
+      // The first request is the one startTorchSync makes when it starts; each gravity change makes another.
+      const gates = [deferred<void>(), deferred<void>(), deferred<void>()]
+      let n = 0
+      const client = torchClient({
+        torchPositions: async (seams, gravity) => {
+          await gates[n++]!.promise
+          return real.torchPositions(seams, gravity)
+        },
+      })
+      const seams = [upright()]
+      useStore.setState({ seams })
+      stop = startTorchSync(client)
+      changeGravity([-1, 0, 0])
+      await settle()
+      changeGravity([0, 0, 1])
+      await settle()
+      gates[2]!.resolve()
+      await vi.waitFor(() => expect(positionFor(state(), seams[0]!)).toBeDefined())
+      const newest = positionFor(state(), seams[0]!)!.code
+      gates[0]!.resolve()
+      gates[1]!.resolve()
+      await settle()
+      await settle()
+      expect(positionFor(state(), seams[0]!)?.code).toBe(newest)
+      expect(state().positionsById.upright!.gravity).toEqual([0, 0, 1])
+    })
+
+    it('follows manual edits and their undo', async () => {
+      useStore.setState({ seams: [flat()] })
+      stop = startTorchSync(torchClient())
+      await vi.waitFor(() => expect(Object.keys(state().positionsById)).toEqual(['flat']))
+      state().splitAt('flat', 40)
+      await vi.waitFor(() => expect(Object.keys(state().positionsById)).toEqual(['flat/a', 'flat/b']))
+      undoEdit()
+      await vi.waitFor(() => expect(Object.keys(state().positionsById)).toEqual(['flat']))
+    })
+
+    it('reversing a vertical seam flips climbing to descending: PF becomes PG', async () => {
+      useStore.setState({ seams: [upright()] })
+      stop = startTorchSync(torchClient())
+      await vi.waitFor(() => expect(state().positionsById.upright?.position.code).toBe('PF'))
+      state().select('upright')
+      reverseSelected()
+      await vi.waitFor(() => expect(Object.values(state().positionsById).map((e) => e.position.code)).toEqual(['PG']))
+      undoEdit()
+      await vi.waitFor(() => expect(Object.values(state().positionsById).map((e) => e.position.code)).toEqual(['PF']))
+    })
+
+    it('stops asking once it is stopped', async () => {
+      let calls = 0
+      const client = torchClient({
+        torchPositions: async (seams, gravity) => {
+          calls++
+          return real.torchPositions(seams, gravity)
+        },
+      })
+      stop = startTorchSync(client)
+      stop()
+      useStore.setState({ seams: [flat()] })
+      await settle()
+      expect(calls).toBe(0)
+    })
+
+    it('does not ask again when only the status of a seam changes', async () => {
+      let calls = 0
+      const client = torchClient({
+        torchPositions: async (seams, gravity) => {
+          calls++
+          return real.torchPositions(seams, gravity)
+        },
+      })
+      useStore.setState({ seams: [flat()] })
+      stop = startTorchSync(client)
+      await vi.waitFor(() => expect(calls).toBe(1))
+      state().toggleAccepted('flat')
+      state().select('flat')
+      await settle()
+      expect(calls).toBe(1)
+    })
+  })
+
+  describe('poses of the selected seam', () => {
+    it('are worked out for the selected seam, reset the scrub, and are dropped with the selection', async () => {
+      const seams = [flat(), upright()]
+      useStore.setState({ seams })
+      stop = startTorchSync(torchClient())
+      state().setScrub(30)
+      state().select('flat')
+      await vi.waitFor(() => expect(posesFor(state(), seams[0]!)).not.toBeNull())
+      expect(state().scrubS).toBe(0)
+      expect(posesFor(state(), seams[0]!)!.length).toBeGreaterThan(1)
+
+      state().select(null)
+      await vi.waitFor(() => expect(state().posesForSelected).toBeNull())
+    })
+
+    it('ignore an older answer for a seam that is no longer selected', async () => {
+      const seams = [flat(), upright()]
+      const gates = [deferred<void>(), deferred<void>()]
+      let n = 0
+      const client = torchClient({
+        torchPoses: async (seam, params) => {
+          await gates[n++]!.promise
+          return real.torchPoses(seam, params)
+        },
+      })
+      useStore.setState({ seams })
+      stop = startTorchSync(client)
+      state().select('flat')
+      await settle()
+      state().select('upright')
+      await settle()
+      gates[1]!.resolve()
+      await vi.waitFor(() => expect(state().posesForSelected?.seam).toBe(seams[1]))
+      gates[0]!.resolve()
+      await settle()
+      await settle()
+      expect(state().posesForSelected?.seam).toBe(seams[1])
+    })
+
+    it('come back for the edited seam after a reverse, and the scrub starts again at the start', async () => {
+      useStore.setState({ seams: [flat()] })
+      stop = startTorchSync(torchClient())
+      state().select('flat')
+      await vi.waitFor(() => expect(state().posesForSelected).not.toBeNull())
+      state().setScrub(60)
+      reverseSelected()
+      await vi.waitFor(() => expect(state().posesForSelected?.seam.id).toBe('flat~r'))
+      expect(state().scrubS).toBe(0)
+    })
+
+    it('refreshPoses with nothing selected clears them', async () => {
+      useStore.setState({ seams: [flat()], posesForSelected: { seam: flat(), poses: [] } })
+      await refreshPoses(torchClient())
+      expect(state().posesForSelected).toBeNull()
+    })
+
+    it('shows a worker error as a notice', async () => {
+      useStore.setState({ seams: [flat()], selectedId: 'flat' })
+      const error = { what: 'Torch poses failed.', why: 'The worker stopped.', next: 'Reload the page.' }
+      await refreshPoses(torchClient({ torchPoses: async () => ({ status: 'error', error }) }))
+      expect(state().notice).toEqual(error)
+    })
+  })
+
+  describe('changeGravity', () => {
+    it('sets the gravity and clears any earlier notice', () => {
+      useStore.setState({ notice: { what: 'x', why: 'y', next: 'z' } })
+      expect(changeGravity([0, 0, 1])).toBeNull()
+      expect(state().gravity).toEqual([0, 0, 1])
+      expect(state().notice).toBeNull()
+    })
+
+    it('refuses a zero or non finite vector with a notice and keeps the gravity', () => {
+      changeGravity([1, 0, 0])
+      const refusal = changeGravity([0, 0, 0])
+      expect(refusal).not.toBeNull()
+      expect(state().notice).toEqual(refusal)
+      expect(state().gravity).toEqual([1, 0, 0])
     })
   })
 })
