@@ -7,20 +7,28 @@ export function resetStore(): void {
   useStore.temporal.getState().clear()
 }
 
-export function seam(id: string, confidence = 0.9, lengthMm = 200): SeamCandidate {
+export function seam(id: string, confidence = 0.9, lengthMm = 200, overrides: Partial<SeamCandidate> = {}): SeamCandidate {
   return {
     id,
     label: id.toUpperCase(),
     source: 'crease',
     concavity: 'known',
     jointType: 'fillet',
+    hidden: false,
     confidence,
     closed: false,
     lengthMm,
     openingAngleDeg: 90,
     points: [],
+    ...overrides,
   }
 }
+
+// Corner candidates come back from detection but stay hidden, so counts in tests are of the visible seams.
+export const shown = (seams: SeamCandidate[]): SeamCandidate[] => seams.filter((s) => !s.hidden)
+
+export const corner = (id: string, confidence = 0.9, lengthMm = 100): SeamCandidate =>
+  seam(id, confidence, lengthMm, { jointType: 'corner', hidden: true })
 
 export function partInfo(overrides: Partial<PartInfo> = {}): PartInfo {
   return {

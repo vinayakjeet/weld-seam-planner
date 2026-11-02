@@ -3,7 +3,7 @@ import { computeFaceData } from '../../../src/core/mesh/faces'
 import { buildMeshModel, type MeshModel } from '../../../src/core/mesh/model'
 import { extractCreaseEdges } from '../../../src/core/seams/crease'
 import { loadSampleModel } from '../helpers/models'
-import { soupOf } from '../helpers/shapes'
+import { cubeTriangles, soupOf } from '../helpers/shapes'
 
 // Bare triangle pairs are open sheets, which buildMeshModel marks unsigned. The concavity rule is tested on them
 // as if their winding were trusted; the unsigned path has its own tests below.
@@ -124,5 +124,48 @@ describe('extractCreaseEdges on the samples', () => {
 
   it('finds nothing on two separate convex boxes', () => {
     expect(creasesOf(loadSampleModel('t-joint-assembly'), 15).edgeIds).toHaveLength(0)
+  })
+})
+
+describe('extractCreaseEdges convex edges', () => {
+  it('returns the ridge as a convex edge and the valley as none', () => {
+    const ridge = creasesOf(fold(90, 'ridge'), 30)
+    expect(ridge.edgeIds).toHaveLength(0)
+    expect(ridge.convex.edgeIds).toHaveLength(1)
+    expect(ridge.convex.dihedralDeg[0]).toBeCloseTo(90, 3)
+    expect(creasesOf(fold(90, 'valley'), 30).convex.edgeIds).toHaveLength(0)
+  })
+
+  it('applies the same angle threshold: a 25 degree ridge is out at 30 and in at 20', () => {
+    const model = fold(25, 'ridge')
+    expect(creasesOf(model, 30).convex.edgeIds).toHaveLength(0)
+    expect(creasesOf(model, 20).convex.edgeIds).toHaveLength(1)
+  })
+
+  it('finds the 12 edges of a box, 4 of 100 mm and 8 of 40 mm, and no concave edge', () => {
+    const box = buildMeshModel(soupOf(cubeTriangles([0, 0, 0], [100, 40, 40])), 1)
+    const result = creasesOf(box, 30)
+    expect(result.edgeIds).toHaveLength(0)
+    expect(result.convex.edgeIds).toHaveLength(12)
+    expect(totalLength(box, result.convex.edgeIds)).toBeCloseTo(4 * 100 + 8 * 40, 3)
+    for (const theta of result.convex.dihedralDeg) expect(theta).toBeCloseTo(90, 3)
+    expect(Array.from(result.convex.unknown).every((u) => u === 0)).toBe(true)
+  })
+
+  it('does not call an edge of an unsigned body convex, since its concavity is unknown', () => {
+    const sheet = buildMeshModel(soupOf([[0, 0, 0, 10, 0, 0, 5, 10, 0], [10, 0, 0, 0, 0, 0, 5, 0, -10]]), 1)
+    expect(sheet.orientation.unsignedBodies).toEqual([0])
+    const result = creasesOf(sheet, 30)
+    expect(result.edgeIds).toHaveLength(1)
+    expect(result.convex.edgeIds).toHaveLength(0)
+  })
+
+  it('keeps the concave edges of the T-joint unchanged next to its convex ones', () => {
+    const model = loadSampleModel('t-joint-merged')
+    const result = creasesOf(model, 30)
+    expect(totalLength(model, result.edgeIds)).toBeCloseTo(400, 1)
+    expect(result.convex.edgeIds.length).toBeGreaterThan(0)
+    const concave = new Set(result.edgeIds)
+    expect(Array.from(result.convex.edgeIds).some((e) => concave.has(e))).toBe(false)
   })
 })

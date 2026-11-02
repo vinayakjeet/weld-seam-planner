@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '../../state/store'
+import { useVisibleSeams } from '../../state/useVisibleSeams'
 import { Button } from '../kit/Button'
 import { Tab, TabList, TabPanel, Tabs } from '../kit/Tabs'
 import { DetectionSettings } from './DetectionSettings'
 import { PartWarnings } from './PartWarnings'
 import { seamRows } from './seamRows'
-import { acceptAllLabel } from './seamText'
+import { acceptAllLabel, noSeamsMessage } from './seamText'
+import { TypeMenu } from './TypeMenu'
 
 const COLUMNS = [
   { key: 'n', label: '#', title: 'Seam number' },
@@ -18,7 +20,7 @@ const COLUMNS = [
   { key: 'status', label: '', title: 'Status' },
 ]
 
-const GRID = 'grid grid-cols-[22px_minmax(0,1fr)_34px_34px_34px_28px_28px_16px] items-center gap-x-1.5 px-3'
+const GRID = 'grid grid-cols-[22px_minmax(0,1fr)_46px_30px_28px_28px_28px_16px] items-center gap-x-1.5 px-3'
 
 const STATUS_DOT = {
   accepted: 'bg-seam-accepted',
@@ -27,6 +29,7 @@ const STATUS_DOT = {
 } as const
 
 function EmptyMessage({ partLoaded, busy }: { partLoaded: boolean; busy: boolean }) {
+  const hiddenCorners = useStore((s) => s.seams.reduce((n, seam) => n + (seam.hidden ? 1 : 0), 0))
   if (!partLoaded) {
     return (
       <p>
@@ -37,15 +40,13 @@ function EmptyMessage({ partLoaded, busy }: { partLoaded: boolean; busy: boolean
     )
   }
   if (busy) return <p>Detecting seams.</p>
-  return (
-    <p>No crease seams found. Touching bodies need contact detection, which is not available yet; lower the crease angle or load a merged part.</p>
-  )
+  return <p>{noSeamsMessage(hiddenCorners)}</p>
 }
 
 function AcceptAll() {
   const [threshold, setThreshold] = useState(0.7)
   const acceptAbove = useStore((s) => s.acceptAbove)
-  const hasSeams = useStore((s) => s.seams.length > 0)
+  const hasSeams = useVisibleSeams().length > 0
   return (
     <div className="flex shrink-0 flex-col gap-1.5 border-b border-line px-3 py-2">
       <Button disabled={!hasSeams} onClick={() => acceptAbove(threshold)} className="w-full">
@@ -66,8 +67,9 @@ function AcceptAll() {
 }
 
 function SeamTable() {
-  const seams = useStore((s) => s.seams)
+  const seams = useVisibleSeams()
   const statusById = useStore((s) => s.statusById)
+  const typeById = useStore((s) => s.typeById)
   const selectedId = useStore((s) => s.selectedId)
   const hoverId = useStore((s) => s.hoverId)
   const partLoaded = useStore((s) => s.part !== null)
@@ -75,7 +77,7 @@ function SeamTable() {
   const select = useStore((s) => s.select)
   const hover = useStore((s) => s.hover)
   const toggleAccepted = useStore((s) => s.toggleAccepted)
-  const rows = useMemo(() => seamRows(seams, statusById), [seams, statusById])
+  const rows = useMemo(() => seamRows(seams, statusById, typeById), [seams, statusById, typeById])
   const body = useRef<HTMLDivElement>(null)
 
   // A seam picked in the viewport may be a row that is scrolled out of sight.
@@ -126,8 +128,8 @@ function SeamTable() {
               <span role="cell" className="truncate text-ink-0">
                 {row.label}
               </span>
-              <span role="cell" className="truncate">
-                {row.type}
+              <span role="cell" className="min-w-0">
+                <TypeMenu row={row} />
               </span>
               <span role="cell" className="num text-right">
                 {row.length}

@@ -8,11 +8,16 @@ export interface CreaseEdges {
   unknown: Uint8Array
 }
 
+export interface CreaseResult extends CreaseEdges {
+  // Convex counterparts (outside corners), found in the same pass. Never holds an edge of an unsigned body.
+  convex: CreaseEdges
+}
+
 // Concave manifold edges whose faces turn by at least creaseAngleDeg. Boundary and non-manifold edges are never
 // returned. Concave means face B bends toward the side face A's normal points to: (cB - m) . nA > eps.
 // In a body with no known sign (open, non-manifold, not orientable) concavity cannot be read from winding, so every
 // edge that turns enough is returned, marked unknown.
-export function extractCreaseEdges(model: MeshModel, faces: FaceData, creaseAngleDeg: number): CreaseEdges {
+export function extractCreaseEdges(model: MeshModel, faces: FaceData, creaseAngleDeg: number): CreaseResult {
   const { edges, mesh, bounds } = model
   const { normals, centroids } = faces
   const { positions } = mesh
@@ -25,6 +30,8 @@ export function extractCreaseEdges(model: MeshModel, faces: FaceData, creaseAngl
   const edgeIds: number[] = []
   const dihedral: number[] = []
   const unknown: number[] = []
+  const convexIds: number[] = []
+  const convexDihedral: number[] = []
   for (let e = 0; e < edges.edgeCount; e++) {
     if (edges.useCount[e] !== 2) continue
     const fa = edges.faceA[e]! * 3
@@ -39,11 +46,27 @@ export function extractCreaseEdges(model: MeshModel, faces: FaceData, creaseAngl
       (centroids[fb + 1]! - (positions[a + 1]! + positions[b + 1]!) / 2) * normals[fa + 1]! +
       (centroids[fb + 2]! - (positions[a + 2]! + positions[b + 2]!) / 2) * normals[fa + 2]!
     const noSign = unsigned[model.bodies.triangleBody[edges.faceA[e]!]!] === 1
-    if (!noSign && outward <= epsilon) continue
+    const degrees = (Math.acos(Math.max(-1, cos)) * 180) / Math.PI
+    if (!noSign && outward <= epsilon) {
+      if (outward < -epsilon) {
+        convexIds.push(e)
+        convexDihedral.push(degrees)
+      }
+      continue
+    }
 
     edgeIds.push(e)
-    dihedral.push((Math.acos(Math.max(-1, cos)) * 180) / Math.PI)
+    dihedral.push(degrees)
     unknown.push(noSign ? 1 : 0)
   }
-  return { edgeIds: Uint32Array.from(edgeIds), dihedralDeg: Float32Array.from(dihedral), unknown: Uint8Array.from(unknown) }
+  return {
+    edgeIds: Uint32Array.from(edgeIds),
+    dihedralDeg: Float32Array.from(dihedral),
+    unknown: Uint8Array.from(unknown),
+    convex: {
+      edgeIds: Uint32Array.from(convexIds),
+      dihedralDeg: Float32Array.from(convexDihedral),
+      unknown: new Uint8Array(convexIds.length),
+    },
+  }
 }

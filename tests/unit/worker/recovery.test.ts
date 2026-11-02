@@ -4,7 +4,7 @@ import { DEFAULT_DETECT_SETTINGS } from '../../../src/core/seams/detect'
 import { wrapGeometryApi, type GeometryClient } from '../../../src/worker/client'
 import { createGeometryApi, type DetectOutcome, type GeometryApi } from '../../../src/worker/geometry.api'
 import { createRecoveringClient } from '../../../src/worker/recovery'
-import { deferred } from '../helpers/state'
+import { deferred, shown } from '../helpers/state'
 import { readSample } from '../helpers/samples'
 
 const ports: MessagePort[] = []
@@ -50,7 +50,7 @@ function harness() {
 
 function seamCount(outcome: DetectOutcome): number {
   if (outcome.status !== 'ok') throw new Error(`expected ok, got ${JSON.stringify(outcome).slice(0, 200)}`)
-  return outcome.seams.length
+  return shown(outcome.seams).length
 }
 
 describe('recovering client', () => {
@@ -80,7 +80,7 @@ describe('recovering client', () => {
     const outcome = await client.detect(DEFAULT_DETECT_SETTINGS, noop)
 
     expect(seamCount(outcome)).toBe(2)
-    if (outcome.status === 'ok') expect(outcome.seams[0]!.lengthMm).toBeCloseTo(200, 0)
+    if (outcome.status === 'ok') expect(shown(outcome.seams)[0]!.lengthMm).toBeCloseTo(200, 0)
     expect(spawned[1]!.unitCalls).toEqual(['in'])
   })
 

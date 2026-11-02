@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { STEPS, useStore } from '../../../src/state/store'
-import { resetStore, seam } from '../helpers/state'
+import { corner, resetStore, seam } from '../helpers/state'
 
 const temporal = () => useStore.temporal.getState()
 const state = () => useStore.getState()
@@ -69,6 +69,98 @@ describe('accepting seams', () => {
   it('keeps at most 100 undo steps', () => {
     for (let i = 0; i < 105; i++) state().toggleAccepted('a')
     expect(temporal().pastStates).toHaveLength(100)
+  })
+})
+
+describe('joint type overrides', () => {
+  it('sets an override, undoes it and redoes it', () => {
+    state().setType('a', 'lap')
+    expect(state().typeById).toEqual({ a: 'lap' })
+    temporal().undo()
+    expect(state().typeById).toEqual({})
+    temporal().redo()
+    expect(state().typeById).toEqual({ a: 'lap' })
+  })
+
+  it('replaces an earlier override', () => {
+    state().setType('a', 'lap')
+    state().setType('a', 'saddle')
+    expect(state().typeById).toEqual({ a: 'saddle' })
+    expect(temporal().pastStates).toHaveLength(2)
+  })
+
+  it('clears an override with null and when set back to the computed type', () => {
+    state().setType('a', 'lap')
+    state().setType('a', null)
+    expect(state().typeById).toEqual({})
+    state().setType('a', 'lap')
+    state().setType('a', 'fillet')
+    expect(state().typeById).toEqual({})
+  })
+
+  it('adds no history entry for a type that is already in force', () => {
+    state().setType('a', 'fillet')
+    state().setType('a', null)
+    expect(temporal().pastStates).toHaveLength(0)
+    state().setType('a', 'lap')
+    state().setType('a', 'lap')
+    expect(temporal().pastStates).toHaveLength(1)
+  })
+
+  it('ignores an id that is not among the current seams', () => {
+    state().setType('ghost', 'lap')
+    expect(state().typeById).toEqual({})
+    expect(temporal().pastStates).toHaveLength(0)
+  })
+
+  it('undoes acceptance and type together as separate steps, each restoring both maps as they were', () => {
+    state().toggleAccepted('a')
+    state().setType('a', 'lap')
+    temporal().undo()
+    expect(state().typeById).toEqual({})
+    expect(state().statusById).toEqual({ a: 'accepted' })
+    temporal().undo()
+    expect(state().statusById).toEqual({})
+  })
+})
+
+describe('corner candidates in the store', () => {
+  beforeEach(() => {
+    useStore.setState({ seams: [seam('a', 0.9), corner('c', 0.95), seam('b', 0.7)] })
+  })
+
+  it('keeps them hidden by default', () => {
+    expect(state().showCorners).toBe(false)
+  })
+
+  it('leaves them out of accept all until they are shown', () => {
+    state().acceptAbove(0.5)
+    expect(state().statusById).toEqual({ a: 'accepted', b: 'accepted' })
+    state().setShowCorners(true)
+    state().acceptAbove(0.5)
+    expect(state().statusById).toEqual({ a: 'accepted', b: 'accepted', c: 'accepted' })
+  })
+
+  it('does not make the switch an undo step', () => {
+    state().setShowCorners(true)
+    state().setShowCorners(false)
+    expect(temporal().pastStates).toHaveLength(0)
+  })
+
+  it('clears a selected or hovered corner when corners are hidden again', () => {
+    state().setShowCorners(true)
+    state().select('c')
+    state().hover('c')
+    state().setShowCorners(false)
+    expect(state().selectedId).toBeNull()
+    expect(state().hoverId).toBeNull()
+  })
+
+  it('keeps the selection of a visible seam when corners are hidden', () => {
+    state().setShowCorners(true)
+    state().select('a')
+    state().setShowCorners(false)
+    expect(state().selectedId).toBe('a')
   })
 })
 

@@ -71,15 +71,16 @@ describe('partChip', () => {
 
 describe('seamRows', () => {
   it('numbers the seams in order and reads their status from the status map', () => {
-    const rows = seamRows([seam('a', 0.9, 600), seam('b', 0.8, 157.08), seam('c', 0.5, 20)], { a: 'accepted', c: 'rejected' })
+    const rows = seamRows([seam('a', 0.9, 600), seam('b', 0.8, 157.08), seam('c', 0.5, 20)], { a: 'accepted', c: 'rejected' }, {})
+    const fillet = { type: 'Fillet', jointType: 'fillet', computedType: 'fillet', overridden: false }
     expect(rows).toEqual([
-      { id: 'a', n: 1, label: 'A', type: 'Fillet', length: '600', status: 'accepted' },
-      { id: 'b', n: 2, label: 'B', type: 'Fillet', length: '157.1', status: 'candidate' },
-      { id: 'c', n: 3, label: 'C', type: 'Fillet', length: '20', status: 'rejected' },
+      { id: 'a', n: 1, label: 'A', ...fillet, length: '600', status: 'accepted' },
+      { id: 'b', n: 2, label: 'B', ...fillet, length: '157.1', status: 'candidate' },
+      { id: 'c', n: 3, label: 'C', ...fillet, length: '20', status: 'rejected' },
     ])
   })
 
   it('is empty for no seams', () => {
-    expect(seamRows([], {})).toEqual([])
+    expect(seamRows([], {}, {})).toEqual([])
   })
 })

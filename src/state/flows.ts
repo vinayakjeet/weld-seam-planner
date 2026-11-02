@@ -93,6 +93,7 @@ async function applyLoad(outcome: LoadOutcome, fileName: string, client: Geometr
     importState: { phase: 'idle' },
     seams: [],
     statusById: {},
+    typeById: {},
     selectedId: null,
     hoverId: null,
     detectSettings: DEFAULT_DETECT_SETTINGS,

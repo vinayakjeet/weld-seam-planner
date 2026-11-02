@@ -5,6 +5,7 @@ import { LineMaterial } from 'three/addons/lines/LineMaterial.js'
 import { LineSegments2 } from 'three/addons/lines/LineSegments2.js'
 import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js'
 import { useStore } from '../../state/store'
+import { useVisibleSeams } from '../../state/useVisibleSeams'
 import { cssVar } from './cssVar'
 import { overGizmo } from './gizmo'
 import { chooseSeamHit, type SeamLineHit } from './pickSeam'
@@ -61,7 +62,7 @@ function useDisposed(lines: LineSegments2 | null): void {
 // One merged line set holds every seam. Hover and selection are drawn again, thicker, in small overlay sets because
 // line width belongs to the material and cannot differ per seam inside the merged one.
 export function SeamLines({ partRef }: { partRef: RefObject<Mesh | null> }) {
-  const seams = useStore((s) => s.seams)
+  const seams = useVisibleSeams()
   const statusById = useStore((s) => s.statusById)
   const hoverId = useStore((s) => s.hoverId)
   const selectedId = useStore((s) => s.selectedId)

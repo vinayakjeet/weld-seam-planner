@@ -5,10 +5,13 @@ import { buildBodyBvhs } from '../../../src/core/seams/bodyBvh'
 import { DEFAULT_DETECT_SETTINGS, detectSeams, type SeamCandidate } from '../../../src/core/seams/detect'
 import { loadSampleModel, loadSoup, transformSoup } from '../helpers/models'
 import { readManifest, readSample } from '../helpers/samples'
-import { cubeTriangles, soupOf } from '../helpers/shapes'
+import { cubeTriangles, narrowFlangeT, soupOf, steppedLap } from '../helpers/shapes'
+import { shown } from '../helpers/state'
 
-const detect = (id: string, creaseAngleDeg = DEFAULT_DETECT_SETTINGS.creaseAngleDeg) =>
+// Corner candidates are detected but hidden, so everything below counts the visible seams unless it says "all".
+const detectAll = (id: string, creaseAngleDeg = DEFAULT_DETECT_SETTINGS.creaseAngleDeg) =>
   detectSeams(loadSampleModel(id), { creaseAngleDeg })
+const detect = (id: string, creaseAngleDeg = DEFAULT_DETECT_SETTINGS.creaseAngleDeg) => shown(detectAll(id, creaseAngleDeg))
 
 const countBy = (seams: SeamCandidate[], source: SeamCandidate['source']) => seams.filter((s) => s.source === source).length
 
@@ -67,7 +70,7 @@ describe('contact seams', () => {
   it('uses the supplied body BVHs instead of building its own', () => {
     const model = loadSampleModel('t-joint-assembly')
     const bvhs = buildBodyBvhs(model)
-    const seams = detectSeams(model, { creaseAngleDeg: 30 }, { bodyBvhs: bvhs })
+    const seams = shown(detectSeams(model, { creaseAngleDeg: 30 }, { bodyBvhs: bvhs }))
     expect(seams).toHaveLength(2)
   })
 
@@ -131,7 +134,7 @@ describe('winding repair', () => {
     const view = new DataView(buffer)
     const count = view.getUint32(80, true)
     for (let t = 0; t < count; t++) for (let c = 0; c < 3; c++) view.setFloat32(84 + 50 * t + 4 * c, 0, true)
-    const tampered = detectSeams(buildMeshModel(parseStl(buffer).positions, 1), DEFAULT_DETECT_SETTINGS)
+    const tampered = shown(detectSeams(buildMeshModel(parseStl(buffer).positions, 1), DEFAULT_DETECT_SETTINGS))
     expect(tampered.map((s) => s.id)).toEqual(detect('flipped-normals').map((s) => s.id))
   })
 
@@ -201,7 +204,7 @@ describe('detectSeams on single samples', () => {
 
   it('finds nothing on convex bodies that do not touch', () => {
     const apart = buildMeshModel(soupOf([...cubeTriangles([0, 0, 0], [50, 50, 50]), ...cubeTriangles([0, 0, 80], [50, 50, 50])]), 1)
-    expect(detectSeams(apart, DEFAULT_DETECT_SETTINGS)).toEqual([])
+    expect(shown(detectSeams(apart, DEFAULT_DETECT_SETTINGS))).toEqual([])
   })
 })
 
@@ -218,13 +221,32 @@ describe('detectSeams ids', () => {
   })
 })
 
+describe('classification under transforms', () => {
+  const turns = [
+    { rotate: { axis: [1, 2, 3] as [number, number, number], angleDeg: 37 }, translate: [100000, 100000, 100000] as [number, number, number] },
+    { rotate: { axis: [0, 1, 1] as [number, number, number], angleDeg: 11 }, translate: [-3000, 250, 40] as [number, number, number] },
+    { rotate: { axis: [3, -1, 2] as [number, number, number], angleDeg: 73 }, translate: [20, 20, 20] as [number, number, number] },
+    { rotate: { axis: [1, 0, 0] as [number, number, number], angleDeg: 5 }, translate: [1e5, 0, -1e5] as [number, number, number] },
+  ]
+
+  it.each(turns.map((t, i) => [i, t] as const))('keeps the merged T-joint fillets after turn %i', (_, turn) => {
+    const moved = transformSoup(loadSoup('t-joint-merged'), turn)
+    expect(shown(detectSeams(buildMeshModel(moved, 1), DEFAULT_DETECT_SETTINGS)).map((s) => s.jointType)).toEqual(['fillet', 'fillet'])
+  })
+
+  it.each(turns.map((t, i) => [i, t] as const))('keeps the narrow flange laps after turn %i', (_, turn) => {
+    const moved = transformSoup(soupOf(narrowFlangeT()), turn)
+    expect(shown(detectSeams(buildMeshModel(moved, 1), DEFAULT_DETECT_SETTINGS)).map((s) => s.jointType)).toEqual(['lap', 'lap'])
+  })
+})
+
 describe('detectSeams under transforms', () => {
   const soup = loadSoup('t-joint-merged')
-  const reference = detectSeams(buildMeshModel(soup, 1), DEFAULT_DETECT_SETTINGS)
+  const reference = shown(detectSeams(buildMeshModel(soup, 1), DEFAULT_DETECT_SETTINGS))
 
   it('still finds 2 seams on a part modelled in metres', () => {
     const metres = buildMeshModel(transformSoup(soup, { scale: 0.001 }), 1000)
-    expect(detectSeams(metres, DEFAULT_DETECT_SETTINGS)).toHaveLength(2)
+    expect(shown(detectSeams(metres, DEFAULT_DETECT_SETTINGS))).toHaveLength(2)
   })
 
   it('gives the same seams after a 37 degree turn about an arbitrary axis and a 100000 mm move', () => {
@@ -232,11 +254,126 @@ describe('detectSeams under transforms', () => {
       rotate: { axis: [1, 2, 3], angleDeg: 37 },
       translate: [100000, 100000, 100000],
     })
-    const seams = detectSeams(buildMeshModel(moved, 1), DEFAULT_DETECT_SETTINGS)
+    const seams = shown(detectSeams(buildMeshModel(moved, 1), DEFAULT_DETECT_SETTINGS))
     expect(seams).toHaveLength(reference.length)
     seams.forEach((seam, i) => {
       expect(Math.abs(seam.lengthMm - reference[i]!.lengthMm)).toBeLessThan(0.1)
       expect(Math.abs(seam.openingAngleDeg - 90)).toBeLessThan(1)
     })
+  })
+})
+
+describe('joint classification', () => {
+  it('classifies every visible seam of every sample as a fillet', () => {
+    for (const { id } of readManifest().samples) {
+      const types = new Set(detect(id).map((s) => s.jointType))
+      expect([...types], id).toEqual(['fillet'])
+    }
+  })
+
+  it('keeps the loops of the bar through the plate fillets, not saddles', () => {
+    const loops = detect('bar-through-plate')
+    expect(loops.map((s) => [s.source, s.jointType])).toEqual([['intersection', 'fillet'], ['intersection', 'fillet']])
+  })
+
+  it('calls both contact seams of two lapped plates laps', () => {
+    const lower = cubeTriangles([0, 0, 0], [100, 60, 10])
+    const upper = cubeTriangles([60, 0, 10], [100, 60, 10])
+    const seams = shown(detectSeams(buildMeshModel(soupOf([...lower, ...upper]), 1), DEFAULT_DETECT_SETTINGS))
+    expect(seams.map((s) => [s.source, s.jointType])).toEqual([['contact', 'lap'], ['contact', 'lap']])
+    for (const seam of seams) expect(seam.lengthMm).toBeCloseTo(60, 1)
+  })
+
+  it('calls the ends of a lap modelled as one body laps as well', () => {
+    const model = buildMeshModel(soupOf(steppedLap()), 1)
+    expect(model.bodies.count).toBe(1)
+    const seams = shown(detectSeams(model, DEFAULT_DETECT_SETTINGS))
+    expect(seams.map((s) => [s.source, s.jointType])).toEqual([['crease', 'lap'], ['crease', 'lap']])
+    for (const seam of seams) expect(seam.lengthMm).toBeCloseTo(60, 1)
+  })
+
+  it('reads a flange strip narrower than the web as a lap whichever face is the free one', () => {
+    const model = buildMeshModel(soupOf(narrowFlangeT()), 1)
+    expect(model.bodies.count).toBe(1)
+    const seams = shown(detectSeams(model, DEFAULT_DETECT_SETTINGS))
+    expect(seams.map((s) => s.jointType)).toEqual(['lap', 'lap'])
+    for (const seam of seams) expect(seam.lengthMm).toBeCloseTo(100, 1)
+  })
+
+  it('reads the narrow flange strips as laps after an arbitrary rotation and move', () => {
+    const turned = transformSoup(soupOf(narrowFlangeT()), { rotate: { axis: [1, 2, 3], angleDeg: 37 }, translate: [500, -300, 800] })
+    const seams = shown(detectSeams(buildMeshModel(turned, 1), DEFAULT_DETECT_SETTINGS))
+    expect(seams.map((s) => s.jointType)).toEqual(['lap', 'lap'])
+  })
+
+  it('keeps a web 80 mm tall on a 10 mm plate a fillet', () => {
+    expect(detect('t-joint-assembly').map((s) => s.jointType)).toEqual(['fillet', 'fillet'])
+    expect(detect('t-joint-merged').map((s) => s.jointType)).toEqual(['fillet', 'fillet'])
+  })
+})
+
+describe('corner candidates', () => {
+  const box = () => buildMeshModel(soupOf(cubeTriangles([0, 0, 0], [100, 40, 40])), 1)
+
+  it('gives a 100 x 40 x 40 box 12 hidden corners, 4 of 100 mm and 8 of 40 mm, and no visible seam', () => {
+    const all = detectSeams(box(), DEFAULT_DETECT_SETTINGS)
+    expect(shown(all)).toHaveLength(0)
+    expect(all).toHaveLength(12)
+    for (const seam of all) {
+      expect(seam.jointType).toBe('corner')
+      expect(seam.hidden).toBe(true)
+      expect(seam.source).toBe('crease')
+      expect(seam.concavity).toBe('known')
+      expect(seam.openingAngleDeg).toBeCloseTo(90, 1)
+    }
+    const lengths = all.map((s) => Math.round(s.lengthMm)).sort((a, b) => a - b)
+    expect(lengths).toEqual([...Array(8).fill(40), ...Array(4).fill(100)])
+  })
+
+  it('marks visible seams as not hidden', () => {
+    for (const seam of detect('t-joint-merged')) expect(seam.hidden).toBe(false)
+  })
+
+  it('finds hidden corners on every sample and keeps them out of the visible counts', () => {
+    for (const { id } of readManifest().samples) {
+      const all = detectAll(id)
+      expect(all.some((s) => s.hidden), id).toBe(true)
+      expect(all.filter((s) => s.hidden).every((s) => s.jointType === 'corner'), id).toBe(true)
+      expect(all.filter((s) => !s.hidden).every((s) => s.jointType !== 'corner'), id).toBe(true)
+    }
+  })
+
+  it('does not list a contact seam a second time as a hidden corner', () => {
+    const all = detectAll('t-joint-assembly')
+    const contact = all.filter((s) => s.source === 'contact')
+    expect(contact).toHaveLength(2)
+    const middle = (s: SeamCandidate) => s.points[s.points.length >> 1]!.p
+    for (const seam of all.filter((s) => s.hidden)) {
+      for (const c of contact) {
+        const d = Math.hypot(...(middle(seam).map((x, i) => x - middle(c)[i]!) as [number, number, number]))
+        expect(d > 1 || Math.abs(seam.lengthMm - c.lengthMm) > 1, `${seam.id} vs ${c.id}`).toBe(true)
+      }
+    }
+    // 12 edges of the plate and 12 of the web, less the 2 web edges that are the contact seams.
+    expect(all.filter((s) => s.hidden)).toHaveLength(22)
+  })
+
+  it('numbers visible seams first so that their labels do not move when corners are shown', () => {
+    const all = detectAll('t-joint-merged')
+    const visible = all.filter((s) => !s.hidden)
+    expect(visible.map((s) => s.label)).toEqual(['S1', 'S2'])
+    const hidden = all.filter((s) => s.hidden)
+    expect(hidden.map((s) => s.label)).toEqual(hidden.map((_, i) => `S${visible.length + i + 1}`))
+    expect(new Set(all.map((s) => s.id)).size).toBe(all.length)
+  })
+
+  it('offers no corner candidate in a body with no known inside', () => {
+    const quad = (a: number[], b: number[], c: number[], d: number[]) => [[...a, ...b, ...c], [...a, ...c, ...d]]
+    const sheet = soupOf([
+      ...quad([0, 0, 0], [40, 0, 0], [40, 40, 0], [0, 40, 0]),
+      ...quad([0, 40, 0], [40, 40, 0], [40, 40, 40], [0, 40, 40]),
+    ])
+    const all = detectSeams(buildMeshModel(sheet, 1), DEFAULT_DETECT_SETTINGS)
+    expect(all.filter((s) => s.hidden)).toHaveLength(0)
   })
 })

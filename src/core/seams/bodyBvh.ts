@@ -15,7 +15,6 @@ export interface BodyBvh {
 export function buildBodyBvhs(model: MeshModel): BodyBvh[] {
   const { count, triangleBody } = model.bodies
   if (count < 2) return []
-  const { positions, indices } = model.mesh
 
   const sizes = new Uint32Array(count)
   for (let t = 0; t < triangleBody.length; t++) sizes[triangleBody[t]!]!++
@@ -26,15 +25,24 @@ export function buildBodyBvhs(model: MeshModel): BodyBvh[] {
     lists[body]![filled[body]!++] = t
   }
 
-  return lists.map((triangles) => {
-    const index = new Uint32Array(triangles.length * 3)
-    triangles.forEach((t, k) => index.set(indices.subarray(t * 3, t * 3 + 3), k * 3))
-    const geometry = new BufferGeometry()
-    geometry.setAttribute('position', new BufferAttribute(positions, 3))
-    geometry.setIndex(new BufferAttribute(index, 1))
-    // Indirect keeps the index in triangle order, which the triangles map above relies on.
-    const bvh = new MeshBVH(geometry, { indirect: true })
-    const box = bvh.getBoundingBox(new Box3())
-    return { bvh, triangles, min: [box.min.x, box.min.y, box.min.z], max: [box.max.x, box.max.y, box.max.z] }
-  })
+  return lists.map((triangles) => indexTriangles(model, triangles))
+}
+
+// One BVH over the whole mesh, for the few checks on a single-body part that need a ray (the lap rule). Built only
+// on demand, never for detection of contact or intersection.
+export function buildWholeBvh(model: MeshModel): BodyBvh {
+  return indexTriangles(model, Uint32Array.from({ length: model.mesh.triangleCount }, (_, t) => t))
+}
+
+function indexTriangles(model: MeshModel, triangles: Uint32Array): BodyBvh {
+  const { positions, indices } = model.mesh
+  const index = new Uint32Array(triangles.length * 3)
+  triangles.forEach((t, k) => index.set(indices.subarray(t * 3, t * 3 + 3), k * 3))
+  const geometry = new BufferGeometry()
+  geometry.setAttribute('position', new BufferAttribute(positions, 3))
+  geometry.setIndex(new BufferAttribute(index, 1))
+  // Indirect keeps the index in triangle order, which the triangles map relies on.
+  const bvh = new MeshBVH(geometry, { indirect: true })
+  const box = bvh.getBoundingBox(new Box3())
+  return { bvh, triangles, min: [box.min.x, box.min.y, box.min.z], max: [box.max.x, box.max.y, box.max.z] }
 }

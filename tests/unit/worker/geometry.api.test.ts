@@ -11,6 +11,7 @@ import {
   type UserError,
 } from '../../../src/worker/geometry.api'
 import { DEFAULT_DETECT_SETTINGS } from '../../../src/core/seams/detect'
+import { shown } from '../helpers/state'
 import { readSample } from '../helpers/samples'
 import { makeBinaryStl, TRIANGLES } from '../helpers/stl'
 
@@ -155,7 +156,7 @@ describe('geometry api: bad files come back as readable errors', () => {
     const failed = await api.loadStl(new ArrayBuffer(0), 'bad.stl', () => {})
     expect(failed.status).toBe('error')
     const detected = await api.detect(DEFAULT_DETECT_SETTINGS, () => {})
-    expect(detected.status === 'ok' && detected.seams.length).toBe(2)
+    expect(detected.status === 'ok' && shown(detected.seams).length).toBe(2)
   })
 })
 
@@ -173,7 +174,7 @@ describe('geometry api: detect', () => {
     const outcome = await api.detect(DEFAULT_DETECT_SETTINGS, onProgress)
     expect(outcome.status).toBe('ok')
     if (outcome.status !== 'ok') return
-    expect(outcome.seams).toHaveLength(2)
+    expect(shown(outcome.seams)).toHaveLength(2)
     expect(outcome.ms).toBeGreaterThanOrEqual(0)
     expect(events.every(([stage]) => stage === 'detect')).toBe(true)
     expect(events[events.length - 1]![1]).toBe(1)
@@ -186,7 +187,7 @@ describe('geometry api: detect', () => {
     expect(second.part.name).toBe('second.stl')
     expect(second.part.triangles).not.toBe(first.part.triangles)
     const detected = await api.detect(DEFAULT_DETECT_SETTINGS, () => {})
-    expect(detected.status === 'ok' && detected.seams.length).toBe(8)
+    expect(detected.status === 'ok' && shown(detected.seams).length).toBe(8)
   })
 })
 
@@ -217,7 +218,7 @@ describe('geometry client over a real message channel', () => {
     expect(zHitAt(display, 0, 40)).toBeCloseTo(10, 3)
 
     const detected = await client.detect(DEFAULT_DETECT_SETTINGS, () => {})
-    expect(detected.status === 'ok' && detected.seams.length).toBe(2)
+    expect(detected.status === 'ok' && shown(detected.seams).length).toBe(2)
   })
 })
 
@@ -226,7 +227,7 @@ describe('geometry api: contact seams', () => {
     const api = createGeometryApi()
     ready(await api.loadStl(readSample('t-joint-assembly'), 't-joint-assembly.stl', () => {}))
     const outcome = await api.detect(DEFAULT_DETECT_SETTINGS, () => {})
-    expect(outcome.status === 'ok' && outcome.seams.map((s) => s.source)).toEqual(['contact', 'contact'])
+    expect(outcome.status === 'ok' && shown(outcome.seams).map((s) => s.source)).toEqual(['contact', 'contact'])
   })
 
   it('never builds body BVHs for a single body part', async () => {
@@ -282,6 +283,6 @@ describe('geometry api: winding repair', () => {
     const api = createGeometryApi()
     ready(await api.loadStl(readSample('flipped-normals'), 'flipped-normals.stl', () => {}))
     const outcome = await api.detect(DEFAULT_DETECT_SETTINGS, () => {})
-    expect(outcome.status === 'ok' && outcome.seams).toHaveLength(4)
+    expect(outcome.status === 'ok' && shown(outcome.seams)).toHaveLength(4)
   })
 })

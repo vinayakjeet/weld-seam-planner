@@ -79,11 +79,13 @@ describe('importBuffer', () => {
     const client = fakeClient({ loadStl: async () => readyOutcome(), detect: async () => detected([seam('a'), seam('b')]) })
     await importBuffer(buffer(), 'first.stl', client)
     state().toggleAccepted('a')
+    state().setType('b', 'lap')
     state().select('a')
-    expect(useStore.temporal.getState().pastStates).toHaveLength(1)
+    expect(useStore.temporal.getState().pastStates).toHaveLength(2)
 
     await importBuffer(buffer(), 'second.stl', client)
     expect(state().statusById).toEqual({})
+    expect(state().typeById).toEqual({})
     expect(state().selectedId).toBeNull()
     expect(useStore.temporal.getState().pastStates).toHaveLength(0)
     expect(useStore.temporal.getState().futureStates).toHaveLength(0)
@@ -235,6 +237,14 @@ describe('runDetect', () => {
     await b
     expect(state().seams.map((s) => s.id)).toEqual(['new'])
     expect(state().detectBusy).toBe(false)
+  })
+
+  it('keeps type overrides across a new detection run', async () => {
+    const client = fakeClient({ detect: async () => detected([seam('a'), seam('b')]) })
+    await runDetect({ creaseAngleDeg: 30 }, client)
+    state().setType('a', 'saddle')
+    await runDetect({ creaseAngleDeg: 35 }, client)
+    expect(state().typeById).toEqual({ a: 'saddle' })
   })
 
   it('keeps accepted seams when the slider hides them and restores them when it returns', async () => {

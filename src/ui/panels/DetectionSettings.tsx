@@ -11,6 +11,9 @@ export function DetectionSettings() {
   const settings = useStore((s) => s.detectSettings)
   const busy = useStore((s) => s.detectBusy)
   const hidden = hiddenAcceptedMessage(useStore((s) => selectStats(s).hiddenAccepted))
+  const showCorners = useStore((s) => s.showCorners)
+  const setShowCorners = useStore((s) => s.setShowCorners)
+  const cornerCount = useStore((s) => s.seams.reduce((n, seam) => n + (seam.hidden ? 1 : 0), 0))
 
   if (!partLoaded) {
     return <p className="p-3 text-ink-2">Detection settings and the body list appear here once a part is loaded.</p>
@@ -35,6 +38,22 @@ export function DetectionSettings() {
       <p className="text-ink-2">
         An edge counts as a seam candidate when the two faces bend at least this far from flat. Lower finds shallower folds, higher keeps only sharp corners.
       </p>
+      <div className="flex items-start gap-2 border-t border-line pt-3">
+        <input
+          id="show-corners"
+          type="checkbox"
+          role="switch"
+          checked={showCorners}
+          onChange={(e) => setShowCorners(e.target.checked)}
+          className="mt-0.5 accent-brand"
+        />
+        <label htmlFor="show-corners" className="flex flex-col gap-0.5">
+          <span className="text-ink-0">Show corner candidates</span>
+          <span className="text-ink-2">
+            Outside edges where two plates meet, offered for corner joints. {cornerCount === 1 ? '1 found' : `${cornerCount} found`}; hidden by default because most are not welded.
+          </span>
+        </label>
+      </div>
       <p role="status" className="min-h-4 text-ink-1">
         {busy ? 'Detecting seams.' : ''}
       </p>

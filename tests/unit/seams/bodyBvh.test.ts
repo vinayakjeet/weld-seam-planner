@@ -1,10 +1,12 @@
 import { Vector3 } from 'three'
 import { describe, expect, it, vi } from 'vitest'
 import { buildMeshModel } from '../../../src/core/mesh/model'
-import { buildBodyBvhs } from '../../../src/core/seams/bodyBvh'
+import { buildBodyBvhs, buildWholeBvh } from '../../../src/core/seams/bodyBvh'
 import { computeFaceData } from '../../../src/core/mesh/faces'
 import { contactTolerance, findContactEdges } from '../../../src/core/seams/contact'
-import { cubeTriangles, soupOf } from '../helpers/shapes'
+import { DEFAULT_DETECT_SETTINGS, detectSeams } from '../../../src/core/seams/detect'
+import { loadSampleModel } from '../helpers/models'
+import { cubeTriangles, soupOf, steppedLap } from '../helpers/shapes'
 
 const built = vi.hoisted(() => ({ count: 0 }))
 
@@ -71,5 +73,31 @@ describe('contactTolerance', () => {
 
   it('never drops below 0.05 mm', () => {
     expect(contactTolerance(10)).toBe(0.05)
+  })
+})
+
+describe('buildWholeBvh', () => {
+  it('indexes every triangle of a single body in order', () => {
+    built.count = 0
+    const single = model(cubeTriangles([0, 0, 0], [10, 10, 10]))
+    const whole = buildWholeBvh(single)
+    expect(built.count).toBe(1)
+    expect(Array.from(whole.triangles)).toEqual([...Array(12).keys()])
+    whole.max.forEach((v) => expect(v).toBeCloseTo(10, 4))
+    expect(whole.bvh.closestPointToPoint(new Vector3(5, 5, 30))!.distance).toBeCloseTo(20)
+  })
+})
+
+describe('detectSeams and the BVH of a single body', () => {
+  it('builds none when every free face is a wall', () => {
+    built.count = 0
+    detectSeams(loadSampleModel('t-joint-merged'), DEFAULT_DETECT_SETTINGS)
+    expect(built.count).toBe(0)
+  })
+
+  it('builds one over the whole mesh when a strip needs the thickness behind it', () => {
+    built.count = 0
+    detectSeams(model(steppedLap()), DEFAULT_DETECT_SETTINGS)
+    expect(built.count).toBe(1)
   })
 })
