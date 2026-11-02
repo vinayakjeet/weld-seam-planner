@@ -1,7 +1,7 @@
 import * as Comlink from 'comlink'
 import { BufferAttribute, BufferGeometry, DoubleSide, Ray, Vector3 } from 'three'
 import { MeshBVH } from 'three-mesh-bvh'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { wrapGeometryApi } from '../../../src/worker/client'
 import {
   createGeometryApi,
@@ -14,7 +14,20 @@ import { DEFAULT_DETECT_SETTINGS } from '../../../src/core/seams/detect'
 import { readSample } from '../helpers/samples'
 import { makeBinaryStl, TRIANGLES } from '../helpers/stl'
 
-type Stage = 'read' | 'weld' | 'topology' | 'index' | 'detect'
+type Stage = 'read' | 'weld' | 'topology' | 'index' | 'contact' | 'detect'
+
+const built = vi.hoisted(() => ({ count: 0 }))
+
+vi.mock('three-mesh-bvh', async (importOriginal) => {
+  const original = await importOriginal<typeof import('three-mesh-bvh')>()
+  class CountingBvh extends original.MeshBVH {
+    constructor(...args: ConstructorParameters<typeof original.MeshBVH>) {
+      super(...args)
+      built.count++
+    }
+  }
+  return { ...original, MeshBVH: CountingBvh }
+})
 
 function recorder() {
   const events: Array<[Stage, number]> = []
@@ -205,5 +218,52 @@ describe('geometry client over a real message channel', () => {
 
     const detected = await client.detect(DEFAULT_DETECT_SETTINGS, () => {})
     expect(detected.status === 'ok' && detected.seams.length).toBe(2)
+  })
+})
+
+describe('geometry api: contact seams', () => {
+  it('finds the two contact seams of the T-joint assembly', async () => {
+    const api = createGeometryApi()
+    ready(await api.loadStl(readSample('t-joint-assembly'), 't-joint-assembly.stl', () => {}))
+    const outcome = await api.detect(DEFAULT_DETECT_SETTINGS, () => {})
+    expect(outcome.status === 'ok' && outcome.seams.map((s) => s.source)).toEqual(['contact', 'contact'])
+  })
+
+  it('never builds body BVHs for a single body part', async () => {
+    const api = createGeometryApi()
+    ready(await api.loadStl(readSample('t-joint-merged'), 't-joint-merged.stl', () => {}))
+    built.count = 0
+    await api.detect(DEFAULT_DETECT_SETTINGS, () => {})
+    expect(built.count).toBe(0)
+  })
+
+  it('builds the body BVHs once per loaded part and reuses them when the slider changes', async () => {
+    const api = createGeometryApi()
+    ready(await api.loadStl(readSample('t-joint-assembly'), 't-joint-assembly.stl', () => {}))
+    built.count = 0
+    await api.detect(DEFAULT_DETECT_SETTINGS, () => {})
+    expect(built.count).toBe(2)
+    await api.detect({ creaseAngleDeg: 45 }, () => {})
+    await api.detect({ creaseAngleDeg: 20 }, () => {})
+    expect(built.count).toBe(2)
+  })
+
+  it('rebuilds them for a newly loaded part', async () => {
+    const api = createGeometryApi()
+    ready(await api.loadStl(readSample('t-joint-assembly'), 'a.stl', () => {}))
+    await api.detect(DEFAULT_DETECT_SETTINGS, () => {})
+    ready(await api.loadStl(readSample('double-bottom-cell'), 'b.stl', () => {}))
+    built.count = 0
+    await api.detect(DEFAULT_DETECT_SETTINGS, () => {})
+    expect(built.count).toBe(7)
+  })
+
+  it('reports a contact stage before the detect stage for multi body parts only', async () => {
+    const api = createGeometryApi()
+    ready(await api.loadStl(readSample('t-joint-assembly'), 'a.stl', () => {}))
+    const { events, onProgress } = recorder()
+    await api.detect(DEFAULT_DETECT_SETTINGS, onProgress)
+    expect(events.some(([stage]) => stage === 'contact')).toBe(true)
+    expect(events[events.length - 1]).toEqual(['detect', 1])
   })
 })

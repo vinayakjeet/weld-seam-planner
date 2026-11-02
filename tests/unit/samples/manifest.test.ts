@@ -38,6 +38,18 @@ describe('sampleManifestSchema', () => {
     expect(sampleManifestSchema.safeParse(bad).success).toBe(false)
   })
 
+  it('defaults the contact and intersection counts to 0', () => {
+    const parsed = sampleManifestSchema.parse({ version: 1, samples: [entry] })
+    expect([parsed.samples[0]!.expectedContactSeams, parsed.samples[0]!.expectedIntersectionSeams]).toEqual([0, 0])
+  })
+
+  it('rejects a negative expected contact or intersection count', () => {
+    for (const field of ['expectedContactSeams', 'expectedIntersectionSeams']) {
+      const bad = { version: 1, samples: [{ ...entry, [field]: -1 }] }
+      expect(sampleManifestSchema.safeParse(bad).success, field).toBe(false)
+    }
+  })
+
   it('rejects duplicate ids', () => {
     const bad = { version: 1, samples: [entry, { ...entry, file: 'b.stl' }] }
     expect(sampleManifestSchema.safeParse(bad).success).toBe(false)
@@ -85,6 +97,25 @@ describe('public/samples', () => {
     expect(girder?.description).toBe(
       'Welded box girder: 4 outside fillets, 4 inside corners only reachable from the open ends',
     )
+  })
+
+  it('records the hand-derived contact counts', () => {
+    const contact = Object.fromEntries(manifest.samples.map((s) => [s.id, s.expectedContactSeams]))
+    expect(contact).toMatchObject({
+      't-joint-merged': 0,
+      't-joint-assembly': 2,
+      't-joint-inch': 0,
+      't-joint-ascii': 0,
+      'l-bracket-gussets': 0,
+      'box-beam': 0,
+      'pipe-on-plate': 0,
+      'double-bottom-cell': 50,
+    })
+  })
+
+  it('no longer says contact detection is missing', () => {
+    expect(byId.get('t-joint-assembly')?.description).not.toMatch(/until contact detection exists/)
+    expect(byId.get('double-bottom-cell')?.description).not.toMatch(/need contact detection/)
   })
 
   it('records the hand-derived crease counts and body counts', () => {

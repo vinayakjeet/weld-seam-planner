@@ -8,6 +8,8 @@ export const sampleEntrySchema = z.object({
   units: z.enum(['mm', 'in']),
   bodies: z.number().int().positive(),
   expectedCreaseSeams: z.number().int().nonnegative(),
+  expectedContactSeams: z.number().int().nonnegative().default(0),
+  expectedIntersectionSeams: z.number().int().nonnegative().default(0),
 })
 
 export const sampleManifestSchema = z

@@ -8,16 +8,20 @@
       "description": "T-joint as one merged body: plate and web fused, two concave seams",
       "units": "mm",
       "bodies": 1,
-      "expectedCreaseSeams": 2
+      "expectedCreaseSeams": 2,
+      "expectedContactSeams": 0,
+      "expectedIntersectionSeams": 0
     },
     {
       "id": "t-joint-assembly",
       "file": "t-joint-assembly.stl",
       "name": "T-joint (assembly)",
-      "description": "T-joint as two separate touching bodies: no creases until contact detection exists",
+      "description": "T-joint as two separate touching bodies: two contact seams, the same as the merged T-joint",
       "units": "mm",
       "bodies": 2,
-      "expectedCreaseSeams": 0
+      "expectedCreaseSeams": 0,
+      "expectedContactSeams": 2,
+      "expectedIntersectionSeams": 0
     },
     {
       "id": "t-joint-inch",
@@ -26,7 +30,9 @@
       "description": "T-joint modelled in inches: triggers the units prompt",
       "units": "in",
       "bodies": 1,
-      "expectedCreaseSeams": 2
+      "expectedCreaseSeams": 2,
+      "expectedContactSeams": 0,
+      "expectedIntersectionSeams": 0
     },
     {
       "id": "t-joint-ascii",
@@ -35,7 +41,9 @@
       "description": "T-joint saved as an ASCII STL file",
       "units": "mm",
       "bodies": 1,
-      "expectedCreaseSeams": 2
+      "expectedCreaseSeams": 2,
+      "expectedContactSeams": 0,
+      "expectedIntersectionSeams": 0
     },
     {
       "id": "l-bracket-gussets",
@@ -44,7 +52,9 @@
       "description": "L-bracket with three triangular gussets: many short seams",
       "units": "mm",
       "bodies": 1,
-      "expectedCreaseSeams": 16
+      "expectedCreaseSeams": 16,
+      "expectedContactSeams": 0,
+      "expectedIntersectionSeams": 0
     },
     {
       "id": "box-beam",
@@ -53,7 +63,9 @@
       "description": "Welded box girder: 4 outside fillets, 4 inside corners only reachable from the open ends",
       "units": "mm",
       "bodies": 1,
-      "expectedCreaseSeams": 8
+      "expectedCreaseSeams": 8,
+      "expectedContactSeams": 0,
+      "expectedIntersectionSeams": 0
     },
     {
       "id": "pipe-on-plate",
@@ -62,16 +74,20 @@
       "description": "Hollow pipe welded to a plate: one outer loop and one bore loop",
       "units": "mm",
       "bodies": 1,
-      "expectedCreaseSeams": 2
+      "expectedCreaseSeams": 2,
+      "expectedContactSeams": 0,
+      "expectedIntersectionSeams": 0
     },
     {
       "id": "double-bottom-cell",
       "file": "double-bottom-cell.stl",
       "name": "Double-bottom cell",
-      "description": "Seven separate plates, girders and stiffened floors in exact contact: most seams need contact detection",
+      "description": "Seven separate plates, girders and stiffened floors in exact contact: contact and crease seams",
       "units": "mm",
       "bodies": 7,
-      "expectedCreaseSeams": 6
+      "expectedCreaseSeams": 6,
+      "expectedContactSeams": 50,
+      "expectedIntersectionSeams": 0
     }
   ]
 }

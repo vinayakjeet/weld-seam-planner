@@ -16,6 +16,7 @@ const STAGE_LABELS: Record<Stage, string> = {
   weld: 'Merging vertices',
   topology: 'Building edge topology',
   index: 'Preparing display',
+  contact: 'Indexing bodies for contact',
   detect: 'Detecting seams',
 }
 

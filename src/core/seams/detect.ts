@@ -1,9 +1,12 @@
+import type { Vec3 } from '../math/vec3'
 import { computeFaceData, type FaceData } from '../mesh/faces'
 import type { MeshModel } from '../mesh/model'
+import { buildBodyBvhs, type BodyBvh } from './bodyBvh'
 import { chainEdges, edgeEnds, type Chain } from './chain'
 import { confidence } from './confidence'
+import { findContactEdges } from './contact'
 import { extractCreaseEdges, type CreaseEdges } from './crease'
-import { buildSeamPoints, type SeamPoint } from './frames'
+import { buildSeamPoints, type NormalsOf, type SeamPoint } from './frames'
 
 export interface DetectSettings {
   creaseAngleDeg: number
@@ -11,10 +14,17 @@ export interface DetectSettings {
 
 export const DEFAULT_DETECT_SETTINGS: DetectSettings = { creaseAngleDeg: 30 }
 
+// Passes that need per-body BVHs reuse these when given; otherwise they build their own.
+export interface DetectContext {
+  bodyBvhs?: BodyBvh[]
+}
+
+export type SeamSource = 'crease' | 'contact' | 'intersection' | 'nonmanifold' | 'manual'
+
 export interface SeamCandidate {
   id: string
   label: string
-  source: 'crease'
+  source: SeamSource
   jointType: 'fillet'
   confidence: number
   closed: boolean
@@ -27,27 +37,18 @@ const TURN_BREAK_DEG = 40
 const MIN_LENGTH_MM = 10
 const MIN_LENGTH_FRACTION = 0.01
 
-export function detectSeams(model: MeshModel, settings: DetectSettings): SeamCandidate[] {
+type RawSeam = Omit<SeamCandidate, 'label'>
+
+export function detectSeams(model: MeshModel, settings: DetectSettings, context: DetectContext = {}): SeamCandidate[] {
   const faces = computeFaceData(model.mesh)
-  const creases = extractCreaseEdges(model, faces, settings.creaseAngleDeg)
-  const chains = chainEdges(model.mesh.positions, edgeEnds(model.edges, creases.edgeIds), TURN_BREAK_DEG)
   const minLength = Math.max(MIN_LENGTH_MM, MIN_LENGTH_FRACTION * model.bounds.diagonal)
 
-  const found: Omit<SeamCandidate, 'label'>[] = []
-  for (const chain of chains) {
-    const { points, lengthMm } = buildSeamPoints(chain, creases.edgeIds, model, faces)
-    if (lengthMm < minLength) continue
-    const { openingAngleDeg, medianAdjacentAreaMm2 } = describeChain(chain, creases, model, faces)
-    found.push({
-      id: '',
-      source: 'crease',
-      jointType: 'fillet',
-      confidence: confidence({ lengthMm, openingDeg: openingAngleDeg, medianAdjacentAreaMm2, diagonal: model.bounds.diagonal }),
-      closed: chain.closed,
-      lengthMm,
-      openingAngleDeg,
-      points,
-    })
+  const creases = extractCreaseEdges(model, faces, settings.creaseAngleDeg)
+  const found: RawSeam[] = seamsFromEdges('crease', creases, model, faces, minLength)
+
+  if (model.bodies.count > 1) {
+    const bvhs = context.bodyBvhs ?? buildBodyBvhs(model)
+    found.push(...contactSeams(model, faces, bvhs, settings, minLength))
   }
 
   for (const seam of found) seam.id = seamId(seam)
@@ -60,6 +61,55 @@ export function detectSeams(model: MeshModel, settings: DetectSettings): SeamCan
     used.add(id)
     return { ...seam, id, label: `S${i + 1}` }
   })
+}
+
+// The plate normals of a contact seam are the free face of the touching body and the surface it touches, so the
+// opening angle is measured between those two, not between the two faces of the touching body's own edge.
+function contactSeams(model: MeshModel, faces: FaceData, bvhs: BodyBvh[], settings: DetectSettings, minLength: number): RawSeam[] {
+  const contact = findContactEdges(model, faces, bvhs, settings.creaseAngleDeg)
+  const normalsOfEdge = (k: number): [Vec3, Vec3] => {
+    const free = contact.freeFace[k]! * 3
+    return [
+      [faces.normals[free]!, faces.normals[free + 1]!, faces.normals[free + 2]!],
+      [contact.touchedNormal[k * 3]!, contact.touchedNormal[k * 3 + 1]!, contact.touchedNormal[k * 3 + 2]!],
+    ]
+  }
+  const dihedralDeg = Float32Array.from(contact.edgeIds, (_, k) => {
+    const [n1, n2] = normalsOfEdge(k)
+    const cos = n1[0] * n2[0] + n1[1] * n2[1] + n1[2] * n2[2]
+    return (Math.acos(Math.max(-1, Math.min(1, cos))) * 180) / Math.PI
+  })
+  return seamsFromEdges('contact', { edgeIds: contact.edgeIds, dihedralDeg }, model, faces, minLength, normalsOfEdge)
+}
+
+// Chains the edges, drops chains under minLength and describes the rest. normalsOfEdge indexes the edge list.
+function seamsFromEdges(
+  source: SeamSource,
+  edges: CreaseEdges,
+  model: MeshModel,
+  faces: FaceData,
+  minLength: number,
+  normalsOfEdge?: (edge: number) => [Vec3, Vec3],
+): RawSeam[] {
+  const chains = chainEdges(model.mesh.positions, edgeEnds(model.edges, edges.edgeIds), TURN_BREAK_DEG)
+  const seams: RawSeam[] = []
+  for (const chain of chains) {
+    const normalsOf: NormalsOf | undefined = normalsOfEdge && ((segment) => normalsOfEdge(chain.edges[segment]!))
+    const { points, lengthMm } = buildSeamPoints(chain, edges.edgeIds, model, faces, normalsOf)
+    if (lengthMm < minLength) continue
+    const { openingAngleDeg, medianAdjacentAreaMm2 } = describeChain(chain, edges, model, faces)
+    seams.push({
+      id: '',
+      source,
+      jointType: 'fillet',
+      confidence: confidence({ lengthMm, openingDeg: openingAngleDeg, medianAdjacentAreaMm2, diagonal: model.bounds.diagonal }),
+      closed: chain.closed,
+      lengthMm,
+      openingAngleDeg,
+      points,
+    })
+  }
+  return seams
 }
 
 // Opening angle is the length-weighted mean of 180 - theta; the area is the median over the faces beside the seam.
@@ -85,7 +135,7 @@ function describeChain(chain: Chain, creases: CreaseEdges, model: MeshModel, fac
 
 // Stable across runs and across settings that leave the seam unchanged: hashes the start, middle and end points
 // and the length, each rounded to 0.1 mm.
-function seamId(seam: Omit<SeamCandidate, 'label'>): string {
+function seamId(seam: RawSeam): string {
   const { points } = seam
   const pick = [points[0]!, points[points.length >> 1]!, points[points.length - 1]!]
   const key = [...pick.flatMap(({ p }) => p), seam.lengthMm].map((x) => Math.round(x * 10)).join(',')
@@ -94,5 +144,5 @@ function seamId(seam: Omit<SeamCandidate, 'label'>): string {
     hash ^= key.charCodeAt(i)
     hash = Math.imul(hash, 0x01000193)
   }
-  return `crease-${(hash >>> 0).toString(16).padStart(8, '0')}`
+  return `${seam.source}-${(hash >>> 0).toString(16).padStart(8, '0')}`
 }

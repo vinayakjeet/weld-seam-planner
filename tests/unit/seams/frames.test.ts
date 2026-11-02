@@ -4,7 +4,7 @@ import { computeFaceData } from '../../../src/core/mesh/faces'
 import type { MeshModel } from '../../../src/core/mesh/model'
 import { chainEdges, edgeEnds, type Chain } from '../../../src/core/seams/chain'
 import { extractCreaseEdges } from '../../../src/core/seams/crease'
-import { buildSeamPoints } from '../../../src/core/seams/frames'
+import { buildSeamPoints, pointsFromPolyline } from '../../../src/core/seams/frames'
 import { loadSampleModel } from '../helpers/models'
 
 function pipeline(model: MeshModel) {
@@ -76,6 +76,56 @@ describe('buildSeamPoints on the pipe loops', () => {
       const [vertical, side] = Math.abs(n1[2]) > Math.abs(n2[2]) ? [n1, n2] : [n2, n1]
       expect(Math.abs(vertical[2])).toBeGreaterThan(0.999)
       expect(Math.abs(side[2])).toBeLessThan(0.01)
+    }
+  })
+})
+
+describe('pointsFromPolyline', () => {
+  const along = (n1: Vec3, n2: Vec3) => () => [n1, n2] as [Vec3, Vec3]
+
+  it('samples an open polyline with the tangent and the provided plate normals', () => {
+    const { points, lengthMm } = pointsFromPolyline([[0, 0, 0], [10, 0, 0]], false, along([0, 1, 0], [0, 0, 1]))
+    expect(lengthMm).toBeCloseTo(10)
+    expect(points[0]!.p).toEqual([0, 0, 0])
+    expect(points[points.length - 1]!.s).toBeCloseTo(10)
+    for (const { t, n1, n2 } of points) {
+      expect(t).toEqual([1, 0, 0])
+      expect(n1).toEqual([0, 1, 0])
+      expect(n2).toEqual([0, 0, 1])
+    }
+  })
+
+  it('swaps the normals so that n1 x n2 always points along the tangent', () => {
+    const { points } = pointsFromPolyline([[0, 0, 0], [10, 0, 0]], false, along([0, 0, 1], [0, 1, 0]))
+    for (const { t, n1, n2 } of points) {
+      expect(n1).toEqual([0, 1, 0])
+      expect(n2).toEqual([0, 0, 1])
+      expect(dot(cross(n1, n2), t)).toBeGreaterThan(0)
+    }
+  })
+
+  it('asks the provider per polyline segment and closes a loop without repeating the first point', () => {
+    const asked = new Set<number>()
+    const square: Vec3[] = [[0, 0, 0], [10, 0, 0], [10, 10, 0], [0, 10, 0]]
+    const { points, lengthMm } = pointsFromPolyline(square, true, (segment) => {
+      asked.add(segment)
+      return [[0, 0, 1], [0, 0, 1]]
+    })
+    expect(lengthMm).toBeCloseTo(40)
+    expect([...asked].sort()).toEqual([0, 1, 2, 3])
+    const first = points[0]!.p
+    expect(points.slice(1).some(({ p }) => length([p[0] - first[0], p[1] - first[1], p[2] - first[2]]) < 1e-9)).toBe(false)
+  })
+})
+
+describe('buildSeamPoints with a normals provider', () => {
+  it('uses the provider instead of the adjacent faces', () => {
+    const model = loadSampleModel('t-joint-merged')
+    const { faces, edgeIds, chains } = pipeline(model)
+    const { points } = buildSeamPoints(chains[0]!, edgeIds, model, faces, () => [[1, 0, 0], [0, 0, 1]])
+    for (const { n1, n2, t } of points) {
+      expect(new Set([n1.join(), n2.join()])).toEqual(new Set(['1,0,0', '0,0,1']))
+      expect(Math.abs(dot(cross(n1, n2), t))).toBeCloseTo(0, 6)
     }
   })
 })

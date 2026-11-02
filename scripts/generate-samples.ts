@@ -128,12 +128,17 @@ interface Sample extends SampleEntry {
   ascii: boolean
 }
 
+type Counted = 'expectedContactSeams' | 'expectedIntersectionSeams'
+
 function sample(
-  fields: Omit<SampleEntry, 'file' | 'bodies'> & { solids: Manifold[]; scale?: number; ascii?: boolean },
+  fields: Omit<SampleEntry, 'file' | 'bodies' | Counted> &
+    Partial<Pick<SampleEntry, Counted>> & { solids: Manifold[]; scale?: number; ascii?: boolean },
 ): Sample {
-  const { solids, scale = 1, ascii = false, ...entry } = fields
+  const { solids, scale = 1, ascii = false, expectedContactSeams = 0, expectedIntersectionSeams = 0, ...entry } = fields
   return {
     ...entry,
+    expectedContactSeams,
+    expectedIntersectionSeams,
     file: `${entry.id}.stl`,
     bodies: solids.length,
     soup: toSoup(solids).map((x) => x * scale),
@@ -155,10 +160,12 @@ const samples: Sample[] = [
   sample({
     id: 't-joint-assembly',
     name: 'T-joint (assembly)',
-    description: 'T-joint as two separate touching bodies: no creases until contact detection exists',
+    description: 'T-joint as two separate touching bodies: two contact seams, the same as the merged T-joint',
     units: 'mm',
     solids: [tj.plate, tj.webOnPlate],
-    expectedCreaseSeams: 0, // two separate boxes, every edge convex = 0 (contact seams are Phase 2)
+    expectedCreaseSeams: 0, // two separate boxes, every edge convex = 0
+    // 2 web bottom edges (200 mm) lie on the plate top = 2; the two 10 mm end edges are flush with the plate ends
+    expectedContactSeams: 2 * 1,
   }),
   sample({
     id: 't-joint-inch',
@@ -207,10 +214,15 @@ const samples: Sample[] = [
   sample({
     id: 'double-bottom-cell',
     name: 'Double-bottom cell',
-    description: 'Seven separate plates, girders and stiffened floors in exact contact: most seams need contact detection',
+    description: 'Seven separate plates, girders and stiffened floors in exact contact: contact and crease seams',
     units: 'mm',
     solids: doubleBottomCell(),
     expectedCreaseSeams: 3 * 2, // 3 stiffened floors x 2 concave lines (bar top and bar bottom against the floor face) = 6
+    // Edges under 10 mm (floor ends at plates and girders, bar tip) are dropped by the length filter.
+    expectedContactSeams:
+      2 * 2 * 2 + // 2 girders x 2 plates x 2 long edges (800 mm)
+      3 * 2 * 2 + // 3 floors x 2 plates x 2 long edges (150 mm)
+      3 * 2 * 5, // 3 floors x 2 girders x 5 edges of the T shaped end face (100, 44, 48, 40, 40 mm)
   }),
 ]
 
@@ -222,14 +234,16 @@ for (const s of samples) {
 
 const manifest = sampleManifestSchema.parse({
   version: 1,
-  samples: samples.map(({ id, file, name, description, units, bodies, expectedCreaseSeams }) => ({
-    id,
-    file,
-    name,
-    description,
-    units,
-    bodies,
-    expectedCreaseSeams,
+  samples: samples.map((s) => ({
+    id: s.id,
+    file: s.file,
+    name: s.name,
+    description: s.description,
+    units: s.units,
+    bodies: s.bodies,
+    expectedCreaseSeams: s.expectedCreaseSeams,
+    expectedContactSeams: s.expectedContactSeams,
+    expectedIntersectionSeams: s.expectedIntersectionSeams,
   })),
 })
 writeFileSync(`${OUT_DIR}manifest.json`, `${JSON.stringify(manifest, null, 2)}\n`)

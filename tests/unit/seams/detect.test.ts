@@ -1,19 +1,79 @@
 import { describe, expect, it } from 'vitest'
 import { buildMeshModel } from '../../../src/core/mesh/model'
-import { DEFAULT_DETECT_SETTINGS, detectSeams } from '../../../src/core/seams/detect'
+import { buildBodyBvhs } from '../../../src/core/seams/bodyBvh'
+import { DEFAULT_DETECT_SETTINGS, detectSeams, type SeamCandidate } from '../../../src/core/seams/detect'
 import { loadSampleModel, loadSoup, transformSoup } from '../helpers/models'
 import { readManifest } from '../helpers/samples'
+import { cubeTriangles, soupOf } from '../helpers/shapes'
 
 const detect = (id: string, creaseAngleDeg = DEFAULT_DETECT_SETTINGS.creaseAngleDeg) =>
   detectSeams(loadSampleModel(id), { creaseAngleDeg })
 
+const countBy = (seams: SeamCandidate[], source: SeamCandidate['source']) => seams.filter((s) => s.source === source).length
+
 describe('detectSeams against the hand-derived manifest', () => {
-  it.each(readManifest().samples.map((s) => [s.id, s.expectedCreaseSeams] as const))(
-    '%s yields %i crease seams',
-    (id, expected) => {
-      expect(detect(id)).toHaveLength(expected)
-    },
-  )
+  it.each(readManifest().samples.map((s) => [s.id, s] as const))('%s yields the expected seams per source', (id, entry) => {
+    const seams = detect(id)
+    expect(countBy(seams, 'crease'), 'crease').toBe(entry.expectedCreaseSeams)
+    expect(countBy(seams, 'contact'), 'contact').toBe(entry.expectedContactSeams)
+    expect(countBy(seams, 'intersection'), 'intersection').toBe(entry.expectedIntersectionSeams)
+    expect(seams, 'total').toHaveLength(entry.expectedCreaseSeams + entry.expectedContactSeams + entry.expectedIntersectionSeams)
+  })
+})
+
+describe('contact seams', () => {
+  const near = (a: number[], b: number[]) => a.every((x, i) => Math.abs(x - b[i]!) < 1e-6)
+
+  it('gives the T-joint assembly the same two fillets as the merged T-joint', () => {
+    const merged = detect('t-joint-merged')
+    const assembly = detect('t-joint-assembly')
+    expect(assembly).toHaveLength(2)
+    for (const seam of assembly) {
+      expect(seam.source).toBe('contact')
+      expect(seam.jointType).toBe('fillet')
+      expect(seam.id.startsWith('contact-')).toBe(true)
+      expect(Math.abs(seam.lengthMm - 200)).toBeLessThan(0.5)
+      expect(Math.abs(seam.openingAngleDeg - 90)).toBeLessThan(0.5)
+      expect(seam.closed).toBe(false)
+    }
+    const side = (seam: SeamCandidate) => Math.sign(seam.points[0]!.p[1])
+    for (const sign of [-1, 1]) {
+      const a = assembly.find((s) => side(s) === sign)!
+      const m = merged.find((s) => side(s) === sign)!
+      expect(Math.abs(a.lengthMm - m.lengthMm)).toBeLessThan(0.5)
+      expect(a.points[0]!.p[2]).toBeCloseTo(m.points[0]!.p[2], 3)
+      for (const { n1, n2 } of a.points) {
+        const pair = [n1, n2]
+        expect(pair.some((n) => near(n, [0, sign, 0]))).toBe(true)
+        expect(pair.some((n) => near(n, [0, 0, 1]))).toBe(true)
+      }
+    }
+  })
+
+  it('gives the double-bottom cell its 50 contact seams by length', () => {
+    const seams = detect('double-bottom-cell')
+    const contact = seams.filter((s) => s.source === 'contact')
+    const expected: Array<[number, number]> = [[800, 8], [150, 12], [100, 6], [44, 6], [48, 6], [40, 12]]
+    for (const [lengthMm, count] of expected) {
+      expect(contact.filter((s) => Math.abs(s.lengthMm - lengthMm) < 0.5).length, `${lengthMm} mm`).toBe(count)
+    }
+    expect(contact).toHaveLength(50)
+    const crease = seams.filter((s) => s.source === 'crease')
+    expect(crease).toHaveLength(6)
+    for (const seam of crease) expect(Math.abs(seam.lengthMm - 150)).toBeLessThan(0.5)
+  })
+
+  it('uses the supplied body BVHs instead of building its own', () => {
+    const model = loadSampleModel('t-joint-assembly')
+    const bvhs = buildBodyBvhs(model)
+    const seams = detectSeams(model, { creaseAngleDeg: 30 }, { bodyBvhs: bvhs })
+    expect(seams).toHaveLength(2)
+  })
+
+  it('leaves single body samples with the same ids as before', () => {
+    expect(detect('t-joint-merged').map((s) => s.id)).toEqual(detect('t-joint-ascii').map((s) => s.id))
+    for (const seam of detect('box-beam')) expect(seam.id.startsWith('crease-')).toBe(true)
+  })
 })
 
 describe('detectSeams on single samples', () => {
@@ -62,8 +122,9 @@ describe('detectSeams on single samples', () => {
     expect(detectSeams(tiny, DEFAULT_DETECT_SETTINGS)).toHaveLength(0)
   })
 
-  it('finds nothing on separate convex bodies', () => {
-    expect(detect('t-joint-assembly')).toEqual([])
+  it('finds nothing on convex bodies that do not touch', () => {
+    const apart = buildMeshModel(soupOf([...cubeTriangles([0, 0, 0], [50, 50, 50]), ...cubeTriangles([0, 0, 80], [50, 50, 50])]), 1)
+    expect(detectSeams(apart, DEFAULT_DETECT_SETTINGS)).toEqual([])
   })
 })
 

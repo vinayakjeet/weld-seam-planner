@@ -6,6 +6,7 @@ import { computeBounds } from '../core/mesh/bounds'
 import { buildMeshModel, type MeshModel } from '../core/mesh/model'
 import { parseStl, StlError } from '../core/mesh/parseStl'
 import { guessUnits, scaleToMm, type KnownUnits, type Units } from '../core/mesh/units'
+import { buildBodyBvhs, type BodyBvh } from '../core/seams/bodyBvh'
 import { detectSeams, type DetectSettings, type SeamCandidate } from '../core/seams/detect'
 
 export type { DetectSettings, SeamCandidate, Units }
@@ -16,7 +17,7 @@ export interface UserError {
   next: string
 }
 
-export type Stage = 'read' | 'weld' | 'topology' | 'index' | 'detect'
+export type Stage = 'read' | 'weld' | 'topology' | 'index' | 'contact' | 'detect'
 
 // fraction is the overall progress of the current call, 0 to 1, and never decreases.
 export type Progress = (stage: Stage, fraction: number) => void
@@ -119,6 +120,8 @@ function describePart(model: MeshModel, name: string, units: KnownUnits): PartIn
 export function createGeometryApi(): GeometryApi {
   let pending: { soup: Float32Array; name: string } | null = null
   let current: MeshModel | null = null
+  // Built on the first detect of a multi body part and kept until another part replaces it.
+  let bodyBvhs: BodyBvh[] | null = null
 
   function build(soup: Float32Array, name: string, units: KnownUnits, report: Progress): LoadOutcome {
     const model = buildMeshModel(soup, scaleToMm(units), (stage) => report(stage, STAGE_START[stage]))
@@ -127,6 +130,7 @@ export function createGeometryApi(): GeometryApi {
     report('index', 1)
     // Only a fully built part replaces the current one, so a failed load leaves the old part usable.
     current = model
+    bodyBvhs = null
     const outcome: LoadOutcome = { status: 'ready', part: describePart(model, name, units), display }
     const buffers = [display.positions.buffer, display.indices.buffer, ...display.bvh.roots]
     return transfer(outcome, buffers as Transferable[])
@@ -184,9 +188,14 @@ export function createGeometryApi(): GeometryApi {
       }
       const report = reporter(onProgress)
       try {
-        report('detect', 0)
+        const needsBvhs = current.bodies.count > 1 && bodyBvhs === null
+        report(needsBvhs ? 'contact' : 'detect', 0)
         const start = performance.now()
-        const seams = detectSeams(current, settings)
+        if (needsBvhs) {
+          bodyBvhs = buildBodyBvhs(current)
+          report('detect', 0.3)
+        }
+        const seams = detectSeams(current, settings, { bodyBvhs: bodyBvhs ?? undefined })
         const ms = performance.now() - start
         report('detect', 1)
         return { status: 'ok', seams, ms }
