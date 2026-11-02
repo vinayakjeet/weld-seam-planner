@@ -1,16 +1,26 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SampleEntry } from '../../../src/core/samples/manifest'
+import { pointsFromPolyline } from '../../../src/core/seams/frames'
+import type { SeamCandidate } from '../../../src/core/seams/detect'
 import {
+  chooseTool,
   chooseUnits,
   DETECT_DEBOUNCE_MS,
+  dismissNotice,
   dropFile,
   drawSeam,
   fetchManifest,
   importBuffer,
   importFile,
   importSample,
+  redoEdit,
+  removeSelected,
+  reverseSelected,
   runDetect,
   scheduleDetect,
+  toolEvent,
+  trimSelected,
+  undoEdit,
 } from '../../../src/state/flows'
 import { selectAllSeams, selectStats } from '../../../src/state/selectors'
 import { useStore } from '../../../src/state/store'
@@ -607,3 +617,243 @@ describe('drawSeam', () => {
     expect(state().manualSeams).toEqual([])
   })
 })
+
+describe('manual tool flows', () => {
+  const lineSeam = (id: string, from: number, to: number): SeamCandidate => {
+    const { points, lengthMm } = pointsFromPolyline([[from, 0, 0], [to, 0, 0]], false, () => [[0, 1, 0], [0, 0, 1]])
+    return seam(id, 0.8, lengthMm, { points })
+  }
+  const ids = () => selectAllSeams(state()).map((s) => s.id)
+  const none = fakeClient()
+  const click = (x: number) => ({ type: 'click', target: { kind: 'surface', point: { p: [x, 0, 0] as [number, number, number], face: -1 } } }) as const
+  const drawn = fakeClient({ snapDraw: async () => ({ status: 'ok', seam: lineSeam('drawn', 0, 50) }) })
+
+  beforeEach(() => {
+    useStore.setState({ seams: [lineSeam('a', 0, 200), lineSeam('b', 200, 300), lineSeam('c', 400, 500)] })
+  })
+
+  describe('draw', () => {
+    it('adds an accepted seam, selects it, goes back to select and shows no notice', async () => {
+      await chooseTool('draw', drawn)
+      await toolEvent(click(0), drawn)
+      await toolEvent(click(50), drawn)
+      expect(state().tool).toMatchObject({ tool: 'draw' })
+      await toolEvent({ type: 'finish' }, drawn)
+      expect(state().tool).toEqual({ tool: 'select' })
+      expect(ids()).toContain('drawn-1')
+      expect(state().statusById['drawn-1']).toBe('accepted')
+      expect(state().selectedId).toBe('drawn-1')
+      expect(state().notice).toBeNull()
+    })
+
+    it('sends the clicks to the worker in order', async () => {
+      let sent: unknown
+      const client = fakeClient({
+        snapDraw: async (clicks) => {
+          sent = clicks
+          return { status: 'ok', seam: lineSeam('drawn', 0, 50) }
+        },
+      })
+      await chooseTool('draw', client)
+      for (const x of [0, 20, 50]) await toolEvent(click(x), client)
+      await toolEvent({ type: 'finish' }, client)
+      expect(sent).toEqual([0, 20, 50].map((x) => ({ p: [x, 0, 0], face: -1 })))
+    })
+
+    it('shows the worker refusal, keeps the points so they can be corrected, and adds nothing', async () => {
+      const error = { what: 'No seam was drawn.', why: 'The clicks are only 0.5 mm apart.', next: 'Click further apart along the joint.' }
+      const client = fakeClient({ snapDraw: async () => ({ status: 'error', error }) })
+      await chooseTool('draw', client)
+      await toolEvent(click(0), client)
+      await toolEvent(click(0.5), client)
+      await toolEvent({ type: 'finish' }, client)
+      expect(state().notice).toEqual(error)
+      expect(state().tool).toEqual({ tool: 'draw', points: [expect.anything(), expect.anything()] })
+      expect(state().manualSeams).toEqual([])
+    })
+
+    it('refuses a single point without calling the worker', async () => {
+      let calls = 0
+      const client = fakeClient({
+        snapDraw: async () => {
+          calls++
+          return { status: 'ok', seam: lineSeam('drawn', 0, 50) }
+        },
+      })
+      await chooseTool('draw', client)
+      await toolEvent(click(0), client)
+      await toolEvent({ type: 'finish' }, client)
+      expect(calls).toBe(0)
+      expect(state().notice?.what).toMatch(/No seam was drawn/)
+    })
+
+    it('a drawn seam is one undo step, and undo removes it from the list', async () => {
+      await chooseTool('draw', drawn)
+      await toolEvent(click(0), drawn)
+      await toolEvent(click(50), drawn)
+      await toolEvent({ type: 'finish' }, drawn)
+      undoEdit()
+      expect(ids()).toEqual(['a', 'b', 'c'])
+      expect(state().selectedId).toBeNull()
+      redoEdit()
+      expect(ids()).toContain('drawn-1')
+    })
+  })
+
+  describe('split', () => {
+    it('needs a selected seam and says so', async () => {
+      await chooseTool('split', none)
+      expect(state().tool).toEqual({ tool: 'select' })
+      expect(state().notice?.what).toMatch(/split/i)
+    })
+
+    it('splits the selected seam at the clicked arc length, selects the first piece and returns to select', async () => {
+      state().select('a')
+      await chooseTool('split', none)
+      await toolEvent({ type: 'click', target: { kind: 'seam', id: 'a', s: 80 } }, none)
+      expect(ids()).toEqual(['b', 'c', 'a/a', 'a/b'])
+      expect(state().selectedId).toBe('a/a')
+      expect(state().tool).toEqual({ tool: 'select' })
+      undoEdit()
+      expect(ids()).toEqual(['a', 'b', 'c'])
+      redoEdit()
+      expect(ids()).toEqual(['b', 'c', 'a/a', 'a/b'])
+    })
+
+    it('shows the refusal for a split too near an end and stays armed for another click', async () => {
+      state().select('a')
+      await chooseTool('split', none)
+      await toolEvent({ type: 'click', target: { kind: 'seam', id: 'a', s: 1 } }, none)
+      expect(state().notice?.why).toMatch(/shorter than 2 mm/)
+      expect(state().tool).toEqual({ tool: 'split' })
+      expect(ids()).toEqual(['a', 'b', 'c'])
+    })
+  })
+
+  describe('merge', () => {
+    it('merges the selected seam with the clicked one and returns to select', async () => {
+      state().select('a')
+      await chooseTool('merge', none)
+      await toolEvent({ type: 'click', target: { kind: 'seam', id: 'b', s: 0 } }, none)
+      expect(ids()).toEqual(['c', 'a+b'])
+      expect(state().tool).toEqual({ tool: 'select' })
+      undoEdit()
+      expect(ids()).toEqual(['a', 'b', 'c'])
+    })
+
+    it('shows the refusal for seams that do not touch and stays armed', async () => {
+      state().select('a')
+      await chooseTool('merge', none)
+      await toolEvent({ type: 'click', target: { kind: 'seam', id: 'c', s: 0 } }, none)
+      expect(state().notice?.what).toBeTruthy()
+      expect(state().tool).toEqual({ tool: 'merge', from: 'a' })
+      expect(ids()).toEqual(['a', 'b', 'c'])
+    })
+  })
+
+  describe('reverse, remove and trim', () => {
+    it('reverse flips the selected seam and undo flips it back', () => {
+      state().select('a')
+      reverseSelected()
+      expect(state().manualSeams.map((m) => m.id)).toEqual(['a~r'])
+      undoEdit()
+      expect(state().manualSeams).toEqual([])
+    })
+
+    it('reverse, remove and trim with nothing selected say what is missing', () => {
+      for (const act of [reverseSelected, removeSelected, () => trimSelected('1', '1')]) {
+        dismissNotice()
+        act()
+        expect(`${state().notice?.what} ${state().notice?.why}`).toMatch(/none is selected/)
+        expect(state().manualSeams).toEqual([])
+      }
+    })
+
+    it('remove refuses a detected seam with the store message and keeps it', () => {
+      state().select('a')
+      removeSelected()
+      expect(state().notice?.what).toBe('Seam A cannot be deleted.')
+      expect(ids()).toEqual(['a', 'b', 'c'])
+    })
+
+    it('remove deletes a manual seam and undo brings it back', () => {
+      state().select('a')
+      reverseSelected()
+      state().select('a~r')
+      removeSelected()
+      expect(ids()).toEqual(['b', 'c'])
+      expect(state().selectedId).toBeNull()
+      undoEdit()
+      expect(ids()).toEqual(['b', 'c', 'a~r'])
+    })
+
+    it('trim cuts the typed amounts from each end; empty means zero', () => {
+      state().select('a')
+      trimSelected('5', '3')
+      expect(state().manualSeams[0]!.lengthMm).toBeCloseTo(192, 6)
+      state().select(state().manualSeams[0]!.id)
+      trimSelected('', '2')
+      expect(state().manualSeams[0]!.lengthMm).toBeCloseTo(190, 6)
+    })
+
+    it('trim shows what was typed when it is not a number, and when the trim leaves nothing', () => {
+      state().select('a')
+      trimSelected('abc', '1')
+      expect(state().notice?.why).toMatch(/abc/)
+      trimSelected('150', '60')
+      expect(state().notice?.what).toBeTruthy()
+      expect(state().manualSeams).toEqual([])
+    })
+  })
+
+  describe('notice and selection', () => {
+    it('a successful edit clears an earlier notice', () => {
+      state().select('a')
+      removeSelected()
+      expect(state().notice).not.toBeNull()
+      reverseSelected()
+      expect(state().notice).toBeNull()
+    })
+
+    it('dismissNotice clears it', () => {
+      state().select('a')
+      removeSelected()
+      dismissNotice()
+      expect(state().notice).toBeNull()
+    })
+
+    it('undo drops a selection that the undone edit created, and redo keeps working', () => {
+      state().select('a')
+      state().splitAt('a', 80)
+      state().select('a/b')
+      undoEdit()
+      expect(state().selectedId).toBeNull()
+      redoEdit()
+      expect(ids()).toEqual(['b', 'c', 'a/a', 'a/b'])
+    })
+
+    it('undo keeps a selection that still exists', () => {
+      state().select('b')
+      state().toggleAccepted('b')
+      undoEdit()
+      expect(state().selectedId).toBe('b')
+    })
+
+    it('a stale selection counts as none when choosing a tool', async () => {
+      useStore.setState({ selectedId: 'gone' })
+      await chooseTool('merge', none)
+      expect(state().tool).toEqual({ tool: 'select' })
+      expect(state().notice?.what).toMatch(/merge/i)
+    })
+
+    it('loading a new part resets the tool and the notice', async () => {
+      state().select('a')
+      await chooseTool('merge', none)
+      useStore.setState({ notice: { what: 'x', why: 'y', next: 'z' } })
+      await importBuffer(buffer(), 'b.stl', fakeClient({ loadStl: async () => readyOutcome(), detect: async () => detected([]) }))
+      expect(state().tool).toEqual({ tool: 'select' })
+      expect(state().notice).toBeNull()
+    })
+  })
+})
+

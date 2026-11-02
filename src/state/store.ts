@@ -1,5 +1,7 @@
 import { temporal } from 'zundo'
 import { create, type StateCreator } from 'zustand'
+import type { ManualError } from '../core/seams/manual'
+import { initialTool, type ToolState } from '../ui/tools/toolMachine'
 import { createPartSlice, type PartSlice } from './partSlice'
 import { createSeamsSlice, type SeamsSlice } from './seamsSlice'
 
@@ -16,6 +18,12 @@ export type StepId = (typeof STEPS)[number]['id']
 interface UiSlice {
   activeStep: StepId
   setActiveStep: (step: StepId) => void
+  // The armed manual tool and its progress. Not undo history.
+  tool: ToolState
+  setTool: (tool: ToolState) => void
+  // The last refused manual action, shown over the viewport until dismissed or the next action starts.
+  notice: ManualError | null
+  setNotice: (notice: ManualError | null) => void
 }
 
 export type AppState = UiSlice & PartSlice & SeamsSlice
@@ -23,6 +31,10 @@ export type AppState = UiSlice & PartSlice & SeamsSlice
 const createUiSlice: StateCreator<AppState, [], [], UiSlice> = (set) => ({
   activeStep: 'import',
   setActiveStep: (activeStep) => set({ activeStep }),
+  tool: initialTool,
+  setTool: (tool) => set({ tool }),
+  notice: null,
+  setNotice: (notice) => set({ notice }),
 })
 
 export const HISTORY_LIMIT = 100

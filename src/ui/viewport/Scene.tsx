@@ -5,9 +5,11 @@ import { Sphere, Vector3, type Mesh } from 'three'
 import { useStore } from '../../state/store'
 import { useShortcuts } from '../shell/useShortcuts'
 import { cssVar } from './cssVar'
+import { DrawTool } from './DrawTool'
 import { GIZMO_MARGIN } from './gizmo'
 import { PartMesh } from './PartMesh'
 import { SeamLines } from './SeamLines'
+import { SplitTool } from './SplitTool'
 
 // Face order is +X, -X, +Y, -Y, +Z, -Z; the camera looks along +Y from the front.
 const Z_UP_FACES = ['Right', 'Left', 'Back', 'Front', 'Top', 'Bottom']
@@ -60,6 +62,8 @@ export function Scene() {
       />
       <PartMesh ref={partMesh} />
       <SeamLines partRef={partMesh} />
+      <DrawTool partRef={partMesh} />
+      <SplitTool />
       <GizmoHelper alignment="top-right" margin={[GIZMO_MARGIN, GIZMO_MARGIN]}>
         <GizmoViewcube
           faces={Z_UP_FACES}

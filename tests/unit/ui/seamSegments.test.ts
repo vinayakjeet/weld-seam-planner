@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Vec3 } from '../../../src/core/math/vec3'
 import type { SeamCandidate } from '../../../src/core/seams/detect'
-import { buildSeamSegments, seamSegmentPositions, type SeamPalette } from '../../../src/ui/viewport/seamSegments'
+import { buildSeamSegments, polylineSegmentPositions, seamSegmentPositions, type SeamPalette } from '../../../src/ui/viewport/seamSegments'
 import { seam } from '../helpers/state'
 
 const palette: SeamPalette = { candidate: [0.1, 0.1, 0.1], accepted: [0.2, 0.4, 0.9], rejected: [0.9, 0.2, 0.2] }
@@ -67,5 +67,17 @@ describe('buildSeamSegments', () => {
   it('ignores a status whose seam is not in the list', () => {
     const built = buildSeamSegments([seamOn('a', [A, B])], { gone: 'accepted' }, palette)
     expect(built.segmentSeam).toHaveLength(1)
+  })
+})
+
+describe('polylineSegmentPositions', () => {
+  it('lays an open polyline out as consecutive segments of 6 floats', () => {
+    const out = polylineSegmentPositions([[0, 0, 0], [10, 0, 0], [10, 5, 0]])
+    expect(Array.from(out)).toEqual([0, 0, 0, 10, 0, 0, 10, 0, 0, 10, 5, 0])
+  })
+
+  it('has nothing to draw for fewer than two points', () => {
+    expect(polylineSegmentPositions([]).length).toBe(0)
+    expect(polylineSegmentPositions([[1, 2, 3]]).length).toBe(0)
   })
 })

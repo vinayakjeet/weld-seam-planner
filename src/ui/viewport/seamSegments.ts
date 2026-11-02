@@ -1,3 +1,4 @@
+import type { Vec3 } from '../../core/math/vec3'
 import type { SeamCandidate } from '../../core/seams/detect'
 import type { SeamStatus } from '../../state/seamsSlice'
 
@@ -32,6 +33,16 @@ function writeSeam(seam: SeamCandidate, out: Float32Array, offset: number): void
     out.set(a, offset + i * 6)
     out.set(b, offset + i * 6 + 3)
   }
+}
+
+// The segments of an open polyline that is not a seam (the line being drawn).
+export function polylineSegmentPositions(points: readonly Vec3[]): Float32Array {
+  const out = new Float32Array(Math.max(0, points.length - 1) * 6)
+  for (let i = 0; i + 1 < points.length; i++) {
+    out.set(points[i]!, i * 6)
+    out.set(points[i + 1]!, i * 6 + 3)
+  }
+  return out
 }
 
 export function seamSegmentPositions(seam: SeamCandidate): Float32Array {

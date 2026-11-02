@@ -1,8 +1,12 @@
 import type { KnownUnits } from '../core/mesh/units'
 import { sampleManifestSchema, type SampleEntry, type SampleManifest } from '../core/samples/manifest'
 import { DEFAULT_DETECT_SETTINGS, type DetectSettings } from '../core/seams/detect'
+import type { ManualError } from '../core/seams/manual'
 import type { GeometryClient } from '../worker/client'
 import type { DrawClick, LoadOutcome, Progress, Stage, UserError } from '../worker/geometry.api'
+import { needSeamSelected, parseTrimInput, type NeedsSeam } from '../ui/panels/manualText'
+import { initialTool, reduceTool, type ToolEffect, type ToolEvent, type ToolName } from '../ui/tools/toolMachine'
+import { selectAllSeams } from './selectors'
 import { useStore } from './store'
 
 export type FetchFn = (url: string) => Promise<Response>
@@ -102,6 +106,8 @@ async function applyLoad(outcome: LoadOutcome, fileName: string, client: Geometr
     detectSettings: DEFAULT_DETECT_SETTINGS,
     detectBusy: false,
     activeStep: 'seams',
+    tool: initialTool,
+    notice: null,
   })
   useStore.temporal.getState().clear()
   // A slider change still waiting would run the old angle on the new part.
@@ -287,4 +293,92 @@ export async function importSample(entry: SampleEntry, client: GeometryClient, f
     }
     await importBuffer(buffer, entry.file, client)
   })
+}
+
+
+const setNotice = (notice: ManualError | null) => useStore.getState().setNotice(notice)
+
+export const dismissNotice = () => setNotice(null)
+
+// A selection the last undo or edit removed counts as none.
+function selectedSeamId(): string | null {
+  const state = useStore.getState()
+  return state.selectedId !== null && selectAllSeams(state).some((seam) => seam.id === state.selectedId) ? state.selectedId : null
+}
+
+async function perform(effect: Exclude<ToolEffect, { kind: 'refuse' }>, client: GeometryClient): Promise<ManualError | null> {
+  const store = useStore.getState()
+  if (effect.kind === 'draw') return drawSeam(effect.clicks, client)
+  if (effect.kind === 'split') return store.splitAt(effect.id, effect.s)
+  return store.mergeSeamIds(effect.a, effect.b)
+}
+
+async function step(event: ToolEvent, client: GeometryClient): Promise<void> {
+  setNotice(null)
+  const { state, effect } = reduceTool(useStore.getState().tool, event)
+  useStore.getState().setTool(state)
+  if (!effect) return
+  if (effect.kind === 'refuse') {
+    setNotice(effect.error)
+    return
+  }
+  const error = await perform(effect, client)
+  if (error) {
+    setNotice(error)
+    return
+  }
+  // The user may have picked another tool while the worker was snapping; that choice stays.
+  const now = useStore.getState().tool
+  if (now.tool === state.tool) useStore.getState().setTool(reduceTool(now, { type: 'done' }).state)
+}
+
+export function chooseTool(tool: ToolName, client: GeometryClient): Promise<void> {
+  return step({ type: 'choose', tool, selectedId: selectedSeamId() }, client)
+}
+
+export function toolEvent(event: Exclude<ToolEvent, { type: 'choose' }>, client: GeometryClient): Promise<void> {
+  return step(event, client)
+}
+
+// Runs an edit on the selected seam and shows what the store refused, or says that nothing is selected.
+function editSelected(action: NeedsSeam, run: (id: string) => ManualError | null): void {
+  setNotice(null)
+  const id = selectedSeamId()
+  if (id === null) {
+    setNotice(needSeamSelected(action))
+    return
+  }
+  const error = run(id)
+  if (error) setNotice(error)
+}
+
+export const reverseSelected = () => editSelected('reverse', (id) => useStore.getState().reverse(id))
+
+export const removeSelected = () => editSelected('delete', (id) => useStore.getState().remove(id))
+
+// The two texts come straight from the input boxes.
+export function trimSelected(startText: string, endText: string): void {
+  editSelected('trim', (id) => {
+    const parsed = parseTrimInput(startText, endText)
+    return 'what' in parsed ? parsed : useStore.getState().trim(id, parsed.startMm, parsed.endMm)
+  })
+}
+
+// Undo and redo can remove the seam that was selected, or the one a merge was started from.
+function dropStaleSelection(): void {
+  const state = useStore.getState()
+  const present = new Set(selectAllSeams(state).map((seam) => seam.id))
+  if (state.selectedId !== null && !present.has(state.selectedId)) state.select(null)
+  if (state.hoverId !== null && !present.has(state.hoverId)) state.hover(null)
+  if (state.tool.tool === 'merge' && !present.has(state.tool.from)) state.setTool(initialTool)
+}
+
+export function undoEdit(): void {
+  useStore.temporal.getState().undo()
+  dropStaleSelection()
+}
+
+export function redoEdit(): void {
+  useStore.temporal.getState().redo()
+  dropStaleSelection()
 }

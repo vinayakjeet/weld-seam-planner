@@ -1,13 +1,16 @@
 import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, type RefObject } from 'react'
 import { Color, Raycaster, Vector2, Vector3, type Mesh } from 'three'
-import { LineMaterial } from 'three/addons/lines/LineMaterial.js'
-import { LineSegments2 } from 'three/addons/lines/LineSegments2.js'
-import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js'
+import { toolEvent } from '../../state/flows'
+import { MERGE_TOLERANCE_MM } from '../../state/seamsSlice'
 import { useStore } from '../../state/store'
 import { useVisibleSeams } from '../../state/useVisibleSeams'
+import { getGeometryClient } from '../../worker/client'
+import { missedMergeTarget, notATarget } from '../panels/manualText'
+import { mergeTargets } from '../tools/mergeTargets'
 import { cssVar } from './cssVar'
 import { overGizmo } from './gizmo'
+import { lineSet, useDisposed } from './lineSet'
 import { chooseSeamHit, type SeamLineHit } from './pickSeam'
 import { buildSeamSegments, seamSegmentPositions, type Rgb, type SeamPalette } from './seamSegments'
 
@@ -29,36 +32,6 @@ function readPalette(): SeamPalette {
   return { candidate: rgb('--seam-candidate'), accepted: rgb('--seam-accepted'), rejected: rgb('--err') }
 }
 
-interface LineStyle {
-  width: number
-  colors?: Float32Array
-  color?: string
-  renderOrder?: number
-}
-
-function lineSet(positions: Float32Array, { width, colors, color, renderOrder = 0 }: LineStyle): LineSegments2 {
-  const geometry = new LineSegmentsGeometry()
-  geometry.setPositions(positions)
-  if (colors) geometry.setColors(colors)
-  const material = new LineMaterial({ linewidth: width, vertexColors: colors !== undefined })
-  if (color) material.color = new Color(color)
-  const lines = new LineSegments2(geometry, material)
-  lines.frustumCulled = false
-  lines.renderOrder = renderOrder
-  return lines
-}
-
-function useDisposed(lines: LineSegments2 | null): void {
-  useEffect(
-    () => () => {
-      if (!lines) return
-      lines.geometry.dispose()
-      lines.material.dispose()
-    },
-    [lines],
-  )
-}
-
 // One merged line set holds every seam. Hover and selection are drawn again, thicker, in small overlay sets because
 // line width belongs to the material and cannot differ per seam inside the merged one.
 export function SeamLines({ partRef }: { partRef: RefObject<Mesh | null> }) {
@@ -66,6 +39,7 @@ export function SeamLines({ partRef }: { partRef: RefObject<Mesh | null> }) {
   const statusById = useStore((s) => s.statusById)
   const hoverId = useStore((s) => s.hoverId)
   const selectedId = useStore((s) => s.selectedId)
+  const mergeFrom = useStore((s) => (s.tool.tool === 'merge' ? s.tool.from : null))
   const { gl, camera } = useThree()
   const palette = useMemo(() => readPalette(), [])
 
@@ -83,9 +57,25 @@ export function SeamLines({ partRef }: { partRef: RefObject<Mesh | null> }) {
     return seam ? lineSet(seamSegmentPositions(seam), { width: HIGHLIGHT_WIDTH_PX, color: cssVar('--seam-hover'), renderOrder: 2 }) : null
   }, [seams, hoverId])
 
+  // While merging, the seams the merge would accept are lit so the choice is visible before the click.
+  const targets = useMemo(() => {
+    const from = mergeFrom === null ? undefined : seams.find((s) => s.id === mergeFrom)
+    const ids = new Set(from ? mergeTargets(from, seams, MERGE_TOLERANCE_MM) : [])
+    const found = seams.filter((s) => ids.has(s.id)).map(seamSegmentPositions)
+    if (found.length === 0) return null
+    const all = new Float32Array(found.reduce((n, part) => n + part.length, 0))
+    let at = 0
+    for (const part of found) {
+      all.set(part, at)
+      at += part.length
+    }
+    return lineSet(all, { width: HIGHLIGHT_WIDTH_PX, color: cssVar('--warn'), renderOrder: 1 })
+  }, [seams, mergeFrom])
+
   useDisposed(base)
   useDisposed(selected)
   useDisposed(hovered)
+  useDisposed(targets)
 
   useEffect(() => {
     if (!base) return
@@ -135,9 +125,18 @@ export function SeamLines({ partRef }: { partRef: RefObject<Mesh | null> }) {
       if (!last) return
       useStore.getState().hover(pickAt(last.x, last.y))
     }
+    // Drawing and splitting use the pointer themselves, so seams under it are not lit or picked.
+    const pointerBusy = () => {
+      const { tool } = useStore.getState()
+      return tool.tool === 'draw' || tool.tool === 'split'
+    }
     const onMove = (event: PointerEvent) => {
       // While a button is down the user is orbiting or panning; hovering would only cost frames.
       if (event.buttons !== 0) return
+      if (pointerBusy()) {
+        useStore.getState().hover(null)
+        return
+      }
       last = { x: event.clientX, y: event.clientY }
       if (!frame) frame = requestAnimationFrame(hoverNow)
     }
@@ -156,8 +155,22 @@ export function SeamLines({ partRef }: { partRef: RefObject<Mesh | null> }) {
     }
     const onClick = (event: MouseEvent) => {
       if (down && Math.hypot(event.clientX - down.x, event.clientY - down.y) > DRAG_PX) return
-      const { select, toggleAccepted } = useStore.getState()
+      const { select, toggleAccepted, tool, setNotice } = useStore.getState()
+      if (pointerBusy()) return
       const id = pickAt(event.clientX, event.clientY)
+      if (tool.tool === 'merge') {
+        const from = seams.find((s) => s.id === tool.from)
+        const clicked = seams.find((s) => s.id === id)
+        if (!from) return
+        if (!clicked) {
+          setNotice(missedMergeTarget(from.label))
+          return
+        }
+        if (clicked.id === from.id) return
+        if (mergeTargets(from, [clicked], MERGE_TOLERANCE_MM).length === 0) setNotice(notATarget(clicked.label, from.label))
+        else void toolEvent({ type: 'click', target: { kind: 'seam', id: clicked.id, s: 0 } }, getGeometryClient())
+        return
+      }
       select(id)
       if (id !== null) toggleAccepted(id)
     }
@@ -180,6 +193,7 @@ export function SeamLines({ partRef }: { partRef: RefObject<Mesh | null> }) {
   return (
     <>
       {base && <primitive object={base} />}
+      {targets && <primitive object={targets} />}
       {selected && <primitive object={selected} />}
       {hovered && <primitive object={hovered} />}
     </>

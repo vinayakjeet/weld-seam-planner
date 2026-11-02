@@ -66,6 +66,17 @@ describe('snapPolyline on a T-joint', () => {
     }
   })
 
+  it('gives the same seam when the clicks name no triangle, because the viewport cannot tell the model triangle', () => {
+    const points: Vec3[] = [[-80, -40, 10], [80, -30, 10]]
+    const named = ok(snapPolyline(points.map(click), context, 3))
+    const unnamed = ok(snapPolyline(points.map((p) => ({ p, face: -1 })), context, 3))
+    expect(unnamed.points).toEqual(named.points)
+    expect(unnamed.approximateNormals).toBe(true)
+    for (const { n1, n2 } of unnamed.points) {
+      expect(Number.isFinite(n1[0] + n1[1] + n1[2] + n2[0] + n2[1] + n2[2])).toBe(true)
+    }
+  })
+
   it('does not snap at all when the snap radius is zero', () => {
     const seam = ok(snapPolyline([click([-99.5, 5.3, 10.2]), click([99.5, 5.2, 9.8])], context, 0))
     expect(seam.approximateNormals).toBe(true)

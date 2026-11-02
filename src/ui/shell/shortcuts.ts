@@ -1,4 +1,15 @@
-export type Shortcut = 'fit' | 'undo' | 'redo'
+export type Shortcut =
+  | 'fit'
+  | 'undo'
+  | 'redo'
+  | 'draw'
+  | 'split'
+  | 'reverse'
+  | 'remove'
+  // Keys of the draw tool; they only do something while a tool is armed.
+  | 'finish'
+  | 'cancel'
+  | 'undoPoint'
 
 export interface KeyEventLike {
   key: string
@@ -20,11 +31,27 @@ function isTextEntry(target: KeyEventLike['target']): boolean {
   return tag === 'INPUT' && !NON_TEXT_INPUTS.has((target.type ?? 'text').toLowerCase())
 }
 
+const LETTER_KEYS: Record<string, Shortcut | undefined> = { f: 'fit', d: 'draw', s: 'split', r: 'reverse' }
+
+// Enter on a focused button or link activates it; taking the key would leave the button dead.
+function isActivatable(target: KeyEventLike['target']): boolean {
+  const tag = target?.tagName?.toUpperCase()
+  return tag === 'BUTTON' || tag === 'A' || tag === 'SUMMARY'
+}
+
 export function shortcutFor(event: KeyEventLike): Shortcut | null {
   if (isTextEntry(event.target) || event.altKey) return null
   const key = event.key.toLowerCase()
   const modifier = event.ctrlKey || event.metaKey
-  if (key === 'f' && !modifier) return 'fit'
   if (key === 'z' && modifier) return event.shiftKey ? 'redo' : 'undo'
+  // Ctrl+R reloads and Ctrl+D bookmarks, so the tool keys never take a modifier. Shift is allowed for caps lock.
+  if (modifier) return null
+  const letter = LETTER_KEYS[key]
+  if (letter) return letter
+  if (key === 'delete') return event.shiftKey ? null : 'remove'
+  if (event.shiftKey) return null
+  if (key === 'enter') return isActivatable(event.target) ? null : 'finish'
+  if (key === 'escape') return 'cancel'
+  if (key === 'backspace') return 'undoPoint'
   return null
 }

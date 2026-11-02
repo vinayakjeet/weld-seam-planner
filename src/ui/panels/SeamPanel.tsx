@@ -4,6 +4,7 @@ import { useVisibleSeams } from '../../state/useVisibleSeams'
 import { Button } from '../kit/Button'
 import { Tab, TabList, TabPanel, Tabs } from '../kit/Tabs'
 import { DetectionSettings } from './DetectionSettings'
+import { ManualTools } from './ManualTools'
 import { PartWarnings } from './PartWarnings'
 import { seamRows } from './seamRows'
 import { acceptAllLabel, noSeamsMessage } from './seamText'
@@ -176,6 +177,7 @@ export function SeamPanel() {
             ))}
           </div>
           <PartWarnings />
+          <ManualTools />
           <AcceptAll />
           <SeamTable />
         </TabPanel>

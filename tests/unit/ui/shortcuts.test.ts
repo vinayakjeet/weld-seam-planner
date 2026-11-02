@@ -35,7 +35,7 @@ describe('shortcutFor', () => {
 
   it('ignores unrelated keys', () => {
     expect(shortcutFor(key('g'))).toBeNull()
-    expect(shortcutFor(key('Escape'))).toBeNull()
+    expect(shortcutFor(key('Tab'))).toBeNull()
     expect(shortcutFor(key('y', { ctrlKey: true }))).toBeNull()
   })
 
@@ -65,3 +65,62 @@ describe('shortcutFor', () => {
     expect(shortcutFor(key('f', {}, null))).toBe('fit')
   })
 })
+
+describe('shortcutFor: manual seam tools', () => {
+  it('maps D, S and R to draw, split and reverse, in either case', () => {
+    expect(shortcutFor(key('d'))).toBe('draw')
+    expect(shortcutFor(key('S', { shiftKey: true }))).toBe('split')
+    expect(shortcutFor(key('r'))).toBe('reverse')
+    expect(shortcutFor(key('D'))).toBe('draw')
+  })
+
+  it('maps Delete to remove', () => {
+    expect(shortcutFor(key('Delete'))).toBe('remove')
+  })
+
+  it('leaves Ctrl, Cmd and Alt combinations to the browser, so Ctrl+R still reloads and Ctrl+D still bookmarks', () => {
+    for (const k of ['d', 's', 'r', 'Delete']) {
+      expect(shortcutFor(key(k, { ctrlKey: true }))).toBeNull()
+      expect(shortcutFor(key(k, { metaKey: true }))).toBeNull()
+      expect(shortcutFor(key(k, { altKey: true }))).toBeNull()
+    }
+  })
+
+  it('does nothing while a text field has focus, so typing a trim value keeps its letters', () => {
+    for (const k of ['d', 's', 'r', 'Delete', 'Enter', 'Escape', 'Backspace']) {
+      for (const target of [
+        { tagName: 'INPUT', type: 'text' },
+        { tagName: 'INPUT', type: 'number' },
+        { tagName: 'TEXTAREA' },
+        { tagName: 'SELECT' },
+        { tagName: 'DIV', isContentEditable: true },
+      ]) {
+        expect(shortcutFor(key(k, {}, target))).toBeNull()
+      }
+    }
+  })
+
+  it('still works on a range input, a checkbox and a button', () => {
+    expect(shortcutFor(key('d', {}, { tagName: 'INPUT', type: 'range' }))).toBe('draw')
+    expect(shortcutFor(key('r', {}, { tagName: 'INPUT', type: 'checkbox' }))).toBe('reverse')
+    expect(shortcutFor(key('Delete', {}, { tagName: 'BUTTON' }))).toBe('remove')
+  })
+
+  it('maps Enter, Escape and Backspace to the drawing keys', () => {
+    expect(shortcutFor(key('Enter'))).toBe('finish')
+    expect(shortcutFor(key('Escape'))).toBe('cancel')
+    expect(shortcutFor(key('Backspace'))).toBe('undoPoint')
+  })
+
+  it('leaves Enter to a focused button or link, which it would otherwise activate', () => {
+    expect(shortcutFor(key('Enter', {}, { tagName: 'BUTTON' }))).toBeNull()
+    expect(shortcutFor(key('Enter', {}, { tagName: 'A' }))).toBeNull()
+  })
+
+  it('ignores the drawing keys with a modifier held', () => {
+    expect(shortcutFor(key('Enter', { ctrlKey: true }))).toBeNull()
+    expect(shortcutFor(key('Backspace', { altKey: true }))).toBeNull()
+    expect(shortcutFor(key('Escape', { shiftKey: true }))).toBeNull()
+  })
+})
+
