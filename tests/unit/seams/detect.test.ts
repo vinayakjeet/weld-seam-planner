@@ -76,6 +76,41 @@ describe('contact seams', () => {
   })
 })
 
+describe('intersection seams', () => {
+  const loops = detect('bar-through-plate')
+
+  it('gives the bar through the plate one closed loop on each plate face', () => {
+    expect(loops).toHaveLength(2)
+    for (const seam of loops) {
+      expect(seam.source).toBe('intersection')
+      expect(seam.jointType).toBe('fillet')
+      expect(seam.closed).toBe(true)
+      expect(seam.id.startsWith('intersection-')).toBe(true)
+      expect(Math.abs(seam.lengthMm / (2 * Math.PI * 25) - 1)).toBeLessThan(0.01)
+      expect(Math.abs(seam.openingAngleDeg - 90)).toBeLessThan(0.5)
+    }
+    expect(loops.map((s) => Math.round(s.points[0]!.p[2])).sort((a, b) => a - b)).toEqual([0, 10])
+  })
+
+  it('points the bisector up and outward on the top face and down and outward on the bottom face', () => {
+    for (const seam of loops) {
+      const top = seam.points[0]!.p[2] > 5
+      for (const { p, n1, n2 } of seam.points) {
+        const b = [n1[0] + n2[0], n1[1] + n2[1], n1[2] + n2[2]]
+        const radial = Math.hypot(p[0], p[1])
+        expect(b[0]! * (p[0] / radial) + b[1]! * (p[1] / radial)).toBeGreaterThan(0.5)
+        expect(top ? b[2]! : -b[2]!).toBeGreaterThan(0.5)
+      }
+    }
+  })
+
+  it('finds no intersection seams where bodies only touch', () => {
+    for (const id of ['t-joint-assembly', 'double-bottom-cell']) {
+      expect(detect(id).filter((s) => s.source === 'intersection'), id).toHaveLength(0)
+    }
+  })
+})
+
 describe('detectSeams on single samples', () => {
   it('gives the T-joint two 200 mm fillets at 90 degrees, labelled by length', () => {
     const seams = detect('t-joint-merged')

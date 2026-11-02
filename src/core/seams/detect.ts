@@ -4,9 +4,10 @@ import type { MeshModel } from '../mesh/model'
 import { buildBodyBvhs, type BodyBvh } from './bodyBvh'
 import { chainEdges, edgeEnds, type Chain } from './chain'
 import { confidence } from './confidence'
-import { findContactEdges } from './contact'
+import { contactTolerance, findContactEdges } from './contact'
 import { extractCreaseEdges, type CreaseEdges } from './crease'
-import { buildSeamPoints, type NormalsOf, type SeamPoint } from './frames'
+import { buildSeamPoints, pointsFromPolyline, type NormalsOf, type SeamPoint } from './frames'
+import { chainSegments, findIntersectionSegments } from './intersect'
 
 export interface DetectSettings {
   creaseAngleDeg: number
@@ -48,7 +49,7 @@ export function detectSeams(model: MeshModel, settings: DetectSettings, context:
 
   if (model.bodies.count > 1) {
     const bvhs = context.bodyBvhs ?? buildBodyBvhs(model)
-    found.push(...contactSeams(model, faces, bvhs, settings, minLength))
+    found.push(...contactSeams(model, faces, bvhs, settings, minLength), ...intersectionSeams(model, bvhs, minLength))
   }
 
   for (const seam of found) seam.id = seamId(seam)
@@ -80,6 +81,49 @@ function contactSeams(model: MeshModel, faces: FaceData, bvhs: BodyBvh[], settin
     return (Math.acos(Math.max(-1, Math.min(1, cos))) * 180) / Math.PI
   })
   return seamsFromEdges('contact', { edgeIds: contact.edgeIds, dihedralDeg }, model, faces, minLength, normalsOfEdge)
+}
+
+const WELD_FRACTION = 1e-4
+const MIN_WELD_MM = 0.001
+
+// Intersection chains are not mesh edges, so they carry their own plate normals and triangle areas. The opening angle
+// is the length-weighted mean of 180 minus the angle between the two outward triangle normals.
+function intersectionSeams(model: MeshModel, bvhs: BodyBvh[], minLength: number): RawSeam[] {
+  const { diagonal } = model.bounds
+  const segments = findIntersectionSegments(model, bvhs, contactTolerance(diagonal))
+  const seams: RawSeam[] = []
+  for (const line of chainSegments(segments, Math.max(WELD_FRACTION * diagonal, MIN_WELD_MM))) {
+    const { points, lengthMm } = pointsFromPolyline(line.points, line.closed, (segment) => line.normals[segment]!)
+    if (lengthMm < minLength) continue
+    let weighted = 0
+    let total = 0
+    line.normals.forEach(([n1, n2], k) => {
+      const a = line.points[k]!
+      const b = line.points[(k + 1) % line.points.length]!
+      const length = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2])
+      const cos = Math.max(-1, Math.min(1, n1[0] * n2[0] + n1[1] * n2[1] + n1[2] * n2[2]))
+      weighted += length * (180 - (Math.acos(cos) * 180) / Math.PI)
+      total += length
+    })
+    const openingAngleDeg = weighted / total
+    seams.push({
+      id: '',
+      source: 'intersection',
+      jointType: 'fillet',
+      confidence: confidence({ lengthMm, openingDeg: openingAngleDeg, medianAdjacentAreaMm2: median(line.areas), diagonal }),
+      closed: line.closed,
+      lengthMm,
+      openingAngleDeg,
+      points,
+    })
+  }
+  return seams
+}
+
+function median(values: number[]): number {
+  const sorted = [...values].sort((x, y) => x - y)
+  const mid = sorted.length >> 1
+  return sorted.length % 2 === 1 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2
 }
 
 // Chains the edges, drops chains under minLength and describes the rest. normalsOfEdge indexes the edge list.
@@ -127,10 +171,7 @@ function describeChain(chain: Chain, creases: CreaseEdges, model: MeshModel, fac
     total += length
     areas.push(faces.areas[model.edges.faceA[edge]!]!, faces.areas[model.edges.faceB[edge]!]!)
   }
-  areas.sort((x, y) => x - y)
-  const mid = areas.length >> 1
-  const median = areas.length % 2 === 1 ? areas[mid]! : (areas[mid - 1]! + areas[mid]!) / 2
-  return { openingAngleDeg: weighted / total, medianAdjacentAreaMm2: median }
+  return { openingAngleDeg: weighted / total, medianAdjacentAreaMm2: median(areas) }
 }
 
 // Stable across runs and across settings that leave the seam unchanged: hashes the start, middle and end points

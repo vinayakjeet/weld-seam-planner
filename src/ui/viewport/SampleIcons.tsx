@@ -63,6 +63,17 @@ export function PipeOnPlateIcon() {
   )
 }
 
+export function BarThroughPlateIcon() {
+  return (
+    <Frame>
+      <rect x="14" y="8" width="68" height="48" />
+      <circle cx="48" cy="32" r="10" />
+      <circle cx="48" cy="32" r="13" stroke="var(--seam-accepted)" strokeWidth="2.5" />
+      <path d="M38 32h20M48 22v20" />
+    </Frame>
+  )
+}
+
 export function DoubleBottomCellIcon() {
   return (
     <Frame>
@@ -95,6 +106,7 @@ const ICONS_BY_PREFIX: [string, ComponentType][] = [
   ['l-bracket', LBracketIcon],
   ['box-beam', BoxBeamIcon],
   ['pipe-on-plate', PipeOnPlateIcon],
+  ['bar-through-plate', BarThroughPlateIcon],
   ['double-bottom-cell', DoubleBottomCellIcon],
 ]
 

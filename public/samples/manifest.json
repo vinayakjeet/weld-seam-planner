@@ -88,6 +88,17 @@
       "expectedCreaseSeams": 6,
       "expectedContactSeams": 50,
       "expectedIntersectionSeams": 0
+    },
+    {
+      "id": "bar-through-plate",
+      "file": "bar-through-plate.stl",
+      "name": "Bar through plate",
+      "description": "Solid round bar passing through a plate: one intersection loop on each face of the plate",
+      "units": "mm",
+      "bodies": 2,
+      "expectedCreaseSeams": 0,
+      "expectedContactSeams": 0,
+      "expectedIntersectionSeams": 2
     }
   ]
 }

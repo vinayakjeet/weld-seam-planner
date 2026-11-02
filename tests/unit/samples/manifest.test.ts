@@ -11,6 +11,7 @@ const IDS = [
   'box-beam',
   'pipe-on-plate',
   'double-bottom-cell',
+  'bar-through-plate',
 ]
 
 const entry = {
@@ -60,7 +61,7 @@ describe('public/samples', () => {
   const manifest = readManifest()
   const byId = new Map(manifest.samples.map((s) => [s.id, s]))
 
-  it('lists the eight samples once each', () => {
+  it('lists the nine samples once each', () => {
     expect(manifest.samples.map((s) => s.id).sort()).toEqual([...IDS].sort())
   })
 
@@ -71,7 +72,7 @@ describe('public/samples', () => {
     }
   })
 
-  it('stores seven samples as binary STL by the size formula', () => {
+  it('stores every sample but the ASCII one as binary STL by the size formula', () => {
     for (const id of IDS.filter((i) => i !== 't-joint-ascii')) {
       const buffer = readSample(id)
       const count = new DataView(buffer).getUint32(80, true)
@@ -88,7 +89,7 @@ describe('public/samples', () => {
 
   it('declares t-joint-inch in inches and the rest in millimetres', () => {
     expect(byId.get('t-joint-inch')?.units).toBe('in')
-    expect(manifest.samples.filter((s) => s.units === 'mm')).toHaveLength(7)
+    expect(manifest.samples.filter((s) => s.units === 'mm')).toHaveLength(8)
   })
 
   it('describes box-beam as the welded box girder', () => {
@@ -113,6 +114,14 @@ describe('public/samples', () => {
     })
   })
 
+  it('records the hand-derived intersection counts and the bar sample label', () => {
+    const intersections = Object.fromEntries(manifest.samples.map((s) => [s.id, s.expectedIntersectionSeams]))
+    expect(intersections['bar-through-plate']).toBe(2)
+    expect(Object.entries(intersections).filter(([id]) => id !== 'bar-through-plate').every(([, n]) => n === 0)).toBe(true)
+    expect(byId.get('bar-through-plate')?.name).toBe('Bar through plate')
+    expect(byId.get('bar-through-plate')?.units).toBe('mm')
+  })
+
   it('no longer says contact detection is missing', () => {
     expect(byId.get('t-joint-assembly')?.description).not.toMatch(/until contact detection exists/)
     expect(byId.get('double-bottom-cell')?.description).not.toMatch(/need contact detection/)
@@ -128,6 +137,7 @@ describe('public/samples', () => {
       'box-beam': [1, 8],
       'pipe-on-plate': [1, 2],
       'double-bottom-cell': [7, 6],
+      'bar-through-plate': [2, 0],
     }
     for (const [id, [bodies, seams]] of Object.entries(expected)) {
       expect([byId.get(id)?.bodies, byId.get(id)?.expectedCreaseSeams], id).toEqual([bodies, seams])

@@ -57,6 +57,13 @@ function pipeOnPlate(): Manifold {
   return M.union(plate, pipe)
 }
 
+// A solid round bar through a plate, two separate bodies (a hollow pipe would add two bore loops).
+function barThroughPlate(): Manifold[] {
+  const plate = box(-75, 75, -75, 75, 0, 10)
+  const bar = M.cylinder(60, 25, 25, 96).translate([0, 0, -25])
+  return [plate, bar]
+}
+
 function doubleBottomCell(): Manifold[] {
   const bottom = box(0, 800, 0, 500, 0, 12)
   const innerBottom = box(0, 800, 0, 500, 112, 124)
@@ -223,6 +230,15 @@ const samples: Sample[] = [
       2 * 2 * 2 + // 2 girders x 2 plates x 2 long edges (800 mm)
       3 * 2 * 2 + // 3 floors x 2 plates x 2 long edges (150 mm)
       3 * 2 * 5, // 3 floors x 2 girders x 5 edges of the T shaped end face (100, 44, 48, 40, 40 mm)
+  }),
+  sample({
+    id: 'bar-through-plate',
+    name: 'Bar through plate',
+    description: 'Solid round bar passing through a plate: one intersection loop on each face of the plate',
+    units: 'mm',
+    solids: barThroughPlate(),
+    expectedCreaseSeams: 0, // plate and bar are convex solids, so no concave crease exists
+    expectedIntersectionSeams: 1 + 1, // loop where the bar leaves the plate top + loop where it leaves the bottom, each 2 pi 25 = 157.08 mm
   }),
 ]
 
