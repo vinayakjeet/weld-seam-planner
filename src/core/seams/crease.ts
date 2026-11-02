@@ -4,10 +4,14 @@ import type { MeshModel } from '../mesh/model'
 export interface CreaseEdges {
   edgeIds: Uint32Array
   dihedralDeg: Float32Array
+  // 1 where the edge lies in a body with no known inside, so concave and convex edges could not be told apart.
+  unknown: Uint8Array
 }
 
 // Concave manifold edges whose faces turn by at least creaseAngleDeg. Boundary and non-manifold edges are never
 // returned. Concave means face B bends toward the side face A's normal points to: (cB - m) . nA > eps.
+// In a body with no known sign (open, non-manifold, not orientable) concavity cannot be read from winding, so every
+// edge that turns enough is returned, marked unknown.
 export function extractCreaseEdges(model: MeshModel, faces: FaceData, creaseAngleDeg: number): CreaseEdges {
   const { edges, mesh, bounds } = model
   const { normals, centroids } = faces
@@ -15,8 +19,12 @@ export function extractCreaseEdges(model: MeshModel, faces: FaceData, creaseAngl
   const cosThreshold = Math.cos((creaseAngleDeg * Math.PI) / 180)
   const epsilon = 1e-6 * bounds.diagonal
 
+  const unsigned = new Uint8Array(model.bodies.count)
+  for (const body of model.orientation.unsignedBodies) unsigned[body] = 1
+
   const edgeIds: number[] = []
   const dihedral: number[] = []
+  const unknown: number[] = []
   for (let e = 0; e < edges.edgeCount; e++) {
     if (edges.useCount[e] !== 2) continue
     const fa = edges.faceA[e]! * 3
@@ -30,10 +38,12 @@ export function extractCreaseEdges(model: MeshModel, faces: FaceData, creaseAngl
       (centroids[fb]! - (positions[a]! + positions[b]!) / 2) * normals[fa]! +
       (centroids[fb + 1]! - (positions[a + 1]! + positions[b + 1]!) / 2) * normals[fa + 1]! +
       (centroids[fb + 2]! - (positions[a + 2]! + positions[b + 2]!) / 2) * normals[fa + 2]!
-    if (outward <= epsilon) continue
+    const noSign = unsigned[model.bodies.triangleBody[edges.faceA[e]!]!] === 1
+    if (!noSign && outward <= epsilon) continue
 
     edgeIds.push(e)
     dihedral.push((Math.acos(Math.max(-1, cos)) * 180) / Math.PI)
+    unknown.push(noSign ? 1 : 0)
   }
-  return { edgeIds: Uint32Array.from(edgeIds), dihedralDeg: Float32Array.from(dihedral) }
+  return { edgeIds: Uint32Array.from(edgeIds), dihedralDeg: Float32Array.from(dihedral), unknown: Uint8Array.from(unknown) }
 }

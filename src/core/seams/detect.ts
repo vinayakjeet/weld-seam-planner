@@ -26,6 +26,8 @@ export interface SeamCandidate {
   id: string
   label: string
   source: SeamSource
+  // Unknown when the body has no known inside, so a fillet could equally be a convex corner.
+  concavity: 'known' | 'unknown'
   jointType: 'fillet'
   confidence: number
   closed: boolean
@@ -80,7 +82,8 @@ function contactSeams(model: MeshModel, faces: FaceData, bvhs: BodyBvh[], settin
     const cos = n1[0] * n2[0] + n1[1] * n2[1] + n1[2] * n2[2]
     return (Math.acos(Math.max(-1, Math.min(1, cos))) * 180) / Math.PI
   })
-  return seamsFromEdges('contact', { edgeIds: contact.edgeIds, dihedralDeg }, model, faces, minLength, normalsOfEdge)
+  const unknown = new Uint8Array(contact.edgeIds.length)
+  return seamsFromEdges('contact', { edgeIds: contact.edgeIds, dihedralDeg, unknown }, model, faces, minLength, normalsOfEdge)
 }
 
 const WELD_FRACTION = 1e-4
@@ -109,6 +112,7 @@ function intersectionSeams(model: MeshModel, bvhs: BodyBvh[], minLength: number)
     seams.push({
       id: '',
       source: 'intersection',
+      concavity: 'known',
       jointType: 'fillet',
       confidence: confidence({ lengthMm, openingDeg: openingAngleDeg, medianAdjacentAreaMm2: median(line.areas), diagonal }),
       closed: line.closed,
@@ -145,6 +149,7 @@ function seamsFromEdges(
     seams.push({
       id: '',
       source,
+      concavity: chain.edges.some((i) => edges.unknown[i] === 1) ? 'unknown' : 'known',
       jointType: 'fillet',
       confidence: confidence({ lengthMm, openingDeg: openingAngleDeg, medianAdjacentAreaMm2, diagonal: model.bounds.diagonal }),
       closed: chain.closed,

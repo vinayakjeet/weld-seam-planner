@@ -63,6 +63,20 @@ export function PipeOnPlateIcon() {
   )
 }
 
+export function FlippedNormalsIcon() {
+  return (
+    <Frame>
+      <rect x="8" y="40" width="34" height="5" />
+      <rect x="22" y="22" width="6" height="18" />
+      <rect x="54" y="40" width="34" height="5" />
+      <rect x="68" y="22" width="6" height="18" />
+      <path d="M24 16v-6M21 13l3-3 3 3M70 10v6M67 13l3 3 3-3" />
+      <Bead x={22} y={40} dx={-1} dy={-1} size={6} />
+      <Bead x={68} y={40} dx={-1} dy={-1} size={6} />
+    </Frame>
+  )
+}
+
 export function BarThroughPlateIcon() {
   return (
     <Frame>
@@ -107,6 +121,7 @@ const ICONS_BY_PREFIX: [string, ComponentType][] = [
   ['box-beam', BoxBeamIcon],
   ['pipe-on-plate', PipeOnPlateIcon],
   ['bar-through-plate', BarThroughPlateIcon],
+  ['flipped-normals', FlippedNormalsIcon],
   ['double-bottom-cell', DoubleBottomCellIcon],
 ]
 

@@ -5,13 +5,17 @@ import { extractCreaseEdges } from '../../../src/core/seams/crease'
 import { loadSampleModel } from '../helpers/models'
 import { soupOf } from '../helpers/shapes'
 
+// Bare triangle pairs are open sheets, which buildMeshModel marks unsigned. The concavity rule is tested on them
+// as if their winding were trusted; the unsigned path has its own tests below.
+const signed = (model: MeshModel): MeshModel => ({ ...model, orientation: { ...model.orientation, unsignedBodies: [] } })
+
 // Two triangles sharing the x axis edge from (0,0,0) to (10,0,0). One lies flat on z = 0,
 // the other leaves it by alphaDeg: up (valley, concave) or down (ridge, convex).
 function fold(alphaDeg: number, kind: 'valley' | 'ridge'): MeshModel {
   const a = (alphaDeg * Math.PI) / 180
   const sign = kind === 'valley' ? 1 : -1
   const apex = [5, -10 * Math.cos(a), sign * 10 * Math.sin(a)]
-  return buildMeshModel(soupOf([[0, 0, 0, 10, 0, 0, 5, 10, 0], [10, 0, 0, 0, 0, 0, ...apex]]), 1)
+  return signed(buildMeshModel(soupOf([[0, 0, 0, 10, 0, 0, 5, 10, 0], [10, 0, 0, 0, 0, 0, ...apex]]), 1))
 }
 
 function creasesOf(model: MeshModel, angleDeg: number) {
@@ -64,6 +68,32 @@ describe('extractCreaseEdges on small folds', () => {
     const model = buildMeshModel(book, 1)
     expect(model.edges.stats.nonManifold).toBe(1)
     expect(creasesOf(model, 15).edgeIds).toHaveLength(0)
+  })
+})
+
+describe('extractCreaseEdges on unsigned bodies', () => {
+  const unsignedFold = (kind: 'valley' | 'ridge') => {
+    const a = (90 * Math.PI) / 180
+    const sign = kind === 'valley' ? 1 : -1
+    const apex = [5, -10 * Math.cos(a), sign * 10 * Math.sin(a)]
+    return buildMeshModel(soupOf([[0, 0, 0, 10, 0, 0, 5, 10, 0], [10, 0, 0, 0, 0, 0, ...apex]]), 1)
+  }
+
+  it('returns both a valley and a ridge, each marked unknown, because the sign of an open sheet is not known', () => {
+    for (const kind of ['valley', 'ridge'] as const) {
+      const model = unsignedFold(kind)
+      expect(model.orientation.unsignedBodies).toEqual([0])
+      const result = creasesOf(model, 30)
+      expect(result.edgeIds, kind).toHaveLength(1)
+      expect(Array.from(result.unknown), kind).toEqual([1])
+      expect(result.dihedralDeg[0], kind).toBeCloseTo(90, 3)
+    }
+  })
+
+  it('marks every crease of a signed body as known', () => {
+    const result = creasesOf(loadSampleModel('t-joint-merged'), 30)
+    expect(result.edgeIds.length).toBeGreaterThan(0)
+    expect(Array.from(result.unknown).every((u) => u === 0)).toBe(true)
   })
 })
 

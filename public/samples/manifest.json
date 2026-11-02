@@ -99,6 +99,17 @@
       "expectedCreaseSeams": 0,
       "expectedContactSeams": 0,
       "expectedIntersectionSeams": 2
+    },
+    {
+      "id": "flipped-normals",
+      "file": "flipped-normals.stl",
+      "name": "Flipped normals",
+      "description": "Two T-joints with reversed winding, one fully inside out and one mixed: repaired from winding before detection",
+      "units": "mm",
+      "bodies": 2,
+      "expectedCreaseSeams": 4,
+      "expectedContactSeams": 0,
+      "expectedIntersectionSeams": 0
     }
   ]
 }

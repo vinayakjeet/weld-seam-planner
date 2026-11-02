@@ -267,3 +267,21 @@ describe('geometry api: contact seams', () => {
     expect(events[events.length - 1]).toEqual(['detect', 1])
   })
 })
+
+describe('geometry api: winding repair', () => {
+  it.each([
+    ['t-joint-merged', 0],
+    ['flipped-normals', 2],
+  ])('reports the reoriented and unsigned body counts of %s', async (id, reoriented) => {
+    const { part } = ready(await createGeometryApi().loadStl(readSample(id), `${id}.stl`, () => {}))
+    expect(part.reorientedBodies).toBe(reoriented)
+    expect(part.unsignedBodies).toBe(0)
+  })
+
+  it('detects the four fillets of flipped-normals through the worker api', async () => {
+    const api = createGeometryApi()
+    ready(await api.loadStl(readSample('flipped-normals'), 'flipped-normals.stl', () => {}))
+    const outcome = await api.detect(DEFAULT_DETECT_SETTINGS, () => {})
+    expect(outcome.status === 'ok' && outcome.seams).toHaveLength(4)
+  })
+})

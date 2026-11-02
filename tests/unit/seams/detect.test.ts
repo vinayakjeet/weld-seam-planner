@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { buildMeshModel } from '../../../src/core/mesh/model'
+import { parseStl } from '../../../src/core/mesh/parseStl'
 import { buildBodyBvhs } from '../../../src/core/seams/bodyBvh'
 import { DEFAULT_DETECT_SETTINGS, detectSeams, type SeamCandidate } from '../../../src/core/seams/detect'
 import { loadSampleModel, loadSoup, transformSoup } from '../helpers/models'
-import { readManifest } from '../helpers/samples'
+import { readManifest, readSample } from '../helpers/samples'
 import { cubeTriangles, soupOf } from '../helpers/shapes'
 
 const detect = (id: string, creaseAngleDeg = DEFAULT_DETECT_SETTINGS.creaseAngleDeg) =>
@@ -108,6 +109,47 @@ describe('intersection seams', () => {
     for (const id of ['t-joint-assembly', 'double-bottom-cell']) {
       expect(detect(id).filter((s) => s.source === 'intersection'), id).toHaveLength(0)
     }
+  })
+})
+
+describe('winding repair', () => {
+  it('finds the same two fillets in each flipped T-joint as in the merged one', () => {
+    const merged = detect('t-joint-merged')
+    const flipped = detect('flipped-normals')
+    expect(flipped).toHaveLength(4)
+    for (const seam of flipped) {
+      expect(seam.source).toBe('crease')
+      expect(seam.concavity).toBe('known')
+      expect(Math.abs(seam.lengthMm - 200)).toBeLessThan(0.5)
+      expect(Math.abs(seam.openingAngleDeg - 90)).toBeLessThan(0.5)
+      expect(Math.abs(seam.confidence - merged[0]!.confidence)).toBeLessThan(1e-6)
+    }
+  })
+
+  it('does not depend on the normals stored in the file', () => {
+    const buffer = readSample('flipped-normals').slice(0)
+    const view = new DataView(buffer)
+    const count = view.getUint32(80, true)
+    for (let t = 0; t < count; t++) for (let c = 0; c < 3; c++) view.setFloat32(84 + 50 * t + 4 * c, 0, true)
+    const tampered = detectSeams(buildMeshModel(parseStl(buffer).positions, 1), DEFAULT_DETECT_SETTINGS)
+    expect(tampered.map((s) => s.id)).toEqual(detect('flipped-normals').map((s) => s.id))
+  })
+
+  it('marks seams of an open sheet as concavity unknown and still offers them', () => {
+    const quad = (a: number[], b: number[], c: number[], d: number[]) => [[...a, ...b, ...c], [...a, ...c, ...d]]
+    const sheet = soupOf([
+      ...quad([0, 0, 0], [40, 0, 0], [40, 40, 0], [0, 40, 0]),
+      ...quad([0, 40, 0], [40, 40, 0], [40, 40, 40], [0, 40, 40]),
+    ])
+    const seams = detectSeams(buildMeshModel(sheet, 1), DEFAULT_DETECT_SETTINGS)
+    expect(seams).toHaveLength(1)
+    expect(seams[0]!.concavity).toBe('unknown')
+    expect(seams[0]!.jointType).toBe('fillet')
+    expect(seams[0]!.lengthMm).toBeCloseTo(40, 1)
+  })
+
+  it('reads concavity as known on every sample', () => {
+    for (const { id } of readManifest().samples) expect(detect(id).every((s) => s.concavity === 'known'), id).toBe(true)
   })
 })
 

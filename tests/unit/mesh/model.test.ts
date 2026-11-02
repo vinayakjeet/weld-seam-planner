@@ -17,6 +17,14 @@ describe('buildMeshModel on the generated samples', () => {
     },
   )
 
+  it('reorients only the flipped-normals sample and leaves every body signed', () => {
+    for (const { id } of readManifest().samples) {
+      const { orientation } = loadSampleModel(id)
+      expect(orientation.unsignedBodies, id).toEqual([])
+      expect(orientation.reorientedBodies, id).toEqual(id === 'flipped-normals' ? [0, 1] : [])
+    }
+  })
+
   it('scales the inch sample to 200 mm across when the user answers inch', () => {
     expect(loadSampleModel('t-joint-inch', 'in').bounds.maxDimension).toBeCloseTo(200, 2)
   })

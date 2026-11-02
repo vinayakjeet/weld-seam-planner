@@ -76,15 +76,26 @@ function doubleBottomCell(): Manifold[] {
 
 type Soup = number[]
 
-function toSoup(solids: Manifold[]): Soup {
+type Flip = (solid: number, centroid: number[], normal: number[]) => boolean
+
+// flip reverses the winding of the triangles it selects, which is how a CAD export ends up with flipped normals.
+function toSoup(solids: Manifold[], flip?: Flip): Soup {
   const soup: Soup = []
-  for (const solid of solids) {
+  solids.forEach((solid, index) => {
     if (solid.decompose().length !== 1) throw new Error('A sample solid is not a single connected body.')
     const { numProp, vertProperties, triVerts } = solid.getMesh()
-    for (const v of triVerts) {
-      soup.push(vertProperties[v * numProp]!, vertProperties[v * numProp + 1]!, vertProperties[v * numProp + 2]!)
+    for (let t = 0; t < triVerts.length; t += 3) {
+      const tri = [0, 1, 2].map((k) => [0, 1, 2].map((c) => vertProperties[triVerts[t + k]! * numProp + c]!))
+      const [a, b, c] = tri as [number[], number[], number[]]
+      const u = [0, 1, 2].map((i) => b[i]! - a[i]!)
+      const v = [0, 1, 2].map((i) => c[i]! - a[i]!)
+      const n = [u[1]! * v[2]! - u[2]! * v[1]!, u[2]! * v[0]! - u[0]! * v[2]!, u[0]! * v[1]! - u[1]! * v[0]!]
+      const len = Math.hypot(n[0]!, n[1]!, n[2]!) || 1
+      const centroid = [0, 1, 2].map((i) => (a[i]! + b[i]! + c[i]!) / 3)
+      const reversed = flip?.(index, centroid, n.map((x) => x / len)) ?? false
+      soup.push(...a, ...(reversed ? c : b), ...(reversed ? b : c))
     }
-  }
+  })
   return soup
 }
 
@@ -139,16 +150,16 @@ type Counted = 'expectedContactSeams' | 'expectedIntersectionSeams'
 
 function sample(
   fields: Omit<SampleEntry, 'file' | 'bodies' | Counted> &
-    Partial<Pick<SampleEntry, Counted>> & { solids: Manifold[]; scale?: number; ascii?: boolean },
+    Partial<Pick<SampleEntry, Counted>> & { solids: Manifold[]; scale?: number; ascii?: boolean; flip?: Flip },
 ): Sample {
-  const { solids, scale = 1, ascii = false, expectedContactSeams = 0, expectedIntersectionSeams = 0, ...entry } = fields
+  const { solids, scale = 1, ascii = false, flip, expectedContactSeams = 0, expectedIntersectionSeams = 0, ...entry } = fields
   return {
     ...entry,
     expectedContactSeams,
     expectedIntersectionSeams,
     file: `${entry.id}.stl`,
     bodies: solids.length,
-    soup: toSoup(solids).map((x) => x * scale),
+    soup: toSoup(solids, flip).map((x) => x * scale),
     ascii,
   }
 }
@@ -239,6 +250,16 @@ const samples: Sample[] = [
     solids: barThroughPlate(),
     expectedCreaseSeams: 0, // plate and bar are convex solids, so no concave crease exists
     expectedIntersectionSeams: 1 + 1, // loop where the bar leaves the plate top + loop where it leaves the bottom, each 2 pi 25 = 157.08 mm
+  }),
+  sample({
+    id: 'flipped-normals',
+    name: 'Flipped normals',
+    description: 'Two T-joints with reversed winding, one fully inside out and one mixed: repaired from winding before detection',
+    units: 'mm',
+    solids: [tj.merged, tj.merged.translate([300, 0, 0])],
+    // Left body: every triangle reversed. Right body: only the two web side faces reversed, so its winding is mixed.
+    flip: (solid, centroid, normal) => solid === 0 || (Math.abs(normal[1]!) > 0.99 && Math.abs(centroid[1]!) < 10),
+    expectedCreaseSeams: 2 * 2, // 2 T-joints x 2 concave lines (web to plate top, 200 mm) = 4, once the winding is repaired
   }),
 ]
 

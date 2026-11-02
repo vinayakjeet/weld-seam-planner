@@ -12,6 +12,7 @@ export function seam(id: string, confidence = 0.9, lengthMm = 200): SeamCandidat
     id,
     label: id.toUpperCase(),
     source: 'crease',
+    concavity: 'known',
     jointType: 'fillet',
     confidence,
     closed: false,
@@ -32,6 +33,8 @@ export function partInfo(overrides: Partial<PartInfo> = {}): PartInfo {
     boundaryEdges: 0,
     nonManifoldEdges: 0,
     droppedDegenerate: 0,
+    reorientedBodies: 0,
+    unsignedBodies: 0,
     ...overrides,
   }
 }

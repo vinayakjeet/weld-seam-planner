@@ -32,6 +32,8 @@ export interface PartInfo {
   boundaryEdges: number
   nonManifoldEdges: number
   droppedDegenerate: number
+  reorientedBodies: number
+  unsignedBodies: number
 }
 
 export interface DisplayData {
@@ -114,6 +116,8 @@ function describePart(model: MeshModel, name: string, units: KnownUnits): PartIn
     boundaryEdges: model.edges.stats.boundary,
     nonManifoldEdges: model.edges.stats.nonManifold,
     droppedDegenerate: model.droppedDegenerate,
+    reorientedBodies: model.orientation.reorientedBodies.length,
+    unsignedBodies: model.orientation.unsignedBodies.length,
   }
 }
 

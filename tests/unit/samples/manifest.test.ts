@@ -12,6 +12,7 @@ const IDS = [
   'pipe-on-plate',
   'double-bottom-cell',
   'bar-through-plate',
+  'flipped-normals',
 ]
 
 const entry = {
@@ -61,7 +62,7 @@ describe('public/samples', () => {
   const manifest = readManifest()
   const byId = new Map(manifest.samples.map((s) => [s.id, s]))
 
-  it('lists the nine samples once each', () => {
+  it('lists the ten samples once each', () => {
     expect(manifest.samples.map((s) => s.id).sort()).toEqual([...IDS].sort())
   })
 
@@ -89,7 +90,7 @@ describe('public/samples', () => {
 
   it('declares t-joint-inch in inches and the rest in millimetres', () => {
     expect(byId.get('t-joint-inch')?.units).toBe('in')
-    expect(manifest.samples.filter((s) => s.units === 'mm')).toHaveLength(8)
+    expect(manifest.samples.filter((s) => s.units === 'mm')).toHaveLength(9)
   })
 
   it('describes box-beam as the welded box girder', () => {
@@ -120,6 +121,7 @@ describe('public/samples', () => {
     expect(Object.entries(intersections).filter(([id]) => id !== 'bar-through-plate').every(([, n]) => n === 0)).toBe(true)
     expect(byId.get('bar-through-plate')?.name).toBe('Bar through plate')
     expect(byId.get('bar-through-plate')?.units).toBe('mm')
+    expect(byId.get('flipped-normals')?.name).toBe('Flipped normals')
   })
 
   it('no longer says contact detection is missing', () => {
@@ -138,6 +140,7 @@ describe('public/samples', () => {
       'pipe-on-plate': [1, 2],
       'double-bottom-cell': [7, 6],
       'bar-through-plate': [2, 0],
+      'flipped-normals': [2, 4],
     }
     for (const [id, [bodies, seams]] of Object.entries(expected)) {
       expect([byId.get(id)?.bodies, byId.get(id)?.expectedCreaseSeams], id).toEqual([bodies, seams])

@@ -1,6 +1,7 @@
 import { labelBodies, type BodyLabels } from './bodies'
 import { computeBounds, type Bounds } from './bounds'
 import { buildEdgeMap, type EdgeMap } from './edgeMap'
+import { orientBodies, type Orientation } from './orient'
 import { StlError } from './parseStl'
 import { weldVertices, type IndexedMesh } from './weld'
 
@@ -9,6 +10,8 @@ export interface MeshModel {
   bounds: Bounds
   edges: EdgeMap
   bodies: BodyLabels
+  // mesh.indices already carry the repaired winding.
+  orientation: Orientation
   droppedDegenerate: number
 }
 
@@ -29,11 +32,15 @@ export function buildMeshModel(soup: Float32Array, scaleToMm: number, onStage?: 
     )
   }
   onStage?.('topology')
+  const edges = buildEdgeMap(mesh.indices, mesh.vertexCount)
+  const bodies = labelBodies(mesh.indices, mesh.vertexCount)
+  const { indices, ...orientation } = orientBodies(mesh, bodies, edges)
   return {
-    mesh,
+    mesh: indices === mesh.indices ? mesh : { ...mesh, indices },
     bounds: computeBounds(mesh.positions),
-    edges: buildEdgeMap(mesh.indices, mesh.vertexCount),
-    bodies: labelBodies(mesh.indices, mesh.vertexCount),
+    edges,
+    bodies,
+    orientation,
     droppedDegenerate,
   }
 }
