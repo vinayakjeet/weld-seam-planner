@@ -1,5 +1,5 @@
 import type { KnownUnits } from '../core/mesh/units'
-import type { GeometryApi, LoadOutcome } from './geometry.api'
+import type { GeometryApi, LoadOutcome, UserError } from './geometry.api'
 
 type GeometryClient = GeometryApi
 
@@ -50,6 +50,21 @@ export function createRecoveringClient(spawn: (onDead: () => void) => GeometryCl
     return restoring
   }
 
+  // An error outcome when the part could not be put back into a replacement worker, otherwise null.
+  async function restoreFailure(target: GeometryClient): Promise<{ status: 'error'; error: UserError } | null> {
+    const restored = await restore(target)
+    if (!restored || restored.status === 'ready') return null
+    if (restored.status === 'error') return restored
+    return {
+      status: 'error',
+      error: {
+        what: 'The part could not be restored in the new background worker.',
+        why: 'The worker that was replaced had the file open, and the copy sent to its replacement asked for a unit choice again.',
+        next: 'Load the file again.',
+      },
+    }
+  }
+
   return {
     async loadStl(buffer, name, onProgress) {
       // The transfer to the worker empties `buffer`, so the copy has to be taken first.
@@ -80,19 +95,14 @@ export function createRecoveringClient(spawn: (onDead: () => void) => GeometryCl
 
     async detect(settings, onProgress) {
       const target = current()
-      const restored = await restore(target)
-      if (restored && restored.status !== 'ready') {
-        if (restored.status === 'error') return restored
-        return {
-          status: 'error',
-          error: {
-            what: 'The part could not be restored in the new background worker.',
-            why: 'The worker that was replaced had the file open, and the copy sent to its replacement asked for a unit choice again.',
-            next: 'Load the file again.',
-          },
-        }
-      }
-      return target.detect(settings, onProgress)
+      const lost = await restoreFailure(target)
+      return lost ?? target.detect(settings, onProgress)
+    },
+
+    async snapDraw(clicks, snapRadiusMm) {
+      const target = current()
+      const lost = await restoreFailure(target)
+      return lost ?? target.snapDraw(clicks, snapRadiusMm)
     },
   }
 }

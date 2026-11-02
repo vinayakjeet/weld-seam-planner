@@ -36,6 +36,7 @@ function harness() {
         return real.setUnits(units, onProgress)
       },
       detect: (settings, onProgress) => real.detect(settings, onProgress),
+      snapDraw: (clicks, radius) => real.snapDraw(clicks, radius),
     }
     const { port1, port2 } = new MessageChannel()
     ports.push(port1, port2)
@@ -68,6 +69,21 @@ describe('recovering client', () => {
     expect(seamCount(await client.detect(DEFAULT_DETECT_SETTINGS, noop))).toBe(2)
     expect(spawned).toHaveLength(2)
     expect(spawned[1]!.loads).toEqual([size])
+  })
+
+  it('restores the part before a drawn seam is snapped, too', async () => {
+    const { client, spawned } = harness()
+    await client.loadStl(readSample('t-joint-merged'), 'a.stl', noop)
+    const clicks = [[-99.5, 5.3, 10.2], [99.5, 5.2, 9.8]].map((p) => ({ p: p as [number, number, number], face: 0 }))
+
+    spawned[0]!.die('boom')
+    expect((await client.snapDraw(clicks, 3)).status).toBe('error')
+    const outcome = await client.snapDraw(clicks, 3)
+
+    expect(outcome.status).toBe('ok')
+    if (outcome.status === 'ok') expect(outcome.seam.lengthMm).toBeGreaterThan(198.5)
+    expect(spawned).toHaveLength(2)
+    expect(spawned[1]!.loads).toHaveLength(1)
   })
 
   it('keeps the unit choice, so an inch part is not rebuilt as millimetres', async () => {

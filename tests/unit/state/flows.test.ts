@@ -4,6 +4,7 @@ import {
   chooseUnits,
   DETECT_DEBOUNCE_MS,
   dropFile,
+  drawSeam,
   fetchManifest,
   importBuffer,
   importFile,
@@ -11,7 +12,7 @@ import {
   runDetect,
   scheduleDetect,
 } from '../../../src/state/flows'
-import { selectStats } from '../../../src/state/selectors'
+import { selectAllSeams, selectStats } from '../../../src/state/selectors'
 import { useStore } from '../../../src/state/store'
 import type { DetectOutcome, LoadOutcome, Progress } from '../../../src/worker/geometry.api'
 import { readManifest, readSample } from '../helpers/samples'
@@ -545,5 +546,64 @@ describe('scheduleDetect', () => {
     await vi.advanceTimersByTimeAsync(DETECT_DEBOUNCE_MS * 2)
     expect(angles).toEqual([])
     expect(state().importState).toEqual({ phase: 'idle' })
+  })
+})
+
+describe('manual seams across detection and loading', () => {
+  const manual = seam('a/a', 1, 80, { source: 'manual' })
+
+  it('keeps manual seams and superseded ids through a re-detect with other settings', async () => {
+    useStore.setState({ seams: [seam('a'), seam('b')], manualSeams: [manual], supersededIds: ['a'], selectedId: 'a/a' })
+    const client = fakeClient({ detect: async () => detected([seam('a'), seam('b'), seam('z')]) })
+    await runDetect({ creaseAngleDeg: 50 }, client)
+
+    expect(state().manualSeams).toEqual([manual])
+    expect(state().supersededIds).toEqual(['a'])
+    expect(selectAllSeams(state()).map((s) => s.id)).toEqual(['b', 'z', 'a/a'])
+    expect(state().selectedId).toBe('a/a')
+  })
+
+  it('clears manual seams and superseded ids when a new part loads, and the drawn numbering restarts', async () => {
+    useStore.setState({ manualSeams: [manual], supersededIds: ['a'], nextDrawnId: 4 })
+    await importBuffer(buffer(), 'b.stl', fakeClient({ loadStl: async () => readyOutcome(), detect: async () => detected([seam('a')]) }))
+    expect(state().manualSeams).toEqual([])
+    expect(state().supersededIds).toEqual([])
+    expect(state().nextDrawnId).toBe(1)
+  })
+})
+
+describe('drawSeam', () => {
+  const clicks = [{ p: [0, 0, 0] as [number, number, number], face: 0 }, { p: [50, 0, 0] as [number, number, number], face: 0 }]
+
+  it('adds the snapped seam as an accepted drawn seam and passes the radius to the worker', async () => {
+    let radius = 0
+    const client = fakeClient({
+      snapDraw: async (_clicks, r) => {
+        radius = r
+        return { status: 'ok', seam: seam('drawn', 1, 50, { source: 'manual' }) }
+      },
+    })
+    expect(await drawSeam(clicks, client, 4)).toBeNull()
+    expect(radius).toBe(4)
+    expect(state().manualSeams.map((s) => s.id)).toEqual(['drawn-1'])
+    expect(state().statusById).toEqual({ 'drawn-1': 'accepted' })
+  })
+
+  it('returns the worker error and adds nothing', async () => {
+    const error = { what: 'No seam was drawn.', why: 'Too few clicks.', next: 'Click again.' }
+    const client = fakeClient({ snapDraw: async () => ({ status: 'error', error }) })
+    expect(await drawSeam(clicks, client)).toEqual(error)
+    expect(state().manualSeams).toEqual([])
+  })
+
+  it('turns a failing worker into a readable error', async () => {
+    const client = fakeClient({
+      snapDraw: async () => {
+        throw new Error('boom')
+      },
+    })
+    const error = await drawSeam(clicks, client)
+    expectReadable(error!)
+    expect(state().manualSeams).toEqual([])
   })
 })

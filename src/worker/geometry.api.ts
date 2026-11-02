@@ -3,13 +3,16 @@ import { BufferAttribute, BufferGeometry } from 'three'
 import { MeshBVH, type SerializedBVH } from 'three-mesh-bvh'
 import type { Vec3 } from '../core/math/vec3'
 import { computeBounds } from '../core/mesh/bounds'
+import { computeFaceData } from '../core/mesh/faces'
 import { buildMeshModel, type MeshModel } from '../core/mesh/model'
 import { parseStl, StlError } from '../core/mesh/parseStl'
 import { guessUnits, scaleToMm, type KnownUnits, type Units } from '../core/mesh/units'
 import { buildBodyBvhs, type BodyBvh } from '../core/seams/bodyBvh'
 import { detectSeams, type DetectSettings, type SeamCandidate } from '../core/seams/detect'
+import { buildSnapContext, snapPolyline, type DrawClick, type SnapContext } from '../core/seams/draw'
+import { isManualError } from '../core/seams/manual'
 
-export type { DetectSettings, SeamCandidate, Units }
+export type { DetectSettings, DrawClick, SeamCandidate, Units }
 
 export interface UserError {
   what: string
@@ -50,10 +53,14 @@ export type LoadOutcome =
 
 export type DetectOutcome = { status: 'ok'; seams: SeamCandidate[]; ms: number } | { status: 'error'; error: UserError }
 
+export type SnapOutcome = { status: 'ok'; seam: SeamCandidate } | { status: 'error'; error: UserError }
+
 export interface GeometryApi {
   loadStl(buffer: ArrayBuffer, name: string, onProgress: Progress): Promise<LoadOutcome>
   setUnits(units: KnownUnits, onProgress: Progress): Promise<LoadOutcome>
   detect(settings: DetectSettings, onProgress: Progress): Promise<DetectOutcome>
+  // Turns the user's clicks on the part into one seam snapped to its edges.
+  snapDraw(clicks: DrawClick[], snapRadiusMm: number): Promise<SnapOutcome>
 }
 
 // Where each load stage starts on the overall bar; the index stage runs to 1.
@@ -126,6 +133,8 @@ export function createGeometryApi(): GeometryApi {
   let current: MeshModel | null = null
   // Built on the first detect of a multi body part and kept until another part replaces it.
   let bodyBvhs: BodyBvh[] | null = null
+  // Feature edges and the surface BVH for drawing, built on the first drawn seam of a part.
+  let snapContext: SnapContext | null = null
 
   function build(soup: Float32Array, name: string, units: KnownUnits, report: Progress): LoadOutcome {
     const model = buildMeshModel(soup, scaleToMm(units), (stage) => report(stage, STAGE_START[stage]))
@@ -135,6 +144,7 @@ export function createGeometryApi(): GeometryApi {
     // Only a fully built part replaces the current one, so a failed load leaves the old part usable.
     current = model
     bodyBvhs = null
+    snapContext = null
     const outcome: LoadOutcome = { status: 'ready', part: describePart(model, name, units), display }
     const buffers = [display.positions.buffer, display.indices.buffer, ...display.bvh.roots]
     return transfer(outcome, buffers as Transferable[])
@@ -203,6 +213,26 @@ export function createGeometryApi(): GeometryApi {
         const ms = performance.now() - start
         report('detect', 1)
         return { status: 'ok', seams, ms }
+      } catch (error) {
+        return { status: 'error', error: toUserError(error) }
+      }
+    },
+
+    async snapDraw(clicks, snapRadiusMm) {
+      if (!current) {
+        return {
+          status: 'error',
+          error: {
+            what: 'There is no part to draw on.',
+            why: 'Drawing a seam needs a loaded STL and none has been loaded in this session.',
+            next: 'Choose an STL file or a sample, then draw the seam again.',
+          },
+        }
+      }
+      try {
+        snapContext ??= buildSnapContext(current, computeFaceData(current.mesh))
+        const result = snapPolyline(clicks, snapContext, snapRadiusMm)
+        return isManualError(result) ? { status: 'error', error: result } : { status: 'ok', seam: result }
       } catch (error) {
         return { status: 'error', error: toUserError(error) }
       }

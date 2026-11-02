@@ -52,6 +52,11 @@ describe('worker call timeout', () => {
     expectReadable(await client.setUnits('mm', () => {}))
   })
 
+  it('covers snapDraw too', async () => {
+    const client = wrapGeometryApi(channel(), { timeoutMs: 30 })
+    expectReadable(await client.snapDraw([], 3))
+  })
+
   it('counts progress as a reply, so a slow but working load is not cut off', async () => {
     const api = fakeClient({
       loadStl: async (_b, _n, onProgress) => {

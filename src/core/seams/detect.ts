@@ -38,6 +38,8 @@ export interface SeamCandidate {
   lengthMm: number
   openingAngleDeg: number
   points: SeamPoint[]
+  // Drawn across open surface: n1 and n2 are the surface normal there, not the two plates of a joint.
+  approximateNormals?: boolean
 }
 
 const TURN_BREAK_DEG = 40

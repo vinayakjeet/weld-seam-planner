@@ -2,7 +2,7 @@ import type { KnownUnits } from '../core/mesh/units'
 import { sampleManifestSchema, type SampleEntry, type SampleManifest } from '../core/samples/manifest'
 import { DEFAULT_DETECT_SETTINGS, type DetectSettings } from '../core/seams/detect'
 import type { GeometryClient } from '../worker/client'
-import type { LoadOutcome, Progress, Stage, UserError } from '../worker/geometry.api'
+import type { DrawClick, LoadOutcome, Progress, Stage, UserError } from '../worker/geometry.api'
 import { useStore } from './store'
 
 export type FetchFn = (url: string) => Promise<Response>
@@ -94,6 +94,9 @@ async function applyLoad(outcome: LoadOutcome, fileName: string, client: Geometr
     seams: [],
     statusById: {},
     typeById: {},
+    manualSeams: [],
+    supersededIds: [],
+    nextDrawnId: 1,
     selectedId: null,
     hoverId: null,
     detectSettings: DEFAULT_DETECT_SETTINGS,
@@ -170,8 +173,8 @@ export async function runDetect(settings: DetectSettings, client: GeometryClient
       useStore.setState({ detectBusy: false, importState: { phase: 'error', error: outcome.error } })
       return
     }
-    const { selectedId, hoverId } = useStore.getState()
-    const ids = new Set(outcome.seams.map((seam) => seam.id))
+    const { selectedId, hoverId, manualSeams } = useStore.getState()
+    const ids = new Set([...outcome.seams, ...manualSeams].map((seam) => seam.id))
     useStore.setState({
       seams: outcome.seams,
       detectBusy: false,
@@ -179,6 +182,17 @@ export async function runDetect(settings: DetectSettings, client: GeometryClient
       hoverId: hoverId !== null && ids.has(hoverId) ? hoverId : null,
     })
   })
+}
+
+// How close a click has to be to an edge to snap to it.
+export const DRAW_SNAP_RADIUS_MM = 3
+
+// Snaps the clicks to the part's edges in the worker and adds the result as an accepted seam. Returns what went wrong, or null.
+export async function drawSeam(clicks: DrawClick[], client: GeometryClient, snapRadiusMm = DRAW_SNAP_RADIUS_MM): Promise<UserError | null> {
+  const outcome = await attempt(() => client.snapDraw(clicks, snapRadiusMm))
+  if (outcome.status === 'error') return outcome.error
+  useStore.getState().addDrawn(outcome.seam)
+  return null
 }
 
 // For a slider: the readout follows every change, detection runs once the slider has been still for the delay.

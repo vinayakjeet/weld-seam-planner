@@ -286,3 +286,40 @@ describe('geometry api: winding repair', () => {
     expect(outcome.status === 'ok' && shown(outcome.seams)).toHaveLength(4)
   })
 })
+
+describe('geometry api: snapDraw', () => {
+  const clicks = ([[-99.5, 5.3, 10.2], [0, 4.7, 10.4], [99.5, 5.2, 9.8]] as const).map((p) => ({ p: [...p] as [number, number, number], face: 0 }))
+
+  it('says what is missing before any part is loaded', async () => {
+    const outcome = await createGeometryApi().snapDraw(clicks, 3)
+    expect(outcome.status).toBe('error')
+    if (outcome.status === 'error') expectUserError(outcome.error)
+  })
+
+  it('snaps the clicks to the crease of the loaded part', async () => {
+    const api = createGeometryApi()
+    ready(await api.loadStl(readSample('t-joint-merged'), 't.stl', () => {}))
+    const outcome = await api.snapDraw(clicks, 3)
+    expect(outcome.status).toBe('ok')
+    if (outcome.status !== 'ok') return
+    expect(outcome.seam.lengthMm).toBeGreaterThan(198.5)
+    expect(outcome.seam.approximateNormals).toBeFalsy()
+  })
+
+  it('hands the drawing error on in the same what, why, next form', async () => {
+    const api = createGeometryApi()
+    ready(await api.loadStl(readSample('t-joint-merged'), 't.stl', () => {}))
+    const outcome = await api.snapDraw(clicks.slice(0, 1), 3)
+    expect(outcome.status).toBe('error')
+    if (outcome.status === 'error') expectUserError(outcome.error)
+  })
+
+  it('works on the newest part after another file loads', async () => {
+    const api = createGeometryApi()
+    ready(await api.loadStl(readSample('t-joint-merged'), 'a.stl', () => {}))
+    await api.snapDraw(clicks, 3)
+    ready(await api.loadStl(readSample('pipe-on-plate'), 'b.stl', () => {}))
+    const outcome = await api.snapDraw(clicks, 3)
+    expect(outcome.status === 'ok' && outcome.seam.approximateNormals).toBe(true)
+  })
+})

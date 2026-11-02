@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { selectStats, visibleSeams } from '../../../src/state/selectors'
+import { selectAllSeams, selectStats, visibleSeams } from '../../../src/state/selectors'
 import { corner, partInfo, seam } from '../helpers/state'
 
 describe('selectStats', () => {
@@ -70,5 +70,32 @@ describe('selectStats with corner candidates', () => {
   it('does not count an accepted corner while it is hidden, and does not call it hidden by the angle', () => {
     const stats = selectStats({ part: null, seams, statusById: { c: 'accepted' }, showCorners: false })
     expect(stats).toMatchObject({ accepted: 0, acceptedLengthMm: 0, hiddenAccepted: 0 })
+  })
+})
+
+describe('selectAllSeams', () => {
+  it('lists detected seams that are not superseded, then the manual ones', () => {
+    const seams = [seam('a'), seam('b'), seam('c')]
+    const manualSeams = [seam('m1'), seam('m2')]
+    expect(selectAllSeams({ seams, manualSeams, supersededIds: ['b'] }).map((s) => s.id)).toEqual(['a', 'c', 'm1', 'm2'])
+  })
+
+  it('returns the detection result itself when nothing was edited', () => {
+    const seams = [seam('a'), seam('b')]
+    expect(selectAllSeams({ seams, manualSeams: [], supersededIds: [] })).toBe(seams)
+  })
+})
+
+describe('selectStats with manual seams', () => {
+  it('counts manual seams, sums their accepted length and does not call a superseded accepted id hidden', () => {
+    const stats = selectStats({
+      part: null,
+      seams: [seam('a', 0.9, 200), seam('b', 0.9, 100)],
+      manualSeams: [seam('a/a', 1, 80), seam('a/b', 1, 120)],
+      supersededIds: ['a'],
+      statusById: { 'a/a': 'accepted', 'a/b': 'accepted', a: 'accepted' },
+      showCorners: false,
+    })
+    expect(stats).toMatchObject({ accepted: 2, candidates: 1, acceptedLengthMm: 200, hiddenAccepted: 0 })
   })
 })

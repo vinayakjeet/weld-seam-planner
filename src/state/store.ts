@@ -27,8 +27,9 @@ const createUiSlice: StateCreator<AppState, [], [], UiSlice> = (set) => ({
 
 export const HISTORY_LIMIT = 100
 
-// Undo covers accepting and rejecting seams and choosing their joint type, nothing else. Hover, selection, settings and
-// the loaded part are not history. Comparing the two maps by reference keeps those changes from adding steps.
+// Undo covers accepting and rejecting seams, choosing their joint type and editing seams (drawing, splitting, merging,
+// trimming, reversing, deleting), nothing else. Hover, selection, settings and the loaded part are not history.
+// Comparing the four values by reference keeps those changes from adding steps.
 export const useStore = create<AppState>()(
   temporal(
     (...args) => ({
@@ -37,8 +38,17 @@ export const useStore = create<AppState>()(
       ...createSeamsSlice(...args),
     }),
     {
-      partialize: (state) => ({ statusById: state.statusById, typeById: state.typeById }),
-      equality: (past, current) => past.statusById === current.statusById && past.typeById === current.typeById,
+      partialize: (state) => ({
+        statusById: state.statusById,
+        typeById: state.typeById,
+        manualSeams: state.manualSeams,
+        supersededIds: state.supersededIds,
+      }),
+      equality: (past, current) =>
+        past.statusById === current.statusById &&
+        past.typeById === current.typeById &&
+        past.manualSeams === current.manualSeams &&
+        past.supersededIds === current.supersededIds,
       limit: HISTORY_LIMIT,
     },
   ),

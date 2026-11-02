@@ -72,6 +72,9 @@ export function fakeClient(impl: Partial<GeometryApi> = {}): GeometryApi {
       throw new Error('unexpected setUnits')
     },
     detect: async () => detected([]),
+    snapDraw: async () => {
+      throw new Error('unexpected snapDraw')
+    },
     ...impl,
   }
 }

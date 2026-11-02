@@ -1,5 +1,5 @@
 import { proxy, transfer, wrap, type Endpoint } from 'comlink'
-import type { DetectOutcome, GeometryApi, LoadOutcome, Progress, UserError } from './geometry.api'
+import type { DetectOutcome, GeometryApi, LoadOutcome, Progress, SnapOutcome, UserError } from './geometry.api'
 import { createRecoveringClient } from './recovery'
 
 export type GeometryClient = GeometryApi
@@ -104,6 +104,8 @@ export function wrapGeometryApi(endpoint: Endpoint, options: ClientOptions = {})
       supervise<LoadOutcome>(options, 'applying the unit choice', (activity) => remote.setUnits(units, watching(activity, onProgress))),
     detect: (settings, onProgress) =>
       supervise<DetectOutcome>(options, 'detecting seams', (activity) => remote.detect(settings, watching(activity, onProgress))),
+    snapDraw: (clicks, snapRadiusMm) =>
+      supervise<SnapOutcome>(options, 'snapping the drawn seam', () => remote.snapDraw(clicks, snapRadiusMm)),
   }
 }
 
