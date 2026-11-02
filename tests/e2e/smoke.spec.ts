@@ -1,42 +1,10 @@
-import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
-import { expect, test as base, type Page } from '@playwright/test'
+import { counts, expect, expectedSeams, loadSample, sampleById, seamRows, statusBar, test } from './helpers'
+import type { Page } from '@playwright/test'
 
-interface ManifestFile {
-  samples: Array<{ id: string; name: string; expectedCreaseSeams: number }>
-}
+const tJoint = sampleById('t-joint-merged')
+const SEAMS = expectedSeams(tJoint)
 
-const manifest = JSON.parse(readFileSync(fileURLToPath(new URL('../../public/samples/manifest.json', import.meta.url)), 'utf8')) as ManifestFile
-const tJoint = manifest.samples.find((sample) => sample.id === 't-joint-merged')
-if (!tJoint) throw new Error('public/samples/manifest.json has no t-joint-merged entry; regenerate it with npx tsx scripts/generate-samples.ts')
-const SEAMS = tJoint.expectedCreaseSeams
-
-// Every test also fails if the app wrote to the console as an error.
-const test = base.extend<{ consoleErrors: string[] }>({
-  consoleErrors: [
-    async ({ page }, use) => {
-      const errors: string[] = []
-      page.on('console', (message) => {
-        if (message.type() === 'error') errors.push(message.text())
-      })
-      page.on('pageerror', (error) => errors.push(error.message))
-      await use(errors)
-      expect(errors, 'the app logged console errors').toEqual([])
-    },
-    { auto: true },
-  ],
-})
-
-const sampleCard = (page: Page) => page.getByRole('button', { name: tJoint.name, exact: true })
-const seamRows = (page: Page) => page.getByRole('table', { name: 'Seams' }).getByRole('row').filter({ has: page.getByRole('cell') })
-const statusBar = (page: Page) => page.locator('footer')
-const counts = (accepted: number, candidates: number) => new RegExp(`Seams accepted / candidate\\s*${accepted} / ${candidates}`)
-
-async function loadTJoint(page: Page) {
-  await sampleCard(page).click()
-  await expect(seamRows(page)).toHaveCount(SEAMS, { timeout: 30_000 })
-  await expect(page.getByRole('progressbar')).toHaveCount(0)
-}
+const loadTJoint = (page: Page) => loadSample(page, tJoint)
 
 // Drops a text file the way a browser does (dragover, then drop) and says whether the page cancelled each event.
 // An uncancelled drop on a link-less page makes the browser open the file and leave the app.
