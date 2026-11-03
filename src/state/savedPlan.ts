@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { SEQUENCE_STRATEGIES } from '../core/sequence/types'
 import { procedureOverridesSchema, procedureSchema, vec3Schema } from '../core/job/schema'
 import type { ManualError } from '../core/seams/manual'
 import type { AppState } from './store'
@@ -43,6 +44,9 @@ export const savedPlanSchema = z.object({
   overridesById: z.record(z.string(), procedureOverridesSchema),
   legById: z.record(z.string(), z.number().positive()),
   thicknessById: z.record(z.string(), z.tuple([thickness, thickness])),
+  // Entries written before the sequence was stored have neither field and read as table order.
+  strategy: z.enum(SEQUENCE_STRATEGIES).default('table-order'),
+  order: z.array(z.object({ seamId: z.string().min(1), reversed: z.boolean(), locked: z.boolean() })).default([]),
   gravity: vec3Schema,
   detectSettings: z.object({ creaseAngleDeg: z.number() }),
   jobSettings: z.object({ poseSpacingMm: z.number().positive(), airSpeedMmS: z.number().positive(), approachMm: z.number().min(0) }),
@@ -70,6 +74,8 @@ export function snapshotOf(state: AppState, savedAt: string): SavedPlan {
     overridesById: state.overridesById,
     legById: state.legById,
     thicknessById: state.thicknessById,
+    strategy: state.strategy,
+    order: state.order,
     gravity: state.gravity,
     detectSettings: state.detectSettings,
     jobSettings: state.jobSettings,

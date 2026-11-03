@@ -16,7 +16,7 @@ export const AUTOSAVE_DELAY_MS = 1000
 
 // The fields a snapshot is made of. A change to any of them is a change worth saving.
 const read = (s: AppState) =>
-  [s.statusById, s.typeById, s.manualSeams, s.supersededIds, s.nextDrawnId, s.procedures, s.procedureById, s.overridesById, s.legById, s.thicknessById, s.gravity, s.detectSettings, s.jobSettings] as const
+  [s.statusById, s.typeById, s.manualSeams, s.supersededIds, s.nextDrawnId, s.procedures, s.procedureById, s.overridesById, s.legById, s.thicknessById, s.strategy, s.order, s.gravity, s.detectSettings, s.jobSettings] as const
 
 interface Active {
   storage: PlanStorage
@@ -128,6 +128,8 @@ function apply(saved: SavedPlan): Partial<AppState> {
     overridesById: saved.overridesById,
     legById: saved.legById,
     thicknessById: saved.thicknessById,
+    strategy: saved.strategy,
+    order: saved.order,
     gravity: saved.gravity,
     detectSettings: saved.detectSettings,
     jobSettings: saved.jobSettings,

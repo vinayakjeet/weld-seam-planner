@@ -28,6 +28,14 @@ function editedState() {
 
 beforeEach(resetStore)
 
+const SEQUENCE = {
+  strategy: 'manual' as const,
+  order: [
+    { seamId: 'b', reversed: true, locked: true },
+    { seamId: 'a', reversed: false, locked: false },
+  ],
+}
+
 describe('savedKey', () => {
   it('is weld-plan: followed by the hash', () => {
     expect(savedKey('abc')).toBe('weld-plan:abc')
@@ -90,5 +98,30 @@ describe('offerSummary', () => {
       procedureById: { a: 'P1', b: 'P1', c: 'P2' },
     })
     expect(offerSummary(snapshotOf(useStore.getState(), NOW))).toEqual({ acceptedSeams: 2, proceduresInUse: 1 })
+  })
+})
+
+describe('the sequence in a saved plan', () => {
+  it('stores the strategy, the order, the reversed flags and the locks', () => {
+    useStore.setState({ ...SEQUENCE })
+    const snapshot = JSON.parse(JSON.stringify(snapshotOf(editedState(), NOW)))
+    const parsed = parseSaved(snapshot)
+    expect(parsed.status).toBe('ok')
+    if (parsed.status === 'ok') expect(parsed.saved).toMatchObject(SEQUENCE)
+  })
+
+  it('reads an entry saved before the sequence was stored as table order', () => {
+    const older = JSON.parse(JSON.stringify(snapshotOf(editedState(), NOW)))
+    delete older.strategy
+    delete older.order
+    const parsed = parseSaved(older)
+    expect(parsed.status).toBe('ok')
+    if (parsed.status === 'ok') expect(parsed.saved).toMatchObject({ strategy: 'table-order', order: [] })
+  })
+
+  it('refuses an order entry with a missing seam id', () => {
+    const snapshot = JSON.parse(JSON.stringify(snapshotOf(editedState(), NOW)))
+    snapshot.order = [{ reversed: false, locked: false }]
+    expect(parseSaved(snapshot).status).toBe('error')
   })
 })

@@ -122,6 +122,58 @@ describe('startAutosave: saving', () => {
   })
 })
 
+describe('the sequence in autosave', () => {
+  const accepted = { a: 'accepted', b: 'accepted', c: 'accepted' } as const
+
+  it('saves a reorder, a reverse flag and a lock as changes to the plan', async () => {
+    const { storage, sets } = memoryStorage()
+    loadedPart()
+    useStore.setState({ statusById: { ...accepted } })
+    const stop = startAutosave(storage)
+    state().reorder(0, 2)
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY_MS)
+    state().toggleLock('c')
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY_MS)
+    expect(sets).toHaveLength(2)
+    expect(sets[1]![1]).toMatchObject({
+      strategy: 'manual',
+      order: [
+        { seamId: 'b', reversed: false, locked: false },
+        { seamId: 'c', reversed: false, locked: true },
+        { seamId: 'a', reversed: false, locked: false },
+      ],
+    })
+    stop()
+  })
+
+  it('puts the order, the reversed flags, the locks and the strategy back on restore', async () => {
+    const memory = memoryStorage()
+    loadedPart()
+    useStore.setState({ statusById: { ...accepted } })
+    state().setSequence('min-air-move', [
+      { seamId: 'c', reversed: true },
+      { seamId: 'a', reversed: false },
+      { seamId: 'b', reversed: false },
+    ])
+    state().toggleLock('a')
+    const stored = JSON.parse(JSON.stringify(snapshotOf(state(), '2026-11-04T10:15:00.000Z')))
+    resetStore()
+    memory.data.set(KEY, stored)
+    const stop = startAutosave(memory.storage)
+    const client = loadClient()
+    await importBuffer(new ArrayBuffer(8), 'a.stl', client)
+    expect(state().order).toEqual([])
+    await restoreSaved(client)
+    expect(state().strategy).toBe('min-air-move')
+    expect(state().order).toEqual([
+      { seamId: 'c', reversed: true, locked: false },
+      { seamId: 'a', reversed: false, locked: true },
+      { seamId: 'b', reversed: false, locked: false },
+    ])
+    stop()
+  })
+})
+
 describe('the restore offer', () => {
   it('opens when a part loads that has a stored entry, and nothing saves while it is open', async () => {
     const { storage, sets } = memoryStorage({ [KEY]: savedSnapshot() })
