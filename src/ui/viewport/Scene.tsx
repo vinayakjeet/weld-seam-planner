@@ -5,11 +5,13 @@ import { Sphere, Vector3, type Mesh } from 'three'
 import { useStore } from '../../state/store'
 import { useShortcuts } from '../shell/useShortcuts'
 import { AccessCone } from './AccessCone'
+import { AirMoves } from './AirMoves'
 import { cssVar } from './cssVar'
 import { DrawTool } from './DrawTool'
 import { GIZMO_MARGIN } from './gizmo'
 import { PartMesh } from './PartMesh'
 import { SeamLines } from './SeamLines'
+import { SequenceLabels } from './SequenceLabels'
 import { SplitTool } from './SplitTool'
 import { TorchPreview } from './TorchPreview'
 
@@ -68,6 +70,8 @@ export function Scene() {
       <SplitTool />
       <TorchPreview />
       <AccessCone />
+      <AirMoves />
+      <SequenceLabels />
       <GizmoHelper alignment="top-right" margin={[GIZMO_MARGIN, GIZMO_MARGIN]}>
         <GizmoViewcube
           faces={Z_UP_FACES}

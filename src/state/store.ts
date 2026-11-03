@@ -8,6 +8,7 @@ import { createAccessSlice, type AccessSlice } from './accessSlice'
 import { createPartSlice, type PartSlice } from './partSlice'
 import { createPlanSlice, type PlanSlice } from './planSlice'
 import { createSeamsSlice, type SeamsSlice } from './seamsSlice'
+import { createSequenceSlice, type SequenceSlice } from './sequenceSlice'
 import { createTorchSlice, type TorchSlice } from './torchSlice'
 import { createViewSlice, type ViewSlice } from './viewSlice'
 
@@ -37,7 +38,7 @@ interface UiSlice {
   offer: SavedPlan | null
 }
 
-export type AppState = UiSlice & PartSlice & SeamsSlice & PlanSlice & TorchSlice & AccessSlice & ViewSlice
+export type AppState = UiSlice & PartSlice & SeamsSlice & PlanSlice & TorchSlice & AccessSlice & ViewSlice & SequenceSlice
 
 const createUiSlice: StateCreator<AppState, [], [], UiSlice> = (set) => ({
   activeStep: 'import',
@@ -54,9 +55,10 @@ const createUiSlice: StateCreator<AppState, [], [], UiSlice> = (set) => ({
 export const HISTORY_LIMIT = 100
 
 // Undo covers accepting and rejecting seams, choosing their joint type, editing seams (drawing, splitting, merging,
-// trimming, reversing, deleting) and the plan (the procedure library, assignments, overrides, legs, thickness edits),
+// trimming, reversing, deleting), the plan (the procedure library, assignments, overrides, legs, thickness edits) and
+// the sequence (its strategy, order and locks),
 // nothing else. Hover, selection, settings and the loaded part are not history.
-// Comparing the nine values by reference keeps those changes from adding steps.
+// Comparing the eleven values by reference keeps those changes from adding steps.
 export const useStore = create<AppState>()(
   temporal(
     (...args) => ({
@@ -67,6 +69,7 @@ export const useStore = create<AppState>()(
       ...createTorchSlice(...args),
       ...createAccessSlice(...args),
       ...createViewSlice(...args),
+      ...createSequenceSlice(...args),
     }),
     {
       partialize: (state) => ({
@@ -79,6 +82,8 @@ export const useStore = create<AppState>()(
         overridesById: state.overridesById,
         legById: state.legById,
         thicknessById: state.thicknessById,
+        strategy: state.strategy,
+        order: state.order,
       }),
       equality: (past, current) =>
         past.statusById === current.statusById &&
@@ -89,7 +94,9 @@ export const useStore = create<AppState>()(
         past.procedureById === current.procedureById &&
         past.overridesById === current.overridesById &&
         past.legById === current.legById &&
-        past.thicknessById === current.thicknessById,
+        past.thicknessById === current.thicknessById &&
+        past.strategy === current.strategy &&
+        past.order === current.order,
       limit: HISTORY_LIMIT,
     },
   ),

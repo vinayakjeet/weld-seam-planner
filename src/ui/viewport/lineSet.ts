@@ -9,14 +9,27 @@ interface LineStyle {
   colors?: Float32Array
   color?: string
   renderOrder?: number
+  dashed?: { dashSize: number; gapSize: number }
+  // Drawn over the part instead of behind it, for a path that runs through the inside of the model.
+  overlay?: boolean
 }
 
-export function lineSet(positions: Float32Array, { width, colors, color, renderOrder = 0 }: LineStyle): LineSegments2 {
+export function lineSet(positions: Float32Array, { width, colors, color, renderOrder = 0, dashed, overlay = false }: LineStyle): LineSegments2 {
   const geometry = new LineSegmentsGeometry()
   geometry.setPositions(positions)
   if (colors) geometry.setColors(colors)
   const material = new LineMaterial({ linewidth: width, vertexColors: colors !== undefined })
   if (color) material.color = new Color(color)
+  if (overlay) {
+    material.depthTest = false
+    material.transparent = true
+    material.opacity = 0.85
+  }
+  if (dashed) {
+    material.dashed = true
+    material.dashSize = dashed.dashSize
+    material.gapSize = dashed.gapSize
+  }
   // An overlay lies exactly on the line set below it; without a lift the two fight over the depth test and speckle.
   if (renderOrder > 0) {
     material.polygonOffset = true
@@ -24,6 +37,7 @@ export function lineSet(positions: Float32Array, { width, colors, color, renderO
     material.polygonOffsetUnits = -renderOrder
   }
   const lines = new LineSegments2(geometry, material)
+  if (dashed) lines.computeLineDistances()
   lines.frustumCulled = false
   lines.renderOrder = renderOrder
   return lines

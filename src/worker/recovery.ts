@@ -121,5 +121,7 @@ export function createRecoveringClient(spawn: (onDead: () => void) => GeometryCl
     exportJob: (plan, createdAt) => current().exportJob(plan, createdAt),
 
     planTiming: (plan) => current().planTiming(plan),
+
+    optimiseSequence: (plan, strategy, locked, order) => current().optimiseSequence(plan, strategy, locked, order),
   }
 }

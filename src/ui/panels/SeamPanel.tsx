@@ -14,6 +14,7 @@ import { PartWarnings } from './PartWarnings'
 import { PreflightPanel } from './PreflightPanel'
 import { ProcedureLibrary } from './ProcedureLibrary'
 import { seamRows } from './seamRows'
+import { SequencePanel } from './SequencePanel'
 import { acceptAllLabel, noSeamsMessage } from './seamText'
 import { TypeMenu } from './TypeMenu'
 
@@ -206,6 +207,7 @@ function SeamTable() {
 export function SeamPanel() {
   const procedureStep = useStore((s) => s.activeStep === 'procedures')
   const exportStep = useStore((s) => s.activeStep === 'export')
+  const sequenceStep = useStore((s) => s.activeStep === 'sequence')
   return (
     <aside aria-label="Seam list" className="flex min-h-0 w-[376px] shrink-0 flex-col border-r border-line bg-surface-1">
       <Tabs defaultValue="seams" className="flex min-h-0 flex-1 flex-col">
@@ -224,6 +226,8 @@ export function SeamPanel() {
           <PartWarnings />
           {exportStep ? (
             <PreflightPanel />
+          ) : sequenceStep ? (
+            <SequencePanel />
           ) : (
             <>
               {procedureStep ? (

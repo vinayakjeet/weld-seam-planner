@@ -1,5 +1,6 @@
 import { type JobPart, type Plan, type PlannedSeam } from '../core/job/plan'
 import { meshWarnings, type MeshWarning } from '../core/mesh/health'
+import { reconcileOrder, type OrderEntry } from '../core/sequence/order'
 import type { SeamCandidate } from '../core/seams/detect'
 import { accessFor } from './accessSlice'
 import type { AppState } from './store'
@@ -90,13 +91,32 @@ export function plannedSeam(state: PlanFields, seam: SeamCandidate): PlannedSeam
 }
 
 let cachedPlan: { deps: readonly unknown[]; plan: Plan } | null = null
+let cachedOrder: { order: AppState['order']; ids: readonly string[]; result: OrderEntry[] } | null = null
+
+// The ids of the accepted, visible seams in table order.
+export function selectTableIds(state: AppState): string[] {
+  return selectPlan(state).seams.map((p) => p.seam.id)
+}
+
+// The sequence as shown: the stored order kept for the seams that are still accepted, newly accepted seams appended
+// forward in table order, rejected ones gone. The same state gives the same array.
+export function selectSequenceOrder(state: AppState): OrderEntry[] {
+  const plan = selectPlan(state)
+  const ids = plan.seams.map((p) => p.seam.id)
+  if (cachedOrder && cachedOrder.order === state.order && cachedOrder.ids.length === ids.length && cachedOrder.ids.every((id, i) => id === ids[i])) {
+    return cachedOrder.result
+  }
+  const result = reconcileOrder(state.order, ids, { locked: false })
+  cachedOrder = { order: state.order, ids, result }
+  return result
+}
 
 // Accepted, visible seams in table order, with the user's type and thickness edits applied. The same state gives the
 // same object, and hover, selection and view changes do not give a new one.
 export function selectPlan(state: AppState): Plan {
   const deps = [
     state.part, state.seams, state.manualSeams, state.supersededIds, state.showCorners, state.statusById, state.typeById,
-    state.thicknessById, state.procedures, state.procedureById, state.overridesById, state.legById, state.accessById, state.accessPointsById, state.gravity,
+    state.thicknessById, state.procedures, state.procedureById, state.overridesById, state.legById, state.accessById, state.accessPointsById, state.strategy, state.order, state.gravity,
     state.detectSettings.creaseAngleDeg, state.jobSettings,
   ]
   if (cachedPlan && cachedPlan.deps.every((d, i) => d === deps[i])) return cachedPlan.plan
@@ -110,6 +130,13 @@ export function selectPlan(state: AppState): Plan {
     procedures: state.procedures,
     seams,
     sequence: null,
+  }
+  // An untouched sequence leaves the plan in table order; once there is a stored order the plan carries it.
+  if (state.order.length > 0) {
+    plan.sequence = {
+      strategy: state.strategy,
+      order: reconcileOrder(state.order, seams.map((p) => p.seam.id), { locked: false }).map(({ seamId, reversed }) => ({ seamId, reversed })),
+    }
   }
   cachedPlan = { deps, plan }
   return plan

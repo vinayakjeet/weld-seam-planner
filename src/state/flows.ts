@@ -124,6 +124,8 @@ async function applyLoad(outcome: LoadOutcome, fileName: string, client: Geometr
     overridesById: {},
     legById: {},
     thicknessById: {},
+    strategy: 'table-order',
+    order: [],
     selectedId: null,
     selectedIds: [],
     rangeAnchor: null,

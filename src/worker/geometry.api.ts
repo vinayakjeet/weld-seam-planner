@@ -8,6 +8,12 @@ import { exportJob, type ExportResult } from '../core/job/build'
 import type { Plan } from '../core/job/plan'
 import { preflight, type Issue } from '../core/job/preflight'
 import { planTiming, type PlanTiming } from '../core/job/timing'
+import { homePoint } from '../core/job/build'
+import { balancedEdge } from '../core/sequence/balance'
+import { nodesFromPlan } from '../core/sequence/nodes'
+import { reconcileOrder, resetToTable } from '../core/sequence/order'
+import { airEdge, optimise } from '../core/sequence/tsp'
+import type { SequenceStrategy, Visit } from '../core/sequence/types'
 import { computeBounds } from '../core/mesh/bounds'
 import { computeFaceData } from '../core/mesh/faces'
 import { sha256Hex } from '../core/mesh/hash'
@@ -73,6 +79,10 @@ export type TorchPosesOutcome = { status: 'ok'; poses: TorchPose[] } | { status:
 
 export type PreflightOutcome = { status: 'ok'; issues: Issue[] } | { status: 'error'; error: UserError }
 
+export type SequenceOutcome =
+  | { status: 'ok'; order: { seamId: string; reversed: boolean }[]; moves: PlanTiming['moves'] }
+  | { status: 'error'; error: UserError }
+
 export type TimingOutcome = { status: 'ok'; timing: PlanTiming } | { status: 'error'; error: UserError }
 
 // ExportResult already has an error arm with the same what, why and next fields.
@@ -100,6 +110,9 @@ export interface GeometryApi {
   exportJob(plan: Plan, createdAt: string): Promise<ExportOutcome>
   // Arc, air and cycle time of the plan in its sequence order; the same figures as the exported summary.
   planTiming(plan: Plan): Promise<TimingOutcome>
+  // Orders the seams of the plan by the strategy, starting from the current order. Locked seams keep their slot and
+  // direction. Returns the new order and the air moves it gives, home included.
+  optimiseSequence(plan: Plan, strategy: SequenceStrategy, locked: string[], current: { seamId: string; reversed: boolean }[]): Promise<SequenceOutcome>
 }
 
 // Where each load stage starts on the overall bar; the index stage runs to 1.
@@ -348,6 +361,30 @@ export function createGeometryApi(): GeometryApi {
 
     async exportJob(plan, createdAt) {
       return exportJob(plan, { createdAt })
+    },
+
+    async optimiseSequence(plan, strategy, locked, current) {
+      try {
+        const lockedIds = new Set(locked)
+        const tableIds = plan.seams.map((p) => p.seam.id)
+        const start = reconcileOrder(current, tableIds)
+        let order = start
+        if (strategy === 'table-order') {
+          order = resetToTable(start.map((e) => ({ ...e, locked: lockedIds.has(e.seamId) })), tableIds).map(({ seamId, reversed }) => ({ seamId, reversed }))
+        } else if (strategy !== 'manual' && start.length > 0) {
+          const nodes = nodesFromPlan(plan, lockedIds)
+          const byId = new Map(nodes.map((node) => [node.id, node]))
+          const visits: Visit[] = start.map((e) => ({ node: byId.get(e.seamId)!, reversed: e.reversed && !byId.get(e.seamId)!.closed }))
+          const home = homePoint(plan)
+          const lead = plan.settings.approachMm
+          const edge = strategy === 'balanced-heat' ? balancedEdge(nodes, home, lead) : airEdge(home, lead)
+          order = optimise(nodes, edge, { start: visits }).map((v) => ({ seamId: v.node.id, reversed: v.reversed }))
+        }
+        const timing = planTiming({ ...plan, sequence: { strategy, order } })
+        return { status: 'ok', order, moves: timing.moves }
+      } catch (error) {
+        return { status: 'error', error: toUserError(error) }
+      }
     },
 
     async planTiming(plan) {
