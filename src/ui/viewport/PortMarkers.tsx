@@ -1,11 +1,13 @@
 import { TransformControls } from '@react-three/drei'
 import { useEffect, useMemo, useRef, type RefObject } from 'react'
 import { DoubleSide, Quaternion, Vector3, type Group } from 'three'
+import type { Vec3 } from '../../core/math/vec3'
 import type { Port } from '../../core/snake/arm'
 import { useStore } from '../../state/store'
 import { cssVar } from './cssVar'
 
 const Z = new Vector3(0, 0, 1)
+const round = (v: number) => Math.round(v * 1000) / 1000
 const ARROW_MM = 250
 const HEAD_MM = 60
 
@@ -54,7 +56,10 @@ function Draggable({ port, color }: { port: Port; color: string }) {
         size={0.8}
         onMouseUp={() => {
           const p = group.current?.position
-          if (p) movePort(port.id, [p.x, p.y, p.z])
+          if (!p) return
+          // A release without a drag leaves float noise in the position; to the micrometre it is the stored value.
+          const next: Vec3 = [round(p.x), round(p.y), round(p.z)]
+          if (next.some((v, i) => Math.abs(v - port.position[i]!) > 1e-6)) movePort(port.id, next)
         }}
       />
     </>

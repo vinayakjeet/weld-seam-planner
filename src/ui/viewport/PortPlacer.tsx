@@ -7,6 +7,13 @@ import { cssVar } from './cssVar'
 import { PointMarkers } from './PointMarkers'
 import { useCanvasPointer } from './useCanvasPointer'
 
+// Rounded to 4 decimals and made unit length again, so a face that is square to an axis gives exactly that axis.
+function tidy(v: Vec3): Vec3 {
+  const rounded = v.map((n) => Math.round(n * 1e4) / 1e4 + 0) as Vec3
+  const length = Math.hypot(...rounded)
+  return length === 0 ? v : (rounded.map((n) => n / length + 0) as Vec3)
+}
+
 interface Hit {
   point: Vec3
   // Points into the part: minus the face normal as seen from the camera.
@@ -35,7 +42,7 @@ export function PortPlacer({ partRef }: { partRef: RefObject<Mesh | null> }) {
     const normal = hit.face.normal.clone().transformDirection(hit.object.matrixWorld)
     // The part is drawn double sided: a face seen from behind still gets a normal that faces the camera.
     if (normal.dot(raycaster.ray.direction) > 0) normal.negate()
-    return { point: [hit.point.x, hit.point.y, hit.point.z], direction: [-normal.x, -normal.y, -normal.z] }
+    return { point: [hit.point.x, hit.point.y, hit.point.z].map((n) => Math.round(n * 100) / 100 + 0) as Vec3, direction: tidy([-normal.x, -normal.y, -normal.z]) }
   }
 
   useCanvasPointer(placing, {

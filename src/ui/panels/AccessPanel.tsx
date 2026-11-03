@@ -219,7 +219,7 @@ function ReachSection() {
 
 export function AccessPanel() {
   return (
-    <div className="shrink-0">
+    <div className="max-h-[52vh] shrink-0 overflow-y-auto border-b border-line">
       <PortList />
       <ArmFields />
       <ReachSection />
