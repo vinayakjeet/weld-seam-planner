@@ -106,7 +106,7 @@ function SeamTable() {
   }, [selectedId])
 
   return (
-    <div role="table" aria-label="Seams" className="flex h-full flex-col">
+    <div role="table" aria-label="Seams" className="flex min-h-0 flex-1 flex-col">
       <div role="row" className={`${GRID} h-7 shrink-0 border-b border-line text-[11px] text-ink-2`}>
         {COLUMNS.map((c) => (
           <span key={c.key} role="columnheader" title={c.title} className="truncate">

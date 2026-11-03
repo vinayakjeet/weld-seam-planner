@@ -9,5 +9,6 @@
   --viewport-bg: #10141A; --part: #8A939E; --part-edge: #3B4552;
   --seam-candidate: #6B7685; --seam-accepted: var(--brand-primary); --seam-hover: #FFFFFF;
   --ok: #3FB950; --warn: #D29922; --err: #F85149; --info: #58A6FF;
+  --scroll-thumb: var(--text-2);  --scroll-track: transparent;
   --num: 'JetBrains Mono', ui-monospace, monospace;    /* tabular numbers */
 }
