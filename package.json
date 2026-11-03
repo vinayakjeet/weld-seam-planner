@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsx scripts/build-schema.ts --check && tsc -b && vite build",
+    "schema": "tsx scripts/build-schema.ts",
     "preview": "vite preview",
     "test": "vitest run",
     "test:e2e": "playwright test",

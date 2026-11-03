@@ -1,0 +1,1814 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://weld-seam-planner.vercel.app/schema/weld-job-1.0.json",
+  "title": "Weld job 1.0",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Where the JSON Schema for this version lives."
+    },
+    "format": {
+      "type": "string",
+      "const": "weld-job",
+      "description": "Identifies the document type."
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^1\\.\\d+\\.\\d+$",
+      "description": "Semver; minor versions only add optional fields."
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Unique job id."
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+      "description": "Creation time, ISO 8601 UTC."
+    },
+    "generator": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ],
+      "additionalProperties": {},
+      "description": "App name and version that wrote the file."
+    },
+    "units": {
+      "type": "object",
+      "properties": {
+        "length": {
+          "type": "string",
+          "const": "mm"
+        },
+        "angle": {
+          "type": "string",
+          "const": "deg"
+        },
+        "time": {
+          "type": "string",
+          "const": "s"
+        },
+        "speed": {
+          "type": "string",
+          "const": "mm/s"
+        },
+        "wireFeed": {
+          "type": "string",
+          "const": "m/min"
+        },
+        "gasFlow": {
+          "type": "string",
+          "const": "L/min"
+        },
+        "heatInput": {
+          "type": "string",
+          "const": "kJ/mm"
+        },
+        "mass": {
+          "type": "string",
+          "const": "kg"
+        }
+      },
+      "required": [
+        "length",
+        "angle",
+        "time",
+        "speed",
+        "wireFeed",
+        "gasFlow",
+        "heatInput",
+        "mass"
+      ],
+      "additionalProperties": {},
+      "description": "Units for every number in the file; consumers must read this, never assume."
+    },
+    "frames": {
+      "type": "object",
+      "properties": {
+        "convention": {
+          "type": "string",
+          "minLength": 1
+        },
+        "gravity": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "items": false,
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "partToCell": {
+          "type": "object",
+          "properties": {
+            "position": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "items": false,
+              "minItems": 3,
+              "maxItems": 3
+            },
+            "quaternion": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "number",
+                  "minimum": -1,
+                  "maximum": 1
+                },
+                {
+                  "type": "number",
+                  "minimum": -1,
+                  "maximum": 1
+                },
+                {
+                  "type": "number",
+                  "minimum": -1,
+                  "maximum": 1
+                },
+                {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                }
+              ],
+              "items": false,
+              "minItems": 4,
+              "maxItems": 4
+            }
+          },
+          "required": [
+            "position",
+            "quaternion"
+          ],
+          "additionalProperties": {}
+        }
+      },
+      "required": [
+        "convention",
+        "gravity",
+        "partToCell"
+      ],
+      "additionalProperties": {},
+      "description": "Handedness and axis conventions, gravity in the part frame, and where the part sits in the cell."
+    },
+    "part": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "sourceUnits": {
+          "type": "string",
+          "enum": [
+            "mm",
+            "in",
+            "m"
+          ]
+        },
+        "scaleToMm": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "triangles": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "bodies": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "boundingBox": {
+          "type": "object",
+          "properties": {
+            "min": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "items": false,
+              "minItems": 3,
+              "maxItems": 3
+            },
+            "max": {
+              "type": "array",
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "items": false,
+              "minItems": 3,
+              "maxItems": 3
+            }
+          },
+          "required": [
+            "min",
+            "max"
+          ],
+          "additionalProperties": {}
+        }
+      },
+      "required": [
+        "name",
+        "sha256",
+        "sourceUnits",
+        "scaleToMm",
+        "triangles",
+        "bodies",
+        "boundingBox"
+      ],
+      "additionalProperties": {},
+      "description": "Source file name, SHA-256, source units and scale, triangle and body counts, bounding box."
+    },
+    "settings": {
+      "type": "object",
+      "properties": {
+        "creaseAngleDeg": {
+          "type": "number"
+        },
+        "poseSpacingMm": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "airSpeedMmS": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "approachMm": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "creaseAngleDeg",
+        "poseSpacingMm",
+        "airSpeedMmS",
+        "approachMm"
+      ],
+      "additionalProperties": {},
+      "description": "Detection and export settings used, so the file is reproducible."
+    },
+    "procedures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Stable id referenced by seams."
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Readable name."
+          },
+          "process": {
+            "type": "string",
+            "enum": [
+              "GMAW",
+              "FCAW",
+              "GTAW",
+              "SAW"
+            ],
+            "description": "GMAW, FCAW, GTAW or SAW."
+          },
+          "transfer": {
+            "description": "Metal transfer mode.",
+            "type": "string",
+            "enum": [
+              "short-circuit",
+              "spray",
+              "pulse"
+            ]
+          },
+          "baseMaterial": {
+            "type": "object",
+            "properties": {
+              "spec": {
+                "type": "string",
+                "minLength": 1
+              },
+              "thicknessMm": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  }
+                ],
+                "items": false,
+                "minItems": 2,
+                "maxItems": 2
+              }
+            },
+            "required": [
+              "spec",
+              "thicknessMm"
+            ],
+            "additionalProperties": {},
+            "description": "Material spec and the thickness range in mm this procedure covers."
+          },
+          "wire": {
+            "type": "object",
+            "properties": {
+              "classification": {
+                "type": "string",
+                "minLength": 1
+              },
+              "diameterMm": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            },
+            "required": [
+              "classification",
+              "diameterMm"
+            ],
+            "additionalProperties": {},
+            "description": "Filler classification and diameter in mm."
+          },
+          "gas": {
+            "description": "Shielding gas mix and flow in L/min.",
+            "type": "object",
+            "properties": {
+              "mix": {
+                "type": "string",
+                "minLength": 1
+              },
+              "flowLpm": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            },
+            "required": [
+              "mix",
+              "flowLpm"
+            ],
+            "additionalProperties": {}
+          },
+          "electrical": {
+            "type": "object",
+            "properties": {
+              "currentA": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "voltageV": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "wireFeedMpm": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "polarity": {
+                "type": "string",
+                "enum": [
+                  "DCEP",
+                  "DCEN",
+                  "AC"
+                ]
+              }
+            },
+            "required": [
+              "currentA",
+              "voltageV",
+              "polarity"
+            ],
+            "additionalProperties": {},
+            "description": "Current in A, voltage in V, wire feed speed in m/min, polarity."
+          },
+          "travelSpeedMmS": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Travel speed in mm/s."
+          },
+          "ctwdMm": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Contact tip to work distance in mm, null when not applicable."
+          },
+          "torch": {
+            "type": "object",
+            "properties": {
+              "workAngleOffsetDeg": {
+                "type": "number"
+              },
+              "travelAngleDeg": {
+                "type": "number",
+                "minimum": 0
+              },
+              "technique": {
+                "type": "string",
+                "enum": [
+                  "push",
+                  "drag"
+                ]
+              }
+            },
+            "required": [
+              "workAngleOffsetDeg",
+              "travelAngleDeg",
+              "technique"
+            ],
+            "additionalProperties": {},
+            "description": "Work angle offset from the bisector in degrees, travel angle, push or drag."
+          },
+          "weave": {
+            "type": "object",
+            "properties": {
+              "pattern": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "zigzag",
+                  "triangle",
+                  "circle"
+                ]
+              },
+              "amplitudeMm": {
+                "type": "number",
+                "minimum": 0
+              },
+              "frequencyHz": {
+                "type": "number",
+                "minimum": 0
+              },
+              "dwellMs": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "pattern",
+              "amplitudeMm",
+              "frequencyHz",
+              "dwellMs"
+            ],
+            "additionalProperties": {},
+            "description": "Pattern, amplitude in mm, frequency in Hz, dwell at the edges in ms."
+          },
+          "arcStart": {
+            "type": "object",
+            "properties": {
+              "preflowS": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "preflowS"
+            ],
+            "additionalProperties": {},
+            "description": "Pre-flow in seconds."
+          },
+          "arcEnd": {
+            "type": "object",
+            "properties": {
+              "craterFillS": {
+                "type": "number",
+                "minimum": 0
+              },
+              "burnbackMs": {
+                "type": "number",
+                "minimum": 0
+              },
+              "postflowS": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "craterFillS",
+              "burnbackMs",
+              "postflowS"
+            ],
+            "additionalProperties": {},
+            "description": "Crater fill in seconds, burnback in ms, post-flow in seconds."
+          },
+          "positions": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "PA",
+                "PB",
+                "PC",
+                "PD",
+                "PE",
+                "PF",
+                "PG"
+              ]
+            },
+            "description": "ISO 6947 positions this procedure is valid for."
+          },
+          "thermalEfficiency": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1,
+            "description": "Process factor k used for heat input."
+          },
+          "preheatC": {
+            "type": "number",
+            "description": "Preheat temperature in degrees C."
+          },
+          "interpassMaxC": {
+            "type": "number",
+            "description": "Maximum interpass temperature in degrees C."
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "process",
+          "baseMaterial",
+          "wire",
+          "electrical",
+          "travelSpeedMmS",
+          "ctwdMm",
+          "torch",
+          "weave",
+          "arcStart",
+          "arcEnd",
+          "positions",
+          "thermalEfficiency",
+          "preheatC",
+          "interpassMaxC"
+        ],
+        "additionalProperties": {}
+      },
+      "description": "Reusable weld procedures referenced by seams."
+    },
+    "seams": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Stable id of the seam."
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Readable name of the seam."
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "crease",
+              "contact",
+              "intersection",
+              "nonmanifold",
+              "manual"
+            ],
+            "description": "How the seam was found."
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "The detector score from 0 to 1."
+          },
+          "jointType": {
+            "type": "string",
+            "enum": [
+              "fillet",
+              "butt",
+              "lap",
+              "corner",
+              "saddle"
+            ],
+            "description": "Joint type of the seam."
+          },
+          "procedureId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Id of the procedure to use."
+          },
+          "overrides": {
+            "type": "object",
+            "properties": {
+              "process": {
+                "type": "string",
+                "enum": [
+                  "GMAW",
+                  "FCAW",
+                  "GTAW",
+                  "SAW"
+                ],
+                "description": "GMAW, FCAW, GTAW or SAW."
+              },
+              "transfer": {
+                "description": "Metal transfer mode.",
+                "type": "string",
+                "enum": [
+                  "short-circuit",
+                  "spray",
+                  "pulse"
+                ]
+              },
+              "baseMaterial": {
+                "type": "object",
+                "properties": {
+                  "spec": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "thicknessMm": {
+                    "type": "array",
+                    "prefixItems": [
+                      {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      },
+                      {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      }
+                    ],
+                    "items": false,
+                    "minItems": 2,
+                    "maxItems": 2
+                  }
+                },
+                "additionalProperties": {}
+              },
+              "wire": {
+                "type": "object",
+                "properties": {
+                  "classification": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "diameterMm": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  }
+                },
+                "additionalProperties": {}
+              },
+              "gas": {
+                "type": "object",
+                "properties": {
+                  "mix": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "flowLpm": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  }
+                },
+                "additionalProperties": {}
+              },
+              "electrical": {
+                "type": "object",
+                "properties": {
+                  "currentA": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "voltageV": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "wireFeedMpm": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "polarity": {
+                    "type": "string",
+                    "enum": [
+                      "DCEP",
+                      "DCEN",
+                      "AC"
+                    ]
+                  }
+                },
+                "additionalProperties": {}
+              },
+              "travelSpeedMmS": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "ctwdMm": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "torch": {
+                "type": "object",
+                "properties": {
+                  "workAngleOffsetDeg": {
+                    "type": "number"
+                  },
+                  "travelAngleDeg": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "technique": {
+                    "type": "string",
+                    "enum": [
+                      "push",
+                      "drag"
+                    ]
+                  }
+                },
+                "additionalProperties": {}
+              },
+              "weave": {
+                "type": "object",
+                "properties": {
+                  "pattern": {
+                    "type": "string",
+                    "enum": [
+                      "none",
+                      "zigzag",
+                      "triangle",
+                      "circle"
+                    ]
+                  },
+                  "amplitudeMm": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "frequencyHz": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "dwellMs": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                },
+                "additionalProperties": {}
+              },
+              "arcStart": {
+                "type": "object",
+                "properties": {
+                  "preflowS": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                },
+                "additionalProperties": {}
+              },
+              "arcEnd": {
+                "type": "object",
+                "properties": {
+                  "craterFillS": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "burnbackMs": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "postflowS": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                },
+                "additionalProperties": {}
+              },
+              "positions": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "PA",
+                    "PB",
+                    "PC",
+                    "PD",
+                    "PE",
+                    "PF",
+                    "PG"
+                  ]
+                },
+                "description": "ISO 6947 positions this procedure is valid for."
+              },
+              "thermalEfficiency": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 1
+              },
+              "preheatC": {
+                "type": "number"
+              },
+              "interpassMaxC": {
+                "type": "number"
+              }
+            },
+            "additionalProperties": {},
+            "description": "Per-seam changes to the procedure, same keys as a procedure."
+          },
+          "legMm": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Fillet leg in mm."
+          },
+          "throatMm": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Fillet throat in mm, 0.707 x leg for equal legs."
+          },
+          "passes": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "index": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991
+                },
+                "lateralOffsetMm": {
+                  "type": "number"
+                },
+                "verticalOffsetMm": {
+                  "type": "number"
+                },
+                "workAngleOffsetDeg": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "index",
+                "lateralOffsetMm",
+                "verticalOffsetMm",
+                "workAngleOffsetDeg"
+              ],
+              "additionalProperties": {}
+            },
+            "description": "One entry per pass with lateral and vertical offsets and work-angle change."
+          },
+          "intermittent": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "lengthMm": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "pitchMm": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  }
+                },
+                "required": [
+                  "lengthMm",
+                  "pitchMm"
+                ],
+                "additionalProperties": {}
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null for continuous, or segment length and pitch."
+          },
+          "boxing": {
+            "type": "object",
+            "properties": {
+              "start": {
+                "type": "boolean"
+              },
+              "end": {
+                "type": "boolean"
+              },
+              "lengthMm": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "start",
+              "end",
+              "lengthMm"
+            ],
+            "additionalProperties": {},
+            "description": "Wrap around the start and/or end, with length."
+          },
+          "closed": {
+            "type": "boolean",
+            "description": "True for a loop, false for an open chain."
+          },
+          "lengthMm": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "Length in mm after trimming."
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "forward",
+              "reverse"
+            ],
+            "description": "Direction relative to the stored points."
+          },
+          "geometry": {
+            "type": "object",
+            "properties": {
+              "openingAngleDeg": {
+                "type": "number"
+              },
+              "plateNormals": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": "array",
+                    "prefixItems": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ],
+                    "items": false,
+                    "minItems": 3,
+                    "maxItems": 3
+                  },
+                  {
+                    "type": "array",
+                    "prefixItems": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ],
+                    "items": false,
+                    "minItems": 3,
+                    "maxItems": 3
+                  }
+                ],
+                "items": false,
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "plateThicknessMm": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  }
+                ],
+                "items": false,
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "start": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "items": false,
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "end": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "items": false,
+                "minItems": 3,
+                "maxItems": 3
+              }
+            },
+            "required": [
+              "openingAngleDeg",
+              "plateNormals",
+              "start",
+              "end"
+            ],
+            "additionalProperties": {},
+            "description": "Opening angle, the two plate normals, plate thickness behind each normal, start and end points."
+          },
+          "position": {
+            "type": "object",
+            "properties": {
+              "aws": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "1F",
+                      "2F",
+                      "3F",
+                      "4F"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "iso6947": {
+                "type": "string",
+                "minLength": 1
+              },
+              "inclinationDeg": {
+                "type": "number"
+              },
+              "rotationDeg": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "aws",
+              "iso6947",
+              "inclinationDeg",
+              "rotationDeg"
+            ],
+            "additionalProperties": {},
+            "description": "AWS and ISO 6947 position plus the two angles they were computed from."
+          },
+          "poses": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "s": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "position": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ],
+                  "items": false,
+                  "minItems": 3,
+                  "maxItems": 3
+                },
+                "quaternion": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "type": "number",
+                      "minimum": -1,
+                      "maximum": 1
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -1,
+                      "maximum": 1
+                    },
+                    {
+                      "type": "number",
+                      "minimum": -1,
+                      "maximum": 1
+                    },
+                    {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    }
+                  ],
+                  "items": false,
+                  "minItems": 4,
+                  "maxItems": 4
+                }
+              },
+              "required": [
+                "s",
+                "position",
+                "quaternion"
+              ],
+              "additionalProperties": {}
+            },
+            "description": "s is arc length in mm; position is the TCP at the weld root in the part frame; quaternion is the tool orientation, x,y,z,w."
+          },
+          "approach": {
+            "type": "object",
+            "properties": {
+              "distanceMm": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "distanceMm"
+            ],
+            "additionalProperties": {},
+            "description": "Distance along minus tool z before arc start."
+          },
+          "retract": {
+            "type": "object",
+            "properties": {
+              "distanceMm": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "distanceMm"
+            ],
+            "additionalProperties": {},
+            "description": "Distance along minus tool z after arc end."
+          },
+          "sensing": {
+            "type": "object",
+            "properties": {
+              "touch": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "direction": {
+                      "type": "array",
+                      "prefixItems": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "number"
+                        }
+                      ],
+                      "items": false,
+                      "minItems": 3,
+                      "maxItems": 3
+                    },
+                    "searchMm": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    }
+                  },
+                  "required": [
+                    "direction",
+                    "searchMm"
+                  ],
+                  "additionalProperties": {}
+                }
+              },
+              "seamTracking": {
+                "type": "string",
+                "enum": [
+                  "through-arc",
+                  "none"
+                ]
+              }
+            },
+            "required": [
+              "touch",
+              "seamTracking"
+            ],
+            "additionalProperties": {},
+            "description": "Touch-sensing searches (direction and distance) and seam tracking mode."
+          },
+          "access": {
+            "type": "object",
+            "properties": {
+              "clearanceDeg": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "class": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "standard",
+                      "slim",
+                      "snake",
+                      "blocked"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "portId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "reachCoverage": {
+                "anyOf": [
+                  {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "unreachable": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    {
+                      "type": "number",
+                      "minimum": 0
+                    }
+                  ],
+                  "items": false,
+                  "minItems": 2,
+                  "maxItems": 2
+                }
+              }
+            },
+            "required": [
+              "clearanceDeg",
+              "class",
+              "portId",
+              "reachCoverage",
+              "unreachable"
+            ],
+            "additionalProperties": {},
+            "description": "Free-cone clearance, class, port, reach coverage 0 to 1, unreachable arc-length intervals."
+          },
+          "estimates": {
+            "type": "object",
+            "properties": {
+              "arcTimeS": {
+                "type": "number",
+                "minimum": 0
+              },
+              "heatInputKJmm": {
+                "type": "number",
+                "minimum": 0
+              },
+              "wireKg": {
+                "type": "number",
+                "minimum": 0
+              },
+              "gasL": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "arcTimeS",
+              "heatInputKJmm",
+              "wireKg",
+              "gasL"
+            ],
+            "additionalProperties": {},
+            "description": "Arc time, heat input, wire mass, gas volume for this seam."
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "seamId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "message": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "code",
+                "seamId",
+                "message"
+              ],
+              "additionalProperties": {}
+            },
+            "description": "Seam-level warnings carried into the file."
+          },
+          "points": {
+            "description": "The seam polyline with frames, unrounded, so the plan can be restored exactly.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "s": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "p": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ],
+                  "items": false,
+                  "minItems": 3,
+                  "maxItems": 3
+                },
+                "t": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ],
+                  "items": false,
+                  "minItems": 3,
+                  "maxItems": 3
+                },
+                "n1": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ],
+                  "items": false,
+                  "minItems": 3,
+                  "maxItems": 3
+                },
+                "n2": {
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ],
+                  "items": false,
+                  "minItems": 3,
+                  "maxItems": 3
+                }
+              },
+              "required": [
+                "s",
+                "p",
+                "t",
+                "n1",
+                "n2"
+              ],
+              "additionalProperties": {}
+            }
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "source",
+          "confidence",
+          "jointType",
+          "procedureId",
+          "overrides",
+          "legMm",
+          "throatMm",
+          "passes",
+          "intermittent",
+          "boxing",
+          "closed",
+          "lengthMm",
+          "direction",
+          "geometry",
+          "position",
+          "poses",
+          "approach",
+          "retract",
+          "sensing",
+          "access",
+          "estimates",
+          "warnings"
+        ],
+        "additionalProperties": {}
+      },
+      "description": "Every accepted seam, in no particular order."
+    },
+    "sequence": {
+      "type": "object",
+      "properties": {
+        "strategy": {
+          "type": "string",
+          "enum": [
+            "table-order",
+            "min-air-move",
+            "manual"
+          ]
+        },
+        "order": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "seamId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "reversed": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "seamId",
+              "reversed"
+            ],
+            "additionalProperties": {}
+          }
+        },
+        "airMoves": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "from": {
+                "type": "string",
+                "minLength": 1
+              },
+              "to": {
+                "type": "string",
+                "minLength": 1
+              },
+              "lengthMm": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "from",
+              "to",
+              "lengthMm"
+            ],
+            "additionalProperties": {}
+          }
+        }
+      },
+      "required": [
+        "strategy",
+        "order",
+        "airMoves"
+      ],
+      "additionalProperties": {},
+      "description": "Strategy used, ordered seam list with direction, air moves."
+    },
+    "access": {
+      "type": "object",
+      "properties": {
+        "ports": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "position": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "items": false,
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "direction": {
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "items": false,
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "diameterMm": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            },
+            "required": [
+              "id",
+              "position",
+              "direction",
+              "diameterMm"
+            ],
+            "additionalProperties": {}
+          }
+        },
+        "arm": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": {}
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "ports",
+        "arm"
+      ],
+      "additionalProperties": {},
+      "description": "Access ports and snake-arm parameters used for reach analysis."
+    },
+    "summary": {
+      "type": "object",
+      "properties": {
+        "seamCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "weldLengthMm": {
+          "type": "number",
+          "minimum": 0
+        },
+        "arcTimeS": {
+          "type": "number",
+          "minimum": 0
+        },
+        "airTimeS": {
+          "type": "number",
+          "minimum": 0
+        },
+        "cycleTimeS": {
+          "type": "number",
+          "minimum": 0
+        },
+        "wireKg": {
+          "type": "number",
+          "minimum": 0
+        },
+        "gasL": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "seamCount",
+        "weldLengthMm",
+        "arcTimeS",
+        "airTimeS",
+        "cycleTimeS",
+        "wireKg",
+        "gasL"
+      ],
+      "additionalProperties": {},
+      "description": "Totals for quoting and checking."
+    },
+    "validation": {
+      "type": "object",
+      "properties": {
+        "errors": {
+          "maxItems": 0,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "minLength": 1
+              },
+              "seamId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "message": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "code",
+              "seamId",
+              "message"
+            ],
+            "additionalProperties": {}
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "minLength": 1
+              },
+              "seamId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "message": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "code",
+              "seamId",
+              "message"
+            ],
+            "additionalProperties": {}
+          }
+        }
+      },
+      "required": [
+        "errors",
+        "warnings"
+      ],
+      "additionalProperties": {},
+      "description": "Pre-flight errors (must be empty to export) and warnings, each with code, seamId and message."
+    }
+  },
+  "required": [
+    "$schema",
+    "format",
+    "version",
+    "id",
+    "createdAt",
+    "generator",
+    "units",
+    "frames",
+    "part",
+    "settings",
+    "procedures",
+    "seams",
+    "sequence",
+    "access",
+    "summary",
+    "validation"
+  ],
+  "additionalProperties": {}
+}

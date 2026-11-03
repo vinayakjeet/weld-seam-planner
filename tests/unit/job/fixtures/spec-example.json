@@ -1,0 +1,330 @@
+{
+  "$schema": "https://weld-seam-planner.vercel.app/schema/weld-job-1.0.json",
+  "format": "weld-job",
+  "version": "1.0.0",
+  "id": "wj-20261104-7f3a",
+  "createdAt": "2026-11-04T10:15:00Z",
+  "generator": {
+    "name": "Weld Seam Planner",
+    "version": "1.0.0"
+  },
+  "units": {
+    "length": "mm",
+    "angle": "deg",
+    "time": "s",
+    "speed": "mm/s",
+    "wireFeed": "m/min",
+    "gasFlow": "L/min",
+    "heatInput": "kJ/mm",
+    "mass": "kg"
+  },
+  "frames": {
+    "convention": "right-handed; positions in the part frame; quaternion order x,y,z,w; tool z points from torch into joint; tool x along travel",
+    "gravity": [
+      0,
+      0,
+      -1
+    ],
+    "partToCell": {
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "quaternion": [
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  },
+  "part": {
+    "name": "double-bottom-cell.stl",
+    "sha256": "7f3a0123456789abcdef0123456789abcdef0123456789abcdef0123456789ab",
+    "sourceUnits": "mm",
+    "scaleToMm": 1,
+    "triangles": 18432,
+    "bodies": 7,
+    "boundingBox": {
+      "min": [
+        0,
+        0,
+        0
+      ],
+      "max": [
+        2400,
+        1600,
+        900
+      ]
+    }
+  },
+  "settings": {
+    "creaseAngleDeg": 30,
+    "poseSpacingMm": 5,
+    "airSpeedMmS": 250,
+    "approachMm": 50
+  },
+  "procedures": [
+    {
+      "id": "WPS-GMAW-SPRAY-FW6",
+      "name": "GMAW spray, fillet 6 mm, PA/PB",
+      "process": "GMAW",
+      "transfer": "spray",
+      "baseMaterial": {
+        "spec": "S355",
+        "thicknessMm": [
+          8,
+          20
+        ]
+      },
+      "wire": {
+        "classification": "ER70S-6",
+        "diameterMm": 1.2
+      },
+      "gas": {
+        "mix": "Ar 82 / CO2 18",
+        "flowLpm": 15
+      },
+      "electrical": {
+        "currentA": 270,
+        "voltageV": 28,
+        "wireFeedMpm": 10,
+        "polarity": "DCEP"
+      },
+      "travelSpeedMmS": 9.0,
+      "ctwdMm": 18,
+      "torch": {
+        "workAngleOffsetDeg": 0,
+        "travelAngleDeg": 10,
+        "technique": "push"
+      },
+      "weave": {
+        "pattern": "none",
+        "amplitudeMm": 0,
+        "frequencyHz": 0,
+        "dwellMs": 0
+      },
+      "arcStart": {
+        "preflowS": 0.3
+      },
+      "arcEnd": {
+        "craterFillS": 0.5,
+        "burnbackMs": 80,
+        "postflowS": 1.0
+      },
+      "positions": [
+        "PA",
+        "PB"
+      ],
+      "thermalEfficiency": 0.8,
+      "preheatC": 20,
+      "interpassMaxC": 250
+    }
+  ],
+  "seams": [
+    {
+      "id": "S07",
+      "label": "Floor F2 to bottom plate, aft side",
+      "source": "contact",
+      "confidence": 0.96,
+      "jointType": "fillet",
+      "procedureId": "WPS-GMAW-SPRAY-FW6",
+      "overrides": {},
+      "legMm": 6,
+      "throatMm": 4.2,
+      "passes": [
+        {
+          "index": 1,
+          "lateralOffsetMm": 0,
+          "verticalOffsetMm": 0,
+          "workAngleOffsetDeg": 0
+        }
+      ],
+      "intermittent": null,
+      "boxing": {
+        "start": false,
+        "end": true,
+        "lengthMm": 20
+      },
+      "closed": false,
+      "lengthMm": 800.0,
+      "direction": "forward",
+      "geometry": {
+        "openingAngleDeg": 90.0,
+        "plateNormals": [
+          [
+            0,
+            0,
+            1
+          ],
+          [
+            0,
+            -1,
+            0
+          ]
+        ],
+        "start": [
+          1200,
+          300,
+          12
+        ],
+        "end": [
+          2000,
+          300,
+          12
+        ]
+      },
+      "position": {
+        "aws": "2F",
+        "iso6947": "PB",
+        "inclinationDeg": 0,
+        "rotationDeg": 135
+      },
+      "poses": [
+        {
+          "s": 0,
+          "position": [
+            1200,
+            300,
+            12
+          ],
+          "quaternion": [
+            -0.9204,
+            0.0334,
+            -0.0805,
+            0.3812
+          ]
+        },
+        {
+          "s": 5,
+          "position": [
+            1205,
+            300,
+            12
+          ],
+          "quaternion": [
+            -0.9204,
+            0.0334,
+            -0.0805,
+            0.3812
+          ]
+        },
+        {
+          "s": 800,
+          "position": [
+            2000,
+            300,
+            12
+          ],
+          "quaternion": [
+            -0.9204,
+            0.0334,
+            -0.0805,
+            0.3812
+          ]
+        }
+      ],
+      "approach": {
+        "distanceMm": 50
+      },
+      "retract": {
+        "distanceMm": 50
+      },
+      "sensing": {
+        "touch": [
+          {
+            "direction": [
+              0,
+              1,
+              0
+            ],
+            "searchMm": 20
+          },
+          {
+            "direction": [
+              0,
+              0,
+              -1
+            ],
+            "searchMm": 20
+          }
+        ],
+        "seamTracking": "through-arc"
+      },
+      "access": {
+        "clearanceDeg": 38,
+        "class": "standard",
+        "portId": null,
+        "reachCoverage": null,
+        "unreachable": []
+      },
+      "estimates": {
+        "arcTimeS": 88.9,
+        "heatInputKJmm": 0.67,
+        "wireKg": 0.131,
+        "gasL": 22.5
+      },
+      "warnings": []
+    }
+  ],
+  "sequence": {
+    "strategy": "min-air-move",
+    "order": [
+      {
+        "seamId": "S07",
+        "reversed": false
+      }
+    ],
+    "airMoves": [
+      {
+        "from": "home",
+        "to": "S07",
+        "lengthMm": 1450
+      },
+      {
+        "from": "S07",
+        "to": "home",
+        "lengthMm": 1320
+      }
+    ]
+  },
+  "access": {
+    "ports": [
+      {
+        "id": "P1",
+        "position": [
+          1200,
+          800,
+          900
+        ],
+        "direction": [
+          0,
+          0,
+          -1
+        ],
+        "diameterMm": 600
+      }
+    ],
+    "arm": {
+      "links": 24,
+      "linkLengthMm": 150,
+      "diameterMm": 80,
+      "maxBendDeg": 18,
+      "torchLengthMm": 250
+    }
+  },
+  "summary": {
+    "seamCount": 1,
+    "weldLengthMm": 800,
+    "arcTimeS": 88.9,
+    "airTimeS": 11.1,
+    "cycleTimeS": 101.8,
+    "wireKg": 0.131,
+    "gasL": 22.5
+  },
+  "validation": {
+    "errors": [],
+    "warnings": []
+  }
+}
