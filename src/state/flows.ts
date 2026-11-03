@@ -104,7 +104,13 @@ async function applyLoad(outcome: LoadOutcome, fileName: string, client: Geometr
     manualSeams: [],
     supersededIds: [],
     nextDrawnId: 1,
+    procedureById: {},
+    overridesById: {},
+    legById: {},
+    thicknessById: {},
     selectedId: null,
+    selectedIds: [],
+    rangeAnchor: null,
     hoverId: null,
     detectSettings: DEFAULT_DETECT_SETTINGS,
     detectBusy: false,
@@ -182,12 +188,12 @@ export async function runDetect(settings: DetectSettings, client: GeometryClient
       useStore.setState({ detectBusy: false, importState: { phase: 'error', error: outcome.error } })
       return
     }
-    const { selectedId, hoverId, manualSeams } = useStore.getState()
+    const { hoverId, manualSeams } = useStore.getState()
     const ids = new Set([...outcome.seams, ...manualSeams].map((seam) => seam.id))
     useStore.setState({
       seams: outcome.seams,
       detectBusy: false,
-      selectedId: selectedId !== null && ids.has(selectedId) ? selectedId : null,
+      ...prunedSelection(useStore.getState(), ids),
       hoverId: hoverId !== null && ids.has(hoverId) ? hoverId : null,
     })
   })
@@ -367,11 +373,19 @@ export function trimSelected(startText: string, endText: string): void {
   })
 }
 
+// The selection without the seams that are gone. A primary seam that is gone gives way to the last one still selected.
+function prunedSelection(state: AppState, present: Set<string>): Pick<AppState, 'selectedId' | 'selectedIds' | 'rangeAnchor'> {
+  const selectedIds = state.selectedIds.filter((id) => present.has(id))
+  const selectedId = state.selectedId !== null && present.has(state.selectedId) ? state.selectedId : (selectedIds[selectedIds.length - 1] ?? null)
+  return { selectedId, selectedIds, rangeAnchor: state.rangeAnchor !== null && present.has(state.rangeAnchor) ? state.rangeAnchor : null }
+}
+
 // Undo and redo can remove the seam that was selected, or the one a merge was started from.
 function dropStaleSelection(): void {
   const state = useStore.getState()
   const present = new Set(selectAllSeams(state).map((seam) => seam.id))
-  if (state.selectedId !== null && !present.has(state.selectedId)) state.select(null)
+  const pruned = prunedSelection(state, present)
+  if (pruned.selectedId !== state.selectedId || pruned.selectedIds.length !== state.selectedIds.length || pruned.rangeAnchor !== state.rangeAnchor) useStore.setState(pruned)
   if (state.hoverId !== null && !present.has(state.hoverId)) state.hover(null)
   if (state.tool.tool === 'merge' && !present.has(state.tool.from)) state.setTool(initialTool)
 }

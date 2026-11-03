@@ -7,6 +7,8 @@ import type { AppState } from './store'
 
 export type SeamStatus = 'accepted' | 'rejected'
 
+export type SelectMode = 'replace' | 'toggle' | 'range'
+
 // Ends of two seams this close count as touching when merging.
 export const MERGE_TOLERANCE_MM = 1
 
@@ -25,7 +27,12 @@ export interface SeamsSlice {
   nextDrawnId: number
   // A view setting, so it is not part of undo history.
   showCorners: boolean
+  // The primary seam: the one the viewport and the torch preview follow, and the last one clicked.
   selectedId: string | null
+  // Every selected seam. selectedId is one of them, or null when none is selected.
+  selectedIds: string[]
+  // Where a Shift click range starts. Set by a plain or Ctrl click.
+  rangeAnchor: string | null
   hoverId: string | null
   detectSettings: DetectSettings
   detectBusy: boolean
@@ -43,7 +50,8 @@ export interface SeamsSlice {
   // Only manual seams can be deleted; a detected one is rejected instead.
   remove: (id: string) => ManualError | null
   setShowCorners: (show: boolean) => void
-  select: (id: string | null) => void
+  // Ctrl or Cmd click toggles, Shift click selects the visible range from the anchor.
+  select: (id: string | null, mode?: SelectMode) => void
   hover: (id: string | null) => void
   setDetectSettings: (settings: DetectSettings) => void
 }
@@ -75,18 +83,48 @@ function replaceSeams(state: AppState, parents: SeamCandidate[], children: SeamC
       ? 'rejected'
       : undefined
   const jointType = typeById[parents[0]!.id] ?? parents[0]!.jointType
+  const first = parents[0]!.id
+  const procedureById = { ...state.procedureById }
+  const overridesById = { ...state.overridesById }
+  const legById = { ...state.legById }
+  const thicknessById = { ...state.thicknessById }
+  const inheritedPlan = {
+    procedure: procedureById[first],
+    overrides: overridesById[first],
+    leg: legById[first],
+    thickness: thicknessById[first],
+  }
   for (const id of parentIds) {
     delete statusById[id]
     delete typeById[id]
+    delete procedureById[id]
+    delete overridesById[id]
+    delete legById[id]
+    delete thicknessById[id]
   }
   const made = children.map((child) => ({ ...child, jointType }))
   if (inherited) for (const child of made) statusById[child.id] = inherited
+  for (const child of made) {
+    if (inheritedPlan.procedure !== undefined) procedureById[child.id] = inheritedPlan.procedure
+    if (inheritedPlan.overrides !== undefined) overridesById[child.id] = structuredClone(inheritedPlan.overrides)
+    if (inheritedPlan.leg !== undefined) legById[child.id] = inheritedPlan.leg
+    if (inheritedPlan.thickness !== undefined) thicknessById[child.id] = [...inheritedPlan.thickness]
+  }
+  const selectedWasParent = state.selectedId !== null && parentIds.has(state.selectedId)
+  const remaining = state.selectedIds.filter((id) => !parentIds.has(id))
+  const touched = remaining.length !== state.selectedIds.length
   return {
     manualSeams: [...state.manualSeams.filter((m) => !parentIds.has(m.id)), ...made],
     supersededIds: newlySuperseded.length > 0 ? [...state.supersededIds, ...newlySuperseded] : state.supersededIds,
     statusById,
     typeById,
-    selectedId: state.selectedId !== null && parentIds.has(state.selectedId) ? made[0]!.id : state.selectedId,
+    procedureById,
+    overridesById,
+    legById,
+    thicknessById,
+    selectedId: selectedWasParent ? made[0]!.id : state.selectedId,
+    selectedIds: touched ? [...remaining, made[0]!.id] : state.selectedIds,
+    rangeAnchor: state.rangeAnchor !== null && parentIds.has(state.rangeAnchor) ? made[0]!.id : state.rangeAnchor,
     hoverId: state.hoverId !== null && parentIds.has(state.hoverId) ? null : state.hoverId,
   }
 }
@@ -100,6 +138,8 @@ export const createSeamsSlice: StateCreator<AppState, [], [], SeamsSlice> = (set
   nextDrawnId: 1,
   showCorners: false,
   selectedId: null,
+  selectedIds: [],
+  rangeAnchor: null,
   hoverId: null,
   detectSettings: DEFAULT_DETECT_SETTINGS,
   detectBusy: false,
@@ -185,6 +225,8 @@ export const createSeamsSlice: StateCreator<AppState, [], [], SeamsSlice> = (set
       statusById: { ...state.statusById, [id]: 'accepted' },
       nextDrawnId: n + 1,
       selectedId: id,
+      selectedIds: [id],
+      rangeAnchor: id,
     }))
     return id
   },
@@ -204,13 +246,22 @@ export const createSeamsSlice: StateCreator<AppState, [], [], SeamsSlice> = (set
     set((current) => {
       const statusById = { ...current.statusById }
       const typeById = { ...current.typeById }
-      delete statusById[id]
-      delete typeById[id]
+      const procedureById = { ...current.procedureById }
+      const overridesById = { ...current.overridesById }
+      const legById = { ...current.legById }
+      const thicknessById = { ...current.thicknessById }
+      for (const map of [statusById, typeById, procedureById, overridesById, legById, thicknessById]) delete map[id]
       return {
         manualSeams: current.manualSeams.filter((m) => m.id !== id),
         statusById,
         typeById,
+        procedureById,
+        overridesById,
+        legById,
+        thicknessById,
         selectedId: current.selectedId === id ? null : current.selectedId,
+        selectedIds: current.selectedIds.filter((s) => s !== id),
+        rangeAnchor: current.rangeAnchor === id ? null : current.rangeAnchor,
         hoverId: current.hoverId === id ? null : current.hoverId,
       }
     })
@@ -224,11 +275,31 @@ export const createSeamsSlice: StateCreator<AppState, [], [], SeamsSlice> = (set
       return {
         showCorners,
         selectedId: hiddenNow(state.selectedId) ? null : state.selectedId,
+        selectedIds: state.selectedIds.filter((id) => !hiddenNow(id)),
+        rangeAnchor: hiddenNow(state.rangeAnchor) ? null : state.rangeAnchor,
         hoverId: hiddenNow(state.hoverId) ? null : state.hoverId,
       }
     }),
 
-  select: (selectedId) => set((state) => (state.selectedId === selectedId ? state : { selectedId })),
+  select: (id, mode = 'replace') =>
+    set((state) => {
+      const only = (selectedId: string | null) =>
+        state.selectedId === selectedId && state.selectedIds.length === (selectedId === null ? 0 : 1) && state.rangeAnchor === selectedId
+          ? state
+          : { selectedId, selectedIds: selectedId === null ? [] : [selectedId], rangeAnchor: selectedId }
+      if (id === null || mode === 'replace') return only(id)
+      if (mode === 'toggle') {
+        if (!state.selectedIds.includes(id)) return { selectedId: id, selectedIds: [...state.selectedIds, id], rangeAnchor: id }
+        const selectedIds = state.selectedIds.filter((s) => s !== id)
+        const selectedId = state.selectedId === id ? (selectedIds[selectedIds.length - 1] ?? null) : state.selectedId
+        return { selectedId, selectedIds, rangeAnchor: selectedId }
+      }
+      const order = visibleSeams(selectAllSeams(state), state.showCorners).map((seam) => seam.id)
+      const from = state.rangeAnchor === null ? -1 : order.indexOf(state.rangeAnchor)
+      const to = order.indexOf(id)
+      if (from < 0 || to < 0) return only(id)
+      return { selectedId: id, selectedIds: order.slice(Math.min(from, to), Math.max(from, to) + 1) }
+    }),
   hover: (hoverId) => set((state) => (state.hoverId === hoverId ? state : { hoverId })),
   setDetectSettings: (detectSettings) => set({ detectSettings }),
 })

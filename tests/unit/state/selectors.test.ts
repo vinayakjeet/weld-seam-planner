@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { selectAllSeams, selectStats, visibleSeams } from '../../../src/state/selectors'
-import { corner, partInfo, seam } from '../helpers/state'
+import { selectAllSeams, selectPlan, selectStats, visibleSeams } from '../../../src/state/selectors'
+import { useStore } from '../../../src/state/store'
+import { corner, partInfo, resetStore, seam } from '../helpers/state'
 
 describe('selectStats', () => {
   it('is all zeros with no part and no seams', () => {
@@ -97,5 +98,70 @@ describe('selectStats with manual seams', () => {
       showCorners: false,
     })
     expect(stats).toMatchObject({ accepted: 2, candidates: 1, acceptedLengthMm: 200, hiddenAccepted: 0 })
+  })
+})
+
+describe('selectPlan', () => {
+  const load = () => {
+    resetStore()
+    useStore.setState({
+      part: partInfo(),
+      seams: [seam('a'), seam('b'), corner('h'), seam('c'), seam('d')],
+      manualSeams: [seam('m', 0.9, 50, { source: 'manual' })],
+      supersededIds: ['d'],
+      statusById: { a: 'accepted', b: 'rejected', h: 'accepted', c: 'accepted', m: 'accepted', d: 'accepted' },
+    })
+  }
+
+  it('holds only accepted, visible, non-superseded seams in table order', () => {
+    load()
+    expect(selectPlan(useStore.getState()).seams.map((p) => p.seam.id)).toEqual(['a', 'c', 'm'])
+    useStore.setState({ showCorners: true })
+    expect(selectPlan(useStore.getState()).seams.map((p) => p.seam.id)).toEqual(['a', 'h', 'c', 'm'])
+  })
+
+  it('applies the type and thickness edits and carries procedure, overrides and leg', () => {
+    load()
+    useStore.setState({
+      typeById: { a: 'lap' },
+      thicknessById: { a: [9, null] },
+      procedureById: { a: 'WPS-GTAW' },
+      overridesById: { a: { travelSpeedMmS: 4 } },
+      legById: { a: 4.5 },
+    })
+    const [first, second] = selectPlan(useStore.getState()).seams
+    expect(first!.seam.jointType).toBe('lap')
+    expect(first!.seam.thicknessMm).toEqual([9, null])
+    expect(first).toMatchObject({ procedureId: 'WPS-GTAW', overrides: { travelSpeedMmS: 4 }, legMm: 4.5, access: null })
+    expect(second).toMatchObject({ procedureId: null, overrides: {}, legMm: null })
+    expect(second!.seam.jointType).toBe('fillet')
+  })
+
+  it('uses the part, gravity, procedures and the crease angle of the detection settings', () => {
+    load()
+    useStore.setState({ detectSettings: { creaseAngleDeg: 41 }, gravity: [1, 0, 0] })
+    const plan = selectPlan(useStore.getState())
+    expect(plan.part).toBe(useStore.getState().part)
+    expect(plan.gravity).toEqual([1, 0, 0])
+    expect(plan.procedures).toBe(useStore.getState().procedures)
+    expect(plan.settings).toEqual({ poseSpacingMm: 5, airSpeedMmS: 250, approachMm: 50, creaseAngleDeg: 41 })
+  })
+
+  it('returns the same object for the same state and after a hover or selection change', () => {
+    load()
+    const first = selectPlan(useStore.getState())
+    expect(selectPlan(useStore.getState())).toBe(first)
+    useStore.getState().hover('a')
+    useStore.getState().select('c')
+    expect(selectPlan(useStore.getState())).toBe(first)
+    useStore.getState().setLeg(['a'], 5)
+    expect(selectPlan(useStore.getState())).not.toBe(first)
+  })
+
+  it('has no seams and unknown units before a part is loaded', () => {
+    resetStore()
+    const plan = selectPlan(useStore.getState())
+    expect(plan.seams).toEqual([])
+    expect(plan.part.sourceUnits).toBe('unknown')
   })
 })

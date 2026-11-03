@@ -2,7 +2,9 @@ import { temporal } from 'zundo'
 import { create, type StateCreator } from 'zustand'
 import type { ManualError } from '../core/seams/manual'
 import { initialTool, type ToolState } from '../ui/tools/toolMachine'
+import { registerHistoryClear } from './history'
 import { createPartSlice, type PartSlice } from './partSlice'
+import { createPlanSlice, type PlanSlice } from './planSlice'
 import { createSeamsSlice, type SeamsSlice } from './seamsSlice'
 import { createTorchSlice, type TorchSlice } from './torchSlice'
 
@@ -27,7 +29,7 @@ interface UiSlice {
   setNotice: (notice: ManualError | null) => void
 }
 
-export type AppState = UiSlice & PartSlice & SeamsSlice & TorchSlice
+export type AppState = UiSlice & PartSlice & SeamsSlice & PlanSlice & TorchSlice
 
 const createUiSlice: StateCreator<AppState, [], [], UiSlice> = (set) => ({
   activeStep: 'import',
@@ -40,15 +42,17 @@ const createUiSlice: StateCreator<AppState, [], [], UiSlice> = (set) => ({
 
 export const HISTORY_LIMIT = 100
 
-// Undo covers accepting and rejecting seams, choosing their joint type and editing seams (drawing, splitting, merging,
-// trimming, reversing, deleting), nothing else. Hover, selection, settings and the loaded part are not history.
-// Comparing the four values by reference keeps those changes from adding steps.
+// Undo covers accepting and rejecting seams, choosing their joint type, editing seams (drawing, splitting, merging,
+// trimming, reversing, deleting) and the plan (the procedure library, assignments, overrides, legs, thickness edits),
+// nothing else. Hover, selection, settings and the loaded part are not history.
+// Comparing the nine values by reference keeps those changes from adding steps.
 export const useStore = create<AppState>()(
   temporal(
     (...args) => ({
       ...createUiSlice(...args),
       ...createPartSlice(...args),
       ...createSeamsSlice(...args),
+      ...createPlanSlice(...args),
       ...createTorchSlice(...args),
     }),
     {
@@ -57,13 +61,25 @@ export const useStore = create<AppState>()(
         typeById: state.typeById,
         manualSeams: state.manualSeams,
         supersededIds: state.supersededIds,
+        procedures: state.procedures,
+        procedureById: state.procedureById,
+        overridesById: state.overridesById,
+        legById: state.legById,
+        thicknessById: state.thicknessById,
       }),
       equality: (past, current) =>
         past.statusById === current.statusById &&
         past.typeById === current.typeById &&
         past.manualSeams === current.manualSeams &&
-        past.supersededIds === current.supersededIds,
+        past.supersededIds === current.supersededIds &&
+        past.procedures === current.procedures &&
+        past.procedureById === current.procedureById &&
+        past.overridesById === current.overridesById &&
+        past.legById === current.legById &&
+        past.thicknessById === current.thicknessById,
       limit: HISTORY_LIMIT,
     },
   ),
 )
+
+registerHistoryClear(() => useStore.temporal.getState().clear())

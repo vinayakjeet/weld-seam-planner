@@ -4,6 +4,7 @@ import { MeshBVH, type SerializedBVH } from 'three-mesh-bvh'
 import type { Vec3 } from '../core/math/vec3'
 import { computeBounds } from '../core/mesh/bounds'
 import { computeFaceData } from '../core/mesh/faces'
+import { sha256Hex } from '../core/mesh/hash'
 import { buildMeshModel, type MeshModel } from '../core/mesh/model'
 import { parseStl, StlError } from '../core/mesh/parseStl'
 import { guessUnits, scaleToMm, type KnownUnits, type Units } from '../core/mesh/units'
@@ -30,6 +31,8 @@ export type Progress = (stage: Stage, fraction: number) => void
 
 export interface PartInfo {
   name: string
+  // Of the file bytes as read, so a saved plan can tell which part it belongs to.
+  sha256: string
   triangles: number
   bodies: number
   bbox: { min: Vec3; max: Vec3 }
@@ -124,9 +127,10 @@ function buildDisplay(model: MeshModel, report: Progress): DisplayData {
   }
 }
 
-function describePart(model: MeshModel, name: string, units: KnownUnits): PartInfo {
+function describePart(model: MeshModel, name: string, sha256: string, units: KnownUnits): PartInfo {
   return {
     name,
+    sha256,
     triangles: model.mesh.triangleCount,
     bodies: model.bodies.count,
     bbox: { min: model.bounds.min, max: model.bounds.max },
@@ -141,7 +145,7 @@ function describePart(model: MeshModel, name: string, units: KnownUnits): PartIn
 }
 
 export function createGeometryApi(): GeometryApi {
-  let pending: { soup: Float32Array; name: string } | null = null
+  let pending: { soup: Float32Array; name: string; sha256: string } | null = null
   let current: MeshModel | null = null
   // Built on the first detect of a multi body part and kept until another part replaces it.
   let bodyBvhs: BodyBvh[] | null = null
@@ -150,7 +154,7 @@ export function createGeometryApi(): GeometryApi {
   // Feature edges and the surface BVH for drawing, built on the first drawn seam of a part.
   let snapContext: SnapContext | null = null
 
-  function build(soup: Float32Array, name: string, units: KnownUnits, report: Progress): LoadOutcome {
+  function build(soup: Float32Array, name: string, sha256: string, units: KnownUnits, report: Progress): LoadOutcome {
     const model = buildMeshModel(soup, scaleToMm(units), (stage) => report(stage, STAGE_START[stage]))
     report('index', STAGE_START.index)
     const display = buildDisplay(model, report)
@@ -160,7 +164,7 @@ export function createGeometryApi(): GeometryApi {
     bodyBvhs = null
     wholeBvh = undefined
     snapContext = null
-    const outcome: LoadOutcome = { status: 'ready', part: describePart(model, name, units), display }
+    const outcome: LoadOutcome = { status: 'ready', part: describePart(model, name, sha256, units), display }
     const buffers = [display.positions.buffer, display.indices.buffer, ...display.bvh.roots]
     return transfer(outcome, buffers as Transferable[])
   }
@@ -171,13 +175,14 @@ export function createGeometryApi(): GeometryApi {
       pending = null
       try {
         report('read', 0)
+        const sha256 = await sha256Hex(buffer)
         const { positions } = parseStl(buffer)
         const { maxDimension } = computeBounds(positions)
         report('read', STAGE_START.weld)
         const guess = guessUnits(maxDimension)
         // A part of exactly zero size has nothing to scale; building it gives the clearer "no usable triangles" error.
-        if (guess === 'mm' || maxDimension === 0) return build(positions, name, 'mm', report)
-        pending = { soup: positions, name }
+        if (guess === 'mm' || maxDimension === 0) return build(positions, name, sha256, 'mm', report)
+        pending = { soup: positions, name, sha256 }
         return { status: 'needs-units', maxDimension, guess }
       } catch (error) {
         return { status: 'error', error: toUserError(error) }
@@ -198,7 +203,7 @@ export function createGeometryApi(): GeometryApi {
         }
       }
       try {
-        return build(waiting.soup, waiting.name, units, reporter(onProgress))
+        return build(waiting.soup, waiting.name, waiting.sha256, units, reporter(onProgress))
       } catch (error) {
         return { status: 'error', error: toUserError(error) }
       }

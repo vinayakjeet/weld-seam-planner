@@ -17,6 +17,7 @@ import { DEFAULT_TORCH, poseAt } from '../../../src/core/torch/frames'
 import { readSample } from '../helpers/samples'
 import { gridBoxTriangles } from '../helpers/shapes'
 import { makeBinaryStl, TRIANGLES } from '../helpers/stl'
+import { createHash } from 'node:crypto'
 
 type Stage = 'read' | 'weld' | 'topology' | 'index' | 'contact' | 'detect'
 
@@ -119,6 +120,18 @@ describe('geometry api: loading', () => {
     expect(part.scaleToMm).toBe(25.4)
     const size = [0, 1, 2].map((c) => part.bbox.max[c]! - part.bbox.min[c]!)
     expect(Math.max(...size)).toBeCloseTo(200, 2)
+  })
+
+  it('reports the sha256 of the file bytes and keeps it through the unit answer', async () => {
+    const api = createGeometryApi()
+    const mm = readSample('t-joint-merged')
+    const expected = createHash('sha256').update(new Uint8Array(mm)).digest('hex')
+    expect(ready(await api.loadStl(mm, 't-joint-merged.stl', () => {})).part.sha256).toBe(expected)
+
+    const inch = readSample('t-joint-inch')
+    const inchHash = createHash('sha256').update(new Uint8Array(inch)).digest('hex')
+    expect((await api.loadStl(inch, 'inch.stl', () => {})).status).toBe('needs-units')
+    expect(ready(await api.setUnits('in', () => {})).part.sha256).toBe(inchHash)
   })
 
   it('loads a binary file whose header starts with "solid"', async () => {

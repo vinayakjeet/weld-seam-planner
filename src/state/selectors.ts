@@ -1,3 +1,4 @@
+import { DEFAULT_JOB_SETTINGS, type JobPart, type Plan, type PlannedSeam } from '../core/job/plan'
 import { meshWarnings, type MeshWarning } from '../core/mesh/health'
 import type { SeamCandidate } from '../core/seams/detect'
 import type { AppState } from './store'
@@ -60,4 +61,47 @@ export function selectStats(
 
 export function selectPartWarnings(state: Pick<AppState, 'part'>): MeshWarning[] {
   return state.part ? meshWarnings(state.part) : []
+}
+
+const NO_PART: JobPart = {
+  name: '',
+  sha256: '',
+  sourceUnits: 'unknown',
+  scaleToMm: 0,
+  triangles: 0,
+  bodies: 0,
+  bbox: { min: [0, 0, 0], max: [0, 0, 0] },
+}
+
+let cachedPlan: { deps: readonly unknown[]; plan: Plan } | null = null
+
+// Accepted, visible seams in table order, with the user's type and thickness edits applied. The same state gives the
+// same object, and hover, selection and view changes do not give a new one.
+export function selectPlan(state: AppState): Plan {
+  const deps = [
+    state.part, state.seams, state.manualSeams, state.supersededIds, state.showCorners, state.statusById, state.typeById,
+    state.thicknessById, state.procedures, state.procedureById, state.overridesById, state.legById, state.gravity,
+    state.detectSettings.creaseAngleDeg,
+  ]
+  if (cachedPlan && cachedPlan.deps.every((d, i) => d === deps[i])) return cachedPlan.plan
+  const seams = visibleSeams(selectAllSeams(state), state.showCorners)
+    .filter((seam) => state.statusById[seam.id] === 'accepted')
+    .map(
+      (seam): PlannedSeam => ({
+        seam: { ...seam, jointType: state.typeById[seam.id] ?? seam.jointType, thicknessMm: state.thicknessById[seam.id] ?? seam.thicknessMm },
+        procedureId: state.procedureById[seam.id] ?? null,
+        overrides: state.overridesById[seam.id] ?? {},
+        legMm: state.legById[seam.id] ?? null,
+        access: null,
+      }),
+    )
+  const plan: Plan = {
+    part: state.part ?? NO_PART,
+    gravity: state.gravity,
+    settings: { ...DEFAULT_JOB_SETTINGS, creaseAngleDeg: state.detectSettings.creaseAngleDeg },
+    procedures: state.procedures,
+    seams,
+  }
+  cachedPlan = { deps, plan }
+  return plan
 }

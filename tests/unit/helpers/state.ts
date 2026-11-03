@@ -34,6 +34,7 @@ export const corner = (id: string, confidence = 0.9, lengthMm = 100): SeamCandid
 export function partInfo(overrides: Partial<PartInfo> = {}): PartInfo {
   return {
     name: 'a.stl',
+    sha256: 'a'.repeat(64),
     triangles: 44,
     bodies: 1,
     bbox: { min: [0, 0, 0], max: [200, 120, 90] },

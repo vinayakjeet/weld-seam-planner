@@ -587,6 +587,52 @@ describe('manual seams across detection and loading', () => {
   })
 })
 
+describe('plan state across loading', () => {
+  it('keeps the procedure library and clears assignments, overrides, legs, thickness edits and the selection', async () => {
+    const custom = { ...useStore.getState().procedures[0]!, id: 'WPS-KEEP', name: 'Keep' }
+    useStore.getState().addProcedure(custom)
+    useStore.setState({
+      seams: [seam('a'), seam('b')],
+      procedureById: { a: 'WPS-KEEP' },
+      overridesById: { a: { travelSpeedMmS: 3 } },
+      legById: { a: 5 },
+      thicknessById: { a: [8, 8] },
+      selectedId: 'a',
+      selectedIds: ['a', 'b'],
+    })
+    await importBuffer(buffer(), 'b.stl', fakeClient({ loadStl: async () => readyOutcome(), detect: async () => detected([seam('a')]) }))
+    expect(state().procedures.map((p) => p.id)).toContain('WPS-KEEP')
+    expect(state().procedureById).toEqual({})
+    expect(state().overridesById).toEqual({})
+    expect(state().legById).toEqual({})
+    expect(state().thicknessById).toEqual({})
+    expect(state().selectedIds).toEqual([])
+    expect(state().selectedId).toBeNull()
+  })
+})
+
+describe('multi-selection after seams go away', () => {
+  it('drops ids a re-detect no longer produces', async () => {
+    useStore.setState({ seams: [seam('a'), seam('b'), seam('c')], selectedId: 'c', selectedIds: ['a', 'c'], rangeAnchor: 'a' })
+    await runDetect({ creaseAngleDeg: 50 }, fakeClient({ detect: async () => detected([seam('a'), seam('b')]) }))
+    expect(state().selectedIds).toEqual(['a'])
+    expect(state().selectedId).toBe('a')
+    expect(state().rangeAnchor).toBe('a')
+  })
+
+  it('drops the children of a split from the selection when it is undone', () => {
+    const { points, lengthMm } = pointsFromPolyline([[0, 0, 0], [200, 0, 0]], false, () => [[0, 1, 0], [0, 0, 1]])
+    useStore.setState({ seams: [seam('a', 0.9, lengthMm, { points }), seam('b')] })
+    state().select('b')
+    state().select('a', 'toggle')
+    state().splitAt('a', 80)
+    expect(state().selectedIds).toEqual(['b', 'a/a'])
+    undoEdit()
+    expect(state().selectedIds).toEqual(['b'])
+    expect(state().selectedId).toBe('b')
+  })
+})
+
 describe('drawSeam', () => {
   const clicks = [{ p: [0, 0, 0] as [number, number, number], face: 0 }, { p: [50, 0, 0] as [number, number, number], face: 0 }]
 
