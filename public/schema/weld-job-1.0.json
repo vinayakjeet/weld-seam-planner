@@ -1290,6 +1290,13 @@
                   "null"
                 ]
               },
+              "nearClearanceDeg": {
+                "default": null,
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
               "class": {
                 "anyOf": [
                   {

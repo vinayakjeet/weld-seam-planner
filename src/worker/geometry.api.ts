@@ -2,6 +2,8 @@ import { transfer } from 'comlink'
 import { BufferAttribute, BufferGeometry } from 'three'
 import { MeshBVH, type SerializedBVH } from 'three-mesh-bvh'
 import type { Vec3 } from '../core/math/vec3'
+import { occluderFromBvh } from '../core/access/occluder'
+import { seamAccess, type AccessAnalysis } from '../core/access/clearance'
 import { exportJob, type ExportResult } from '../core/job/build'
 import type { Plan } from '../core/job/plan'
 import { preflight, type Issue } from '../core/job/preflight'
@@ -11,7 +13,7 @@ import { sha256Hex } from '../core/mesh/hash'
 import { buildMeshModel, type MeshModel } from '../core/mesh/model'
 import { parseStl, StlError } from '../core/mesh/parseStl'
 import { guessUnits, scaleToMm, type KnownUnits, type Units } from '../core/mesh/units'
-import { buildBodyBvhs, MAX_WHOLE_BVH_TRIANGLES, wholeBvhFor, type BodyBvh } from '../core/seams/bodyBvh'
+import { buildBodyBvhs, buildWholeBvh, MAX_WHOLE_BVH_TRIANGLES, wholeBvhFor, type BodyBvh } from '../core/seams/bodyBvh'
 import { detectSeams, type DetectSettings, type SeamCandidate } from '../core/seams/detect'
 import { buildSnapContext, snapPolyline, type DrawClick, type SnapContext } from '../core/seams/draw'
 import { isManualError } from '../core/seams/manual'
@@ -27,7 +29,7 @@ export interface UserError {
   next: string
 }
 
-export type Stage = 'read' | 'weld' | 'topology' | 'index' | 'contact' | 'detect'
+export type Stage = 'read' | 'weld' | 'topology' | 'index' | 'contact' | 'detect' | 'access'
 
 // fraction is the overall progress of the current call, 0 to 1, and never decreases.
 export type Progress = (stage: Stage, fraction: number) => void
@@ -71,6 +73,10 @@ export type TorchPosesOutcome = { status: 'ok'; poses: TorchPose[] } | { status:
 export type PreflightOutcome = { status: 'ok'; issues: Issue[] } | { status: 'error'; error: UserError }
 
 // ExportResult already has an error arm with the same what, why and next fields.
+export type AccessOutcome =
+  | { status: 'ok'; results: Record<string, AccessAnalysis>; ms: number }
+  | { status: 'error'; error: UserError }
+
 export type ExportOutcome = ExportResult
 
 export interface GeometryApi {
@@ -84,6 +90,8 @@ export interface GeometryApi {
   torchPositions(seams: SeamCandidate[], gravity: Gravity): Promise<TorchPositionsOutcome>
   // Torch poses along one seam; the main thread scrubs between them with poseAt.
   torchPoses(seam: SeamCandidate, params: TorchParams): Promise<TorchPosesOutcome>
+  // Free torch cone of every seam, keyed by seam id. Needs the loaded part: it casts rays against the whole mesh.
+  access(seams: SeamCandidate[], onProgress: Progress): Promise<AccessOutcome>
   // Both read only the plan they are given, so they need no part in the worker.
   preflight(plan: Plan): Promise<PreflightOutcome>
   exportJob(plan: Plan, createdAt: string): Promise<ExportOutcome>
@@ -162,6 +170,8 @@ export function createGeometryApi(): GeometryApi {
   let bodyBvhs: BodyBvh[] | null = null
   // The single-body counterpart: undefined until the first detect, null when the part is too large to ray cast.
   let wholeBvh: BodyBvh | null | undefined
+  // One BVH over every triangle for access rays, built on the first access run of a part. Unlike wholeBvh it has no size cap.
+  let accessBvh: BodyBvh | null = null
   // Feature edges and the surface BVH for drawing, built on the first drawn seam of a part.
   let snapContext: SnapContext | null = null
 
@@ -174,6 +184,7 @@ export function createGeometryApi(): GeometryApi {
     current = model
     bodyBvhs = null
     wholeBvh = undefined
+    accessBvh = null
     snapContext = null
     const outcome: LoadOutcome = { status: 'ready', part: describePart(model, name, sha256, units), display }
     const buffers = [display.positions.buffer, display.indices.buffer, ...display.bvh.roots]
@@ -289,6 +300,34 @@ export function createGeometryApi(): GeometryApi {
     async torchPoses(seam, params) {
       try {
         return { status: 'ok', poses: torchPoses(seam.points, seam.closed, params) }
+      } catch (error) {
+        return { status: 'error', error: toUserError(error) }
+      }
+    },
+
+    async access(seams, onProgress) {
+      if (!current) {
+        return {
+          status: 'error',
+          error: {
+            what: 'There is no part to check for torch access.',
+            why: 'The access check casts rays against the part and none has been loaded in this session.',
+            next: 'Choose an STL file or a sample, then run the check again.',
+          },
+        }
+      }
+      const report = reporter(onProgress)
+      try {
+        const start = performance.now()
+        report('access', 0)
+        accessBvh ??= buildWholeBvh(current)
+        const occluded = occluderFromBvh(accessBvh.bvh)
+        const results: Record<string, AccessAnalysis> = {}
+        seams.forEach((seam, i) => {
+          results[seam.id] = seamAccess(seam, occluded)
+          report('access', (i + 1) / seams.length)
+        })
+        return { status: 'ok', results, ms: performance.now() - start }
       } catch (error) {
         return { status: 'error', error: toUserError(error) }
       }

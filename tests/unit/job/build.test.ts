@@ -82,7 +82,7 @@ describe('buildJob on the spec example', () => {
     expect(seam.boxing).toEqual({ start: false, end: false, lengthMm: 0 })
     expect(seam.intermittent).toBeNull()
     expect(seam.direction).toBe('forward')
-    expect(seam.access).toEqual({ clearanceDeg: null, class: null, portId: null, reachCoverage: null, unreachable: [] })
+    expect(seam.access).toEqual({ clearanceDeg: null, nearClearanceDeg: null, class: null, portId: null, reachCoverage: null, unreachable: [] })
     expect(job.access).toEqual({ ports: [], arm: null })
     expect(seam.approach).toEqual({ distanceMm: 50 })
     expect(seam.retract).toEqual({ distanceMm: 50 })

@@ -110,6 +110,12 @@ export function createRecoveringClient(spawn: (onDead: () => void) => GeometryCl
 
     torchPoses: (seam, params) => current().torchPoses(seam, params),
 
+    async access(seams, onProgress) {
+      const target = current()
+      const lost = await restoreFailure(target)
+      return lost ?? target.access(seams, onProgress)
+    },
+
     preflight: (plan) => current().preflight(plan),
 
     exportJob: (plan, createdAt) => current().exportJob(plan, createdAt),

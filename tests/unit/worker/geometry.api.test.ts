@@ -21,7 +21,7 @@ import { createHash } from 'node:crypto'
 import { jobSchema } from '../../../src/core/job/schema'
 import { CREATED_AT, samplePlan } from '../helpers/jobs'
 
-type Stage = 'read' | 'weld' | 'topology' | 'index' | 'contact' | 'detect'
+type Stage = 'read' | 'weld' | 'topology' | 'index' | 'contact' | 'detect' | 'access'
 
 const built = vi.hoisted(() => ({ count: 0 }))
 

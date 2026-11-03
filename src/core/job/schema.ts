@@ -135,6 +135,8 @@ export const seamPointSchema = z.looseObject({ s: nonNegative, p: vec3Schema, t:
 
 export const seamAccessSchema = z.looseObject({
   clearanceDeg: num.nullable(),
+  // Free cone half-angle out to 60 mm; null in files written before the field existed.
+  nearClearanceDeg: num.nullable().default(null),
   class: z.enum(['standard', 'slim', 'snake', 'blocked']).nullable(),
   portId: z.string().nullable(),
   reachCoverage: z.number().min(0).max(1).nullable(),

@@ -34,6 +34,16 @@ describe('jobSchema', () => {
     expect(example.$schema).toBe(SCHEMA_URL)
   })
 
+  it('reads an access object without nearClearanceDeg as null, so older files still validate', () => {
+    const r = jobSchema.safeParse(example)
+    expect(r.success && r.data.seams[0]!.access.nearClearanceDeg).toBeNull()
+  })
+
+  it('keeps nearClearanceDeg when the file has it', () => {
+    const r = jobSchema.safeParse(changed([['seams', 0, 'access', 'nearClearanceDeg'], 45]))
+    expect(r.success && r.data.seams[0]!.access.nearClearanceDeg).toBe(45)
+  })
+
   it('rejects a quaternion of 3 numbers, naming the field', () => {
     const j = changed([['seams', 0, 'poses', 0, 'quaternion'], [0, 0, 1]])
     expect(failingPaths(j)).toContain('seams.0.poses.0.quaternion')

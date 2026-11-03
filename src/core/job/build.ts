@@ -123,7 +123,7 @@ function buildSeam(plan: Plan, planned: PlannedSeam, issues: JobIssue[]): BuiltS
       touch: [scale(mid.n1, -1), scale(mid.n2, -1)].map((direction) => ({ direction: vec(direction, 6), searchMm: SENSING_SEARCH_MM })),
       seamTracking: procedure?.process === 'GTAW' ? 'none' : 'through-arc',
     },
-    access: planned.access ?? { clearanceDeg: null, class: null, portId: null, reachCoverage: null, unreachable: [] },
+    access: planned.access ?? { clearanceDeg: null, nearClearanceDeg: null, class: null, portId: null, reachCoverage: null, unreachable: [] },
     estimates: {
       arcTimeS: r1(est.arcTimeS),
       heatInputKJmm: r3(resolved.heatInputKJmm ?? 0),

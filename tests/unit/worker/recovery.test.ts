@@ -40,6 +40,7 @@ function harness() {
       snapDraw: (clicks, radius) => real.snapDraw(clicks, radius),
       torchPositions: (seams, gravity) => real.torchPositions(seams, gravity),
       torchPoses: (seam, params) => real.torchPoses(seam, params),
+      access: (seams, onProgress) => real.access(seams, onProgress),
       preflight: (plan) => real.preflight(plan),
       exportJob: (plan, createdAt) => real.exportJob(plan, createdAt),
     }
@@ -74,6 +75,20 @@ describe('recovering client', () => {
     expect(seamCount(await client.detect(DEFAULT_DETECT_SETTINGS, noop))).toBe(2)
     expect(spawned).toHaveLength(2)
     expect(spawned[1]!.loads).toEqual([size])
+  })
+
+  it('restores the part before the access check, which casts rays against it', async () => {
+    const { client, spawned } = harness()
+    expect((await client.loadStl(readSample('t-joint-merged'), 'a.stl', noop)).status).toBe('ready')
+    const found = await client.detect(DEFAULT_DETECT_SETTINGS, noop)
+    if (found.status !== 'ok') throw new Error('detect failed')
+    const seams = shown(found.seams)
+
+    spawned[0]!.die('Uncaught RangeError: out of memory')
+    expect((await client.access(seams, noop)).status).toBe('error')
+    const outcome = await client.access(seams, noop)
+    expect(outcome.status).toBe('ok')
+    expect(spawned).toHaveLength(2)
   })
 
   it('restores the part before a drawn seam is snapped, too', async () => {

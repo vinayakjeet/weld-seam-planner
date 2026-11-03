@@ -210,13 +210,13 @@ describe('bead rules', () => {
 describe('access', () => {
   it('ACCESS_BLOCKED: a blocked class', () => {
     const plan = specExamplePlan()
-    plan.seams[0]!.access = { clearanceDeg: null, class: 'blocked', portId: null, reachCoverage: null, unreachable: [] }
+    plan.seams[0]!.access = { clearanceDeg: null, nearClearanceDeg: null, class: 'blocked', portId: null, reachCoverage: null, unreachable: [] }
     only(preflight(plan), 'ACCESS_BLOCKED', 'error', 's07')
   })
 
   it('ACCESS_BLOCKED: a non empty unreachable list', () => {
     const plan = specExamplePlan()
-    plan.seams[0]!.access = { clearanceDeg: null, class: 'standard', portId: null, reachCoverage: 0.9, unreachable: [[10, 20]] }
+    plan.seams[0]!.access = { clearanceDeg: null, nearClearanceDeg: null, class: 'standard', portId: null, reachCoverage: 0.9, unreachable: [[10, 20]] }
     only(preflight(plan), 'ACCESS_BLOCKED', 'error', 's07')
   })
 
