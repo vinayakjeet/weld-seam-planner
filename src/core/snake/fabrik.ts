@@ -52,48 +52,72 @@ function limitBend(prev: Vec3, dir: Vec3, maxDeg: number): Vec3 {
 }
 
 interface CurveShape {
-  // Depth of the straight part, then handle lengths relative to the length-matching scale, and a sideways nudge of
-  // each handle (mm per unit of scale) in the plane across the port axis.
+  // Depth of the straight part, then handle lengths relative to the length-matching scale, a sideways nudge of each
+  // handle (mm per unit of scale) in the plane across the port axis, and the direction of the bulge (radians about the
+  // chord) used when the links are longer than the curve.
   depth: number
   startHandle: number
   endHandle: number
   startSide: Vec3
   endSide: Vec3
+  bulgeAngle: number
 }
 
 // A chain that follows a cubic Bezier from the end of the straight part to the wrist, leaving along the axis and
-// arriving along the tool z. A common scale on both handles is found so the curve is about as long as the links, then
-// joints are placed along it one link length apart. Different shapes give straight arcs, S bends and loops, which is
-// what lets the passes below start near a solution the bend limits allow.
+// arriving along the tool z, with joints placed along it one link length apart. The curve is made as long as the links:
+// by scaling the handles while that can lengthen it, and then by a sin squared bulge across the chord. The bulge is what
+// breaks a chain with slack out of the straight line, where neither FABRIK nor the finish can move it sideways.
 function curvedStart(port: Port, axis: Vec3, goal: WristGoal, toolZ: Vec3, L: number, n: number, shape: CurveShape): Vec3[] {
   const p0 = add(port.position, scale(axis, shape.depth))
   const p3 = goal.wrist
-  const point = (t: number, m: number): Vec3 => {
+  const chord = unit(sub(p3, p0), axis)
+  const across = anyPerpendicular(chord)
+  const across2 = cross(chord, across)
+  const bulgeDir = add(scale(across, Math.cos(shape.bulgeAngle)), scale(across2, Math.sin(shape.bulgeAngle)))
+  const point = (t: number, m: number, bulge: number): Vec3 => {
     const p1 = add(add(p0, scale(axis, m * shape.startHandle)), scale(shape.startSide, m))
     const p2 = add(sub(p3, scale(toolZ, m * shape.endHandle)), scale(shape.endSide, m))
     const u = 1 - t
-    return [0, 1, 2].map((c) => u * u * u * p0[c]! + 3 * u * u * t * p1[c]! + 3 * u * t * t * p2[c]! + t * t * t * p3[c]!) as Vec3
+    const swell = bulge * Math.sin(Math.PI * t) ** 2
+    return [0, 1, 2].map(
+      (c) => u * u * u * p0[c]! + 3 * u * u * t * p1[c]! + 3 * u * t * t * p2[c]! + t * t * t * p3[c]! + swell * bulgeDir[c]!,
+    ) as Vec3
   }
-  const curveLength = (m: number): number => {
+  const curveLength = (m: number, bulge: number): number => {
     let total = 0
-    let last = point(0, m)
+    let last = point(0, m, bulge)
     for (let i = 1; i <= 64; i++) {
-      const q = point(i / 64, m)
+      const q = point(i / 64, m, bulge)
       total += length(sub(q, last))
       last = q
     }
     return total
   }
   const target = n * L
-  let lo = 0
-  let hi = 4 * target
-  for (let i = 0; i < 30; i++) {
-    const mid = (lo + hi) / 2
-    if (curveLength(mid) < target) lo = mid
-    else hi = mid
+  const span = length(sub(p3, p0))
+  const maxHandle = Math.max(0.5 * span, 1e-6)
+  let m = maxHandle
+  let bulge = 0
+  if (curveLength(maxHandle, 0) >= target) {
+    let lo = 0
+    let hi = maxHandle
+    for (let i = 0; i < 30; i++) {
+      const mid = (lo + hi) / 2
+      if (curveLength(mid, 0) < target) lo = mid
+      else hi = mid
+    }
+    m = (lo + hi) / 2
+  } else {
+    let lo = 0
+    let hi = target
+    for (let i = 0; i < 30; i++) {
+      const mid = (lo + hi) / 2
+      if (curveLength(m, mid) < target) lo = mid
+      else hi = mid
+    }
+    bulge = (lo + hi) / 2
   }
-  const m = (lo + hi) / 2
-  const dense = Array.from({ length: 513 }, (_, i) => point(i / 512, m))
+  const dense = Array.from({ length: 513 }, (_, i) => point(i / 512, m, bulge))
   const joints: Vec3[] = [port.position, p0]
   let cursor = 0
   for (let k = 2; k <= n + 1; k++) {
@@ -399,8 +423,8 @@ export function fabrik(port: Port, goal: WristGoal, arm: ArmParams, activeLinks:
   const side2 = cross(axis, side)
   const random = lcg(n * 7919 + 17)
   const shapeAt = (k: number): CurveShape => {
-    if (k === 0) return { depth: 0, startHandle: 1, endHandle: 1, startSide: [0, 0, 0], endSide: [0, 0, 0] }
-    if (k === 1) return { depth: arm.insertionMm / 2, startHandle: 1, endHandle: 1, startSide: [0, 0, 0], endSide: [0, 0, 0] }
+    if (k === 0) return { depth: 0, startHandle: 1, endHandle: 1, startSide: [0, 0, 0], endSide: [0, 0, 0], bulgeAngle: 0 }
+    if (k === 1) return { depth: arm.insertionMm / 2, startHandle: 1, endHandle: 1, startSide: [0, 0, 0], endSide: [0, 0, 0], bulgeAngle: 2.1 }
     const nudge = (): Vec3 => {
       const angle = random() * 2 * Math.PI
       return scale(add(scale(side, Math.cos(angle)), scale(side2, Math.sin(angle))), random() * 0.8)
@@ -411,13 +435,15 @@ export function fabrik(port: Port, goal: WristGoal, arm: ArmParams, activeLinks:
       endHandle: 0.2 + random() * 1.4,
       startSide: nudge(),
       endSide: nudge(),
+      bulgeAngle: random() * 2 * Math.PI,
     }
   }
 
   let used = 0
   let closest: FabrikResult | null = null
   for (let k = 0; k < COLD_STARTS; k++) {
-    const result = run(curvedStart(port, axis, goal, toolZ, L, n, shapeAt(k)))
+    const initial = curvedStart(port, axis, goal, toolZ, L, n, shapeAt(k))
+    const result = run(initial)
     used += result.passes
     if (result.ok) return { ...result, passes: used }
     if (closest === null || result.tipErrorMm < closest.tipErrorMm) closest = result
