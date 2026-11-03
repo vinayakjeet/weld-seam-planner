@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { positionFor } from '../../state/torchSlice'
+import type { SelectMode } from '../../state/seamsSlice'
 import { useStore } from '../../state/store'
 import { useVisibleSeams } from '../../state/useVisibleSeams'
 import { Button } from '../kit/Button'
@@ -8,6 +9,7 @@ import { DetectionSettings } from './DetectionSettings'
 import { ManualTools } from './ManualTools'
 import { PositionChip } from './PositionChip'
 import { PartWarnings } from './PartWarnings'
+import { ProcedureLibrary } from './ProcedureLibrary'
 import { seamRows } from './seamRows'
 import { acceptAllLabel, noSeamsMessage } from './seamText'
 import { TypeMenu } from './TypeMenu'
@@ -23,13 +25,20 @@ const COLUMNS = [
   { key: 'status', label: '', title: 'Status' },
 ]
 
-const GRID = 'grid grid-cols-[22px_minmax(0,1fr)_46px_30px_28px_34px_28px_16px] items-center gap-x-1.5 px-3'
+const GRID = 'grid grid-cols-[22px_minmax(0,1fr)_46px_30px_68px_34px_28px_16px] items-center gap-x-1.5 px-3'
 
 const STATUS_DOT = {
   accepted: 'bg-seam-accepted',
   candidate: 'bg-seam-candidate',
   rejected: 'bg-err',
 } as const
+
+const NO_WPS = 'WPS not set'
+
+// Ctrl or Cmd click toggles one seam, Shift click selects the range up to it.
+function selectMode(e: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }): SelectMode {
+  return e.ctrlKey || e.metaKey ? 'toggle' : e.shiftKey ? 'range' : 'replace'
+}
 
 function EmptyMessage({ partLoaded, busy }: { partLoaded: boolean; busy: boolean }) {
   const hiddenCorners = useStore((s) => s.seams.reduce((n, seam) => n + (seam.hidden ? 1 : 0), 0))
@@ -74,6 +83,8 @@ function SeamTable() {
   const statusById = useStore((s) => s.statusById)
   const typeById = useStore((s) => s.typeById)
   const selectedId = useStore((s) => s.selectedId)
+  const selectedIds = useStore((s) => s.selectedIds)
+  const procedureById = useStore((s) => s.procedureById)
   const hoverId = useStore((s) => s.hoverId)
   const partLoaded = useStore((s) => s.part !== null)
   const busy = useStore((s) => s.detectBusy)
@@ -83,8 +94,8 @@ function SeamTable() {
   const positionsById = useStore((s) => s.positionsById)
   const gravity = useStore((s) => s.gravity)
   const rows = useMemo(
-    () => seamRows(seams, statusById, typeById, (seam) => positionFor({ positionsById, gravity }, seam)),
-    [seams, statusById, typeById, positionsById, gravity],
+    () => seamRows(seams, statusById, typeById, (seam) => positionFor({ positionsById, gravity }, seam), procedureById),
+    [seams, statusById, typeById, positionsById, gravity, procedureById],
   )
   const body = useRef<HTMLDivElement>(null)
 
@@ -114,20 +125,26 @@ function SeamTable() {
               key={row.id}
               role="row"
               tabIndex={0}
-              aria-selected={selectedId === row.id}
+              aria-selected={selectedIds.includes(row.id)}
               data-seam-id={row.id}
               data-status={row.status}
-              onClick={() => select(row.id)}
+              onClick={(e) => select(row.id, selectMode(e))}
               onKeyDown={(e) => {
                 if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
                   e.preventDefault()
-                  select(row.id)
+                  select(row.id, selectMode(e))
                 }
               }}
               onMouseEnter={() => hover(row.id)}
               onMouseLeave={() => hover(null)}
-              className={`${GRID} h-7 cursor-pointer border-b border-line/50 outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-brand ${
-                selectedId === row.id ? 'bg-brand/20 text-ink-0' : hoverId === row.id ? 'bg-surface-2 text-ink-1' : 'text-ink-1'
+              className={`${GRID} h-7 cursor-pointer select-none border-b border-line/50 outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-brand ${
+                selectedId === row.id
+                  ? 'bg-brand/25 text-ink-0'
+                  : selectedIds.includes(row.id)
+                    ? 'bg-brand/15 text-ink-0'
+                    : hoverId === row.id
+                      ? 'bg-surface-2 text-ink-1'
+                      : 'text-ink-1'
               }`}
             >
               <span role="cell" className="num text-ink-2">
@@ -142,8 +159,8 @@ function SeamTable() {
               <span role="cell" className="num text-right">
                 {row.length}
               </span>
-              <span role="cell" aria-label="WPS not set" className="text-ink-2">
-                -
+              <span role="cell" aria-label={row.wps} title={row.wps} className={`truncate ${row.wps === NO_WPS ? 'text-ink-2' : 'text-ink-0'}`}>
+                {row.wps === NO_WPS ? '-' : row.wps.replace(/^WPS-/, '')}
               </span>
               <span role="cell" aria-label={row.position ? `Position ${row.pos}` : 'Position not set'}>
                 <PositionChip position={row.position} />
@@ -172,8 +189,9 @@ function SeamTable() {
 }
 
 export function SeamPanel() {
+  const procedureStep = useStore((s) => s.activeStep === 'procedures')
   return (
-    <aside aria-label="Seam list" className="flex min-h-0 w-[300px] shrink-0 flex-col border-r border-line bg-surface-1">
+    <aside aria-label="Seam list" className="flex min-h-0 w-[376px] shrink-0 flex-col border-r border-line bg-surface-1">
       <Tabs defaultValue="seams" className="flex min-h-0 flex-1 flex-col">
         <TabList label="Left panel">
           <Tab value="seams">Seams</Tab>
@@ -188,8 +206,14 @@ export function SeamPanel() {
             ))}
           </div>
           <PartWarnings />
-          <ManualTools />
-          <AcceptAll />
+          {procedureStep ? (
+            <ProcedureLibrary />
+          ) : (
+            <>
+              <ManualTools />
+              <AcceptAll />
+            </>
+          )}
           <SeamTable />
         </TabPanel>
         <TabPanel value="detection">

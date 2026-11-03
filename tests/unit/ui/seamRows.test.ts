@@ -93,3 +93,14 @@ describe('positionLines', () => {
   })
 })
 
+
+describe('seamRows procedure column', () => {
+  it('shows the assigned procedure id, or "WPS not set"', () => {
+    const rows = seamRows([seam('a'), seam('b')], {}, {}, () => undefined, { b: 'WPS-GTAW' })
+    expect(rows.map((r) => r.wps)).toEqual(['WPS not set', 'WPS-GTAW'])
+  })
+
+  it('shows "WPS not set" when no map is given', () => {
+    expect(seamRows([seam('a')], {}, {})[0]!.wps).toBe('WPS not set')
+  })
+})

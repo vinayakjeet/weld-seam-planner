@@ -73,6 +73,19 @@ const NO_PART: JobPart = {
   bbox: { min: [0, 0, 0], max: [0, 0, 0] },
 }
 
+type PlanFields = Pick<AppState, 'typeById' | 'thicknessById' | 'procedureById' | 'overridesById' | 'legById'>
+
+// One seam as the job builder sees it, whether or not it is accepted, so the Inspector can show the same numbers.
+export function plannedSeam(state: PlanFields, seam: SeamCandidate): PlannedSeam {
+  return {
+    seam: { ...seam, jointType: state.typeById[seam.id] ?? seam.jointType, thicknessMm: state.thicknessById[seam.id] ?? seam.thicknessMm },
+    procedureId: state.procedureById[seam.id] ?? null,
+    overrides: state.overridesById[seam.id] ?? {},
+    legMm: state.legById[seam.id] ?? null,
+    access: null,
+  }
+}
+
 let cachedPlan: { deps: readonly unknown[]; plan: Plan } | null = null
 
 // Accepted, visible seams in table order, with the user's type and thickness edits applied. The same state gives the
@@ -86,15 +99,7 @@ export function selectPlan(state: AppState): Plan {
   if (cachedPlan && cachedPlan.deps.every((d, i) => d === deps[i])) return cachedPlan.plan
   const seams = visibleSeams(selectAllSeams(state), state.showCorners)
     .filter((seam) => state.statusById[seam.id] === 'accepted')
-    .map(
-      (seam): PlannedSeam => ({
-        seam: { ...seam, jointType: state.typeById[seam.id] ?? seam.jointType, thicknessMm: state.thicknessById[seam.id] ?? seam.thicknessMm },
-        procedureId: state.procedureById[seam.id] ?? null,
-        overrides: state.overridesById[seam.id] ?? {},
-        legMm: state.legById[seam.id] ?? null,
-        access: null,
-      }),
-    )
+    .map((seam) => plannedSeam(state, seam))
   const plan: Plan = {
     part: state.part ?? NO_PART,
     gravity: state.gravity,

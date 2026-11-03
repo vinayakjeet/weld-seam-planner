@@ -4,6 +4,13 @@ import { selectAllSeams, visibleSeams } from './selectors'
 import { useStore } from './store'
 
 // The seams the user can see: detected and manual, less the corner candidates while they are switched off.
+// The selected seams that are visible, in table order.
+export function useSelectedSeams(): SeamCandidate[] {
+  const visible = useVisibleSeams()
+  const selectedIds = useStore((s) => s.selectedIds)
+  return useMemo(() => visible.filter((seam) => selectedIds.includes(seam.id)), [visible, selectedIds])
+}
+
 export function useVisibleSeams(): SeamCandidate[] {
   const seams = useStore((s) => s.seams)
   const manualSeams = useStore((s) => s.manualSeams)

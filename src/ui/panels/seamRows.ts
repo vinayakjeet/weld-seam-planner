@@ -17,6 +17,8 @@ export interface SeamRow {
   // The position code, or a dash while the worker has not answered for this seam under the current gravity.
   pos: string
   position: SeamPosition | null
+  // The assigned procedure id, or "WPS not set".
+  wps: string
   status: SeamStatus | 'candidate'
 }
 
@@ -55,6 +57,7 @@ export function seamRows(
   statusById: Record<string, SeamStatus>,
   typeById: Record<string, JointType>,
   positionOf: (seam: SeamCandidate) => SeamPosition | undefined = () => undefined,
+  procedureById: Record<string, string> = {},
 ): SeamRow[] {
   return seams.map((seam, i) => {
     const override = typeById[seam.id]
@@ -71,6 +74,7 @@ export function seamRows(
       length: String(Number(seam.lengthMm.toFixed(1))),
       pos: position ? position.code : '-',
       position,
+      wps: procedureById[seam.id] ?? 'WPS not set',
       status: statusById[seam.id] ?? 'candidate',
     }
   })
