@@ -5,6 +5,7 @@ import type { SeamCandidate } from '../../core/seams/detect'
 import { awsFor, type SeamPosition } from '../../core/torch/positions'
 import type { SeamStatus } from '../../state/seamsSlice'
 import { accessChipText } from './accessText'
+import { acceptAllLabel } from './seamText'
 
 export interface SeamRow {
   id: string
@@ -93,4 +94,19 @@ export function seamRows(
       accPending: analysing && status === 'accepted' && accClass === null,
     }
   })
+}
+
+// The Accept all button: still live while any seam is not accepted, spent once they all are, and explained when
+// there is nothing to accept at all.
+export function acceptAllState(
+  seams: SeamCandidate[],
+  statusById: Record<string, SeamStatus>,
+  threshold: number,
+): { disabled: boolean; label: string; reason: string | null } {
+  const label = acceptAllLabel(threshold)
+  if (seams.length === 0) {
+    return { disabled: true, label, reason: 'There are no seams to accept. Load a part, or lower the crease angle in the Detection tab.' }
+  }
+  if (seams.every((seam) => statusById[seam.id] === 'accepted')) return { disabled: true, label: 'All seams accepted', reason: null }
+  return { disabled: false, label, reason: null }
 }

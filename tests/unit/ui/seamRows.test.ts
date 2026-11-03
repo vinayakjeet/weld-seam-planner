@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { SeamPosition } from '../../../src/core/torch/positions'
 import type { SeamAccess } from '../../../src/core/job/schema'
-import { positionLines, seamRows } from '../../../src/ui/panels/seamRows'
+import { acceptAllState, positionLines, seamRows } from '../../../src/ui/panels/seamRows'
 import { seam } from '../helpers/state'
 
 describe('seamRows type column', () => {
@@ -131,5 +131,29 @@ describe('seamRows access column', () => {
   it('shows a seam with no class yet (empty analysis) as neutral', () => {
     const rows = rowsWith({ a: access(null) }, false)
     expect(rows[0]!.acc).toBe('-')
+  })
+})
+
+describe('acceptAllState', () => {
+  const seams = [seam('a'), seam('b'), seam('c')]
+
+  it('reads Accept all above the threshold while a seam is still a candidate', () => {
+    expect(acceptAllState(seams, { a: 'accepted' }, 0.7)).toEqual({ disabled: false, label: 'Accept all above 0.70', reason: null })
+  })
+
+  it('counts a rejected seam as a candidate, as accepting all does', () => {
+    expect(acceptAllState(seams, { a: 'accepted', b: 'accepted', c: 'rejected' }, 0.7).disabled).toBe(false)
+  })
+
+  it('is disabled and reads All seams accepted when none is left', () => {
+    const all = { a: 'accepted', b: 'accepted', c: 'accepted' } as const
+    expect(acceptAllState(seams, all, 0.7)).toEqual({ disabled: true, label: 'All seams accepted', reason: null })
+  })
+
+  it('is disabled with the reason when there are no seams', () => {
+    const state = acceptAllState([], {}, 0.7)
+    expect(state.disabled).toBe(true)
+    expect(state.label).toBe('Accept all above 0.70')
+    expect(state.reason).toBe('There are no seams to accept. Load a part, or lower the crease angle in the Detection tab.')
   })
 })

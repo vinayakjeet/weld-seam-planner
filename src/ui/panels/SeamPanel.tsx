@@ -2,9 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { accessFor } from '../../state/accessSlice'
 import { positionFor } from '../../state/torchSlice'
 import type { SelectMode } from '../../state/seamsSlice'
+import { selectPlan } from '../../state/selectors'
 import { useStore } from '../../state/store'
 import { useVisibleSeams } from '../../state/useVisibleSeams'
 import { Button } from '../kit/Button'
+import { Tooltip } from '../kit/Tooltip'
 import { Tab, TabList, TabPanel, Tabs } from '../kit/Tabs'
 import { AccessChip } from './AccessChip'
 import { DetectionSettings } from './DetectionSettings'
@@ -13,10 +15,12 @@ import { PositionChip } from './PositionChip'
 import { PartWarnings } from './PartWarnings'
 import { PreflightPanel } from './PreflightPanel'
 import { ProcedureLibrary } from './ProcedureLibrary'
-import { seamRows } from './seamRows'
+import { NoAcceptedSeams, showsNoAccepted } from './NoAcceptedSeams'
+import { acceptAllState, seamRows } from './seamRows'
 import { SequencePanel } from './SequencePanel'
-import { acceptAllLabel, noSeamsMessage } from './seamText'
+import { noSeamsMessage } from './seamText'
 import { TypeMenu } from './TypeMenu'
+import { wpsCode } from './wpsCode'
 
 const COLUMNS = [
   { key: 'n', label: '#', title: 'Seam number' },
@@ -62,11 +66,13 @@ function EmptyMessage({ partLoaded, busy }: { partLoaded: boolean; busy: boolean
 function AcceptAll() {
   const [threshold, setThreshold] = useState(0.7)
   const acceptAbove = useStore((s) => s.acceptAbove)
-  const hasSeams = useVisibleSeams().length > 0
+  const seams = useVisibleSeams()
+  const statusById = useStore((s) => s.statusById)
+  const state = acceptAllState(seams, statusById, threshold)
   return (
     <div className="flex shrink-0 flex-col gap-1.5 border-b border-line px-3 py-2">
-      <Button disabled={!hasSeams} onClick={() => acceptAbove(threshold)} className="w-full">
-        {acceptAllLabel(threshold)}
+      <Button disabled={state.disabled} title={state.reason ?? undefined} onClick={() => acceptAbove(threshold)} className="w-full">
+        {state.label}
       </Button>
       <input
         type="range"
@@ -89,6 +95,8 @@ function SeamTable() {
   const selectedId = useStore((s) => s.selectedId)
   const selectedIds = useStore((s) => s.selectedIds)
   const procedureById = useStore((s) => s.procedureById)
+  const procedures = useStore((s) => s.procedures)
+  const procedureNames = useMemo(() => new Map(procedures.map((p) => [p.id, p.name])), [procedures])
   const hoverId = useStore((s) => s.hoverId)
   const partLoaded = useStore((s) => s.part !== null)
   const busy = useStore((s) => s.detectBusy)
@@ -175,8 +183,14 @@ function SeamTable() {
               <span role="cell" className="num text-right">
                 {row.length}
               </span>
-              <span role="cell" aria-label={row.wps} title={row.wps} className={`truncate ${row.wps === NO_WPS ? 'text-ink-2' : 'text-ink-0'}`}>
-                {row.wps === NO_WPS ? '-' : row.wps.replace(/^WPS-/, '')}
+              <span role="cell" aria-label={row.wps} className={`truncate ${row.wps === NO_WPS ? 'text-ink-2' : 'text-ink-0'}`}>
+                {row.wps === NO_WPS ? (
+                  '-'
+                ) : (
+                  <Tooltip content={procedureNames.get(row.wps) ?? row.wps}>
+                    <span>{wpsCode({ id: row.wps })}</span>
+                  </Tooltip>
+                )}
               </span>
               <span role="cell" aria-label={row.position ? `Position ${row.pos}` : 'Position not set'}>
                 <PositionChip position={row.position} />
@@ -208,6 +222,7 @@ export function SeamPanel() {
   const procedureStep = useStore((s) => s.activeStep === 'procedures')
   const exportStep = useStore((s) => s.activeStep === 'export')
   const sequenceStep = useStore((s) => s.activeStep === 'sequence')
+  const empty = useStore((s) => showsNoAccepted(s.activeStep, selectPlan(s).seams.length))
   return (
     <aside aria-label="Seam list" className="flex min-h-0 w-[376px] shrink-0 flex-col border-r border-line bg-surface-1">
       <Tabs defaultValue="seams" className="flex min-h-0 flex-1 flex-col">
@@ -224,6 +239,7 @@ export function SeamPanel() {
             ))}
           </div>
           <PartWarnings />
+          {empty && <NoAcceptedSeams />}
           {exportStep ? (
             <PreflightPanel />
           ) : sequenceStep ? (

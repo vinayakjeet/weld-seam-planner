@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { timelineSegments } from '../../core/sequence/timeline'
 import { selectPlan } from '../../state/selectors'
 import { useStore } from '../../state/store'
-import { NO_SEAMS_TEXT } from '../panels/SequencePanel'
+import { NO_ACCEPTED_TEXT } from '../panels/NoAcceptedSeams'
 import { PlaybackControls } from './PlaybackControls'
 import { formatCycle } from './summary'
 
@@ -64,7 +64,7 @@ export function Timeline() {
       </header>
       {open &&
         (segments.length === 0 ? (
-          <p className="px-3 pt-2 text-ink-2">{NO_SEAMS_TEXT}</p>
+          <p className="px-3 pt-2 text-ink-2">{NO_ACCEPTED_TEXT}</p>
         ) : (
           <div className="relative">
           <div role="img" aria-label="Arc time and air time of each seam in sequence order" className={`flex h-[80px] items-end gap-px px-3 pb-2 ${current ? '' : 'opacity-60'}`}>

@@ -7,6 +7,7 @@ import { useVisibleSeams } from '../../state/useVisibleSeams'
 import { getGeometryClient } from '../../worker/client'
 import { Button } from '../kit/Button'
 import { cycleField } from '../shell/summary'
+import { NO_ACCEPTED_TEXT } from './NoAcceptedSeams'
 import { sequenceRows } from './sequenceRows'
 
 type Choice = Exclude<SequenceStrategy, 'manual'>
@@ -24,7 +25,6 @@ const STRATEGY_NAMES: Record<SequenceStrategy, string> = {
   manual: 'set by hand',
 }
 
-export const NO_SEAMS_TEXT = 'No accepted seams yet. Accept the seams you want to weld in the Seams step, then order them here.'
 
 const GRID = 'grid grid-cols-[18px_24px_minmax(0,1fr)_44px_82px_24px] items-center gap-x-1.5 px-3'
 
@@ -56,7 +56,7 @@ function Controls() {
   const accepted = useStore((s) => selectPlan(s).seams.length)
   const used = useStore((s) => s.strategy)
   const setNotice = useStore((s) => s.setNotice)
-  const reason = accepted === 0 ? NO_SEAMS_TEXT : null
+  const reason = accepted === 0 ? NO_ACCEPTED_TEXT : null
 
   const run = async () => {
     setBusy(true)
@@ -88,7 +88,6 @@ function Controls() {
       <Button disabled={reason !== null || busy} title={reason ?? undefined} onClick={() => void run()} className="w-full">
         {busy ? 'Optimising' : 'Optimise'}
       </Button>
-      {reason !== null && <p className="text-ink-2">{reason}</p>}
       {reason === null && <p className="text-ink-2">Current order: {STRATEGY_NAMES[used]}. Drag a row, or press Alt and an arrow key, to set it by hand.</p>}
       <Summary />
     </div>
@@ -140,11 +139,8 @@ function SequenceList() {
   }
 
   if (rows.length === 0) {
-    return (
-      <div className="grid flex-1 place-items-center px-6 text-center text-ink-2">
-        <p>{NO_SEAMS_TEXT}</p>
-      </div>
-    )
+    // The no accepted seams message and its button sit above the panel, in SeamPanel.
+    return <div className="flex-1" />
   }
 
   return (
