@@ -44,7 +44,7 @@ export function AirMoves() {
     const { min, max } = plan.part.bbox
     const diagonal = Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2])
     const dash = Math.max(1, diagonal / 120)
-    return lineSet(positions, { width: WIDTH_PX, color: cssVar('--text-1'), renderOrder: 4, overlay: true, dashed: { dashSize: dash, gapSize: dash } })
+    return lineSet(positions, { width: WIDTH_PX, color: cssVar('--text-1'), renderOrder: 4, overlay: true, opacity: 0.85, dashed: { dashSize: dash, gapSize: dash } })
   }, [active, plan, order])
   useDisposed(lines)
   return lines ? <primitive object={lines} /> : null

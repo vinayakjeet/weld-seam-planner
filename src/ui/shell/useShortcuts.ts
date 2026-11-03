@@ -37,6 +37,7 @@ export function useShortcuts(fit: () => void): void {
       else if (shortcut === 'undo') undoEdit()
       else if (shortcut === 'redo') redoEdit()
       else if (shortcut === 'draw' || shortcut === 'split') void chooseTool(shortcut, client)
+      else if (shortcut === 'xray') useStore.getState().toggleXray()
       else if (shortcut === 'reverse') reverseSelected()
       else if (shortcut === 'remove') removeSelected()
       else void toolEvent({ type: shortcut }, client)

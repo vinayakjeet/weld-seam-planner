@@ -148,3 +148,19 @@ describe('shortcutFor play', () => {
   })
 })
 
+describe('shortcutFor xray', () => {
+  it('maps X to x-ray, in either case', () => {
+    expect(shortcutFor(key('x'))).toBe('xray')
+    expect(shortcutFor(key('X'))).toBe('xray')
+    expect(shortcutFor(key('X', { shiftKey: true }))).toBe('xray')
+  })
+
+  it('ignores X in a text field, and with Ctrl, Meta or Alt, which cut text or belong to the browser', () => {
+    expect(shortcutFor(key('x', {}, { tagName: 'INPUT', type: 'text' }))).toBeNull()
+    expect(shortcutFor(key('x', {}, { tagName: 'TEXTAREA' }))).toBeNull()
+    expect(shortcutFor(key('x', { ctrlKey: true }))).toBeNull()
+    expect(shortcutFor(key('x', { metaKey: true }))).toBeNull()
+    expect(shortcutFor(key('x', { altKey: true }))).toBeNull()
+  })
+})
+

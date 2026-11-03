@@ -52,6 +52,9 @@ export function SeamLines({ partRef }: { partRef: RefObject<Mesh | null> }) {
   const mergeFrom = useStore((s) => (s.tool.tool === 'merge' ? s.tool.from : null))
   const { gl, camera } = useThree()
   // Once the playback has started the seams not yet welded are dimmed, so the welded ones stand out.
+  const xray = useStore((s) => s.xray)
+  // With x-ray on the seams are drawn over the part, so every layer sits one step higher than the see-through part.
+  const lift = xray ? 1 : 0
   const dim = useStore((s) => (s.activeStep === 'sequence' || s.activeStep === 'export') && s.timeS > 0)
   const palette = useMemo(() => readPalette(), [])
 
@@ -66,17 +69,17 @@ export function SeamLines({ partRef }: { partRef: RefObject<Mesh | null> }) {
     [seams, statusById, palette, colourBy, accessById, accessPointsById],
   )
   const base = useMemo(
-    () => (built.segmentSeam.length > 0 ? lineSet(built.positions, { width: BASE_WIDTH_PX, colors: built.colors, opacity: dim ? DIM_OPACITY : 1 }) : null),
-    [built, dim],
+    () => (built.segmentSeam.length > 0 ? lineSet(built.positions, { width: BASE_WIDTH_PX, colors: built.colors, opacity: dim ? DIM_OPACITY : 1, overlay: xray, renderOrder: xray ? 1 : 0 }) : null),
+    [built, dim, xray],
   )
   const selected = useMemo(() => {
     const seam = selectedId === null ? undefined : seams.find((s) => s.id === selectedId)
-    return seam ? lineSet(seamSegmentPositions(seam), { width: HIGHLIGHT_WIDTH_PX, color: cssVar('--brand-primary'), renderOrder: 1 }) : null
-  }, [seams, selectedId])
+    return seam ? lineSet(seamSegmentPositions(seam), { width: HIGHLIGHT_WIDTH_PX, color: cssVar('--brand-primary'), renderOrder: 1 + lift, overlay: xray }) : null
+  }, [seams, selectedId, xray, lift])
   const hovered = useMemo(() => {
     const seam = hoverId === null ? undefined : seams.find((s) => s.id === hoverId)
-    return seam ? lineSet(seamSegmentPositions(seam), { width: HIGHLIGHT_WIDTH_PX, color: cssVar('--seam-hover'), renderOrder: 2 }) : null
-  }, [seams, hoverId])
+    return seam ? lineSet(seamSegmentPositions(seam), { width: HIGHLIGHT_WIDTH_PX, color: cssVar('--seam-hover'), renderOrder: 2 + lift, overlay: xray }) : null
+  }, [seams, hoverId, xray, lift])
 
   // While merging, the seams the merge would accept are lit so the choice is visible before the click.
   const targets = useMemo(() => {
@@ -90,8 +93,8 @@ export function SeamLines({ partRef }: { partRef: RefObject<Mesh | null> }) {
       all.set(part, at)
       at += part.length
     }
-    return lineSet(all, { width: HIGHLIGHT_WIDTH_PX, color: cssVar('--warn'), renderOrder: 1 })
-  }, [seams, mergeFrom])
+    return lineSet(all, { width: HIGHLIGHT_WIDTH_PX, color: cssVar('--warn'), renderOrder: 1 + lift, overlay: xray })
+  }, [seams, mergeFrom, xray, lift])
 
   useDisposed(base)
   useDisposed(selected)
@@ -121,7 +124,8 @@ export function SeamLines({ partRef }: { partRef: RefObject<Mesh | null> }) {
       if (raw.length === 0) return null
 
       camera.getWorldPosition(eye)
-      const part = partRef.current
+      // With x-ray on the part is see-through, so a seam behind it can be picked.
+      const part = xray ? null : partRef.current
       const hits: SeamLineHit[] = []
       for (const hit of raw) {
         const point = (hit as { pointOnLine?: Vector3 }).pointOnLine
@@ -209,7 +213,7 @@ export function SeamLines({ partRef }: { partRef: RefObject<Mesh | null> }) {
       element.removeEventListener('pointerdown', onDown)
       element.removeEventListener('click', onClick)
     }
-  }, [gl, camera, base, built.segmentSeam, seams, partRef])
+  }, [gl, camera, base, built.segmentSeam, seams, partRef, xray])
 
   return (
     <>

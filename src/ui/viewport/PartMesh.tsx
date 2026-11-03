@@ -3,11 +3,13 @@ import { DoubleSide, type Mesh } from 'three'
 import { useStore } from '../../state/store'
 import { cssVar } from './cssVar'
 import { buildDisplayGeometry } from './displayGeometry'
+import { xrayMaterial } from './xray'
 
 export function PartMesh({ ref }: { ref?: Ref<Mesh> }) {
   const display = useStore((s) => s.display)
   const geometry = useMemo(() => (display ? buildDisplayGeometry(display) : null), [display])
   const color = useMemo(() => cssVar('--part'), [])
+  const material = xrayMaterial(useStore((s) => s.xray))
 
   useEffect(
     () => () => {
@@ -24,6 +26,9 @@ export function PartMesh({ ref }: { ref?: Ref<Mesh> }) {
         color={color}
         flatShading
         side={DoubleSide}
+        opacity={material.opacity}
+        transparent={material.transparent}
+        depthWrite={material.depthWrite}
         roughness={0.85}
         metalness={0.05}
         polygonOffset

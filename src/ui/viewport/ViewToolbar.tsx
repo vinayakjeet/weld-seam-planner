@@ -6,6 +6,8 @@ import { useStore } from '../../state/store'
 export function ViewToolbar() {
   const colourBy = useStore((s) => s.colourBy)
   const setColourBy = useStore((s) => s.setColourBy)
+  const xray = useStore((s) => s.xray)
+  const toggleXray = useStore((s) => s.toggleXray)
   const byAccess = colourBy === 'access'
   return (
     <div className="absolute bottom-3 left-3 z-10 flex flex-col items-start gap-1.5" role="toolbar" aria-label="View">
@@ -19,6 +21,18 @@ export function ViewToolbar() {
           ))}
         </ul>
       )}
+      <div className="flex gap-1.5">
+      <button
+        type="button"
+        aria-pressed={xray}
+        onClick={toggleXray}
+        title="See through the part to the seams inside it (X)"
+        className={`h-7 rounded-sm border px-2.5 text-[11px] font-medium outline-none focus-visible:ring-1 focus-visible:ring-brand ${
+          xray ? 'border-brand bg-brand/20 text-ink-0' : 'border-line bg-surface-1/90 text-ink-1 hover:border-ink-2'
+        }`}
+      >
+        X-ray
+      </button>
       <button
         type="button"
         aria-pressed={byAccess}
@@ -30,6 +44,7 @@ export function ViewToolbar() {
       >
         Colour by access
       </button>
+      </div>
     </div>
   )
 }

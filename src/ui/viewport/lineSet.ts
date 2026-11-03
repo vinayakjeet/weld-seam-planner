@@ -29,7 +29,6 @@ export function lineSet(positions: Float32Array, { width, colors, color, renderO
   if (overlay) {
     material.depthTest = false
     material.transparent = true
-    material.opacity = 0.85
   }
   if (dashed) {
     material.dashed = true

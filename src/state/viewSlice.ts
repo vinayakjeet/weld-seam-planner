@@ -7,9 +7,14 @@ export type ColourBy = 'status' | 'access'
 export interface ViewSlice {
   colourBy: ColourBy
   setColourBy: (colourBy: ColourBy) => void
+  // The part drawn see-through, with the seams drawn on top of it.
+  xray: boolean
+  toggleXray: () => void
 }
 
 export const createViewSlice: StateCreator<AppState, [], [], ViewSlice> = (set) => ({
   colourBy: 'status',
   setColourBy: (colourBy) => set((state) => (state.colourBy === colourBy ? state : { colourBy })),
+  xray: false,
+  toggleXray: () => set((state) => ({ xray: !state.xray })),
 })

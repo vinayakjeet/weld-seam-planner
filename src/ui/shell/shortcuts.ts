@@ -7,6 +7,7 @@ export type Shortcut =
   | 'reverse'
   | 'remove'
   | 'play'
+  | 'xray'
   // Keys of the draw tool; they only do something while a tool is armed.
   | 'finish'
   | 'cancel'
@@ -32,7 +33,7 @@ function isTextEntry(target: KeyEventLike['target']): boolean {
   return tag === 'INPUT' && !NON_TEXT_INPUTS.has((target.type ?? 'text').toLowerCase())
 }
 
-const LETTER_KEYS: Record<string, Shortcut | undefined> = { f: 'fit', d: 'draw', s: 'split', r: 'reverse' }
+const LETTER_KEYS: Record<string, Shortcut | undefined> = { f: 'fit', d: 'draw', s: 'split', r: 'reverse', x: 'xray' }
 
 // Enter on a focused button or link activates it; taking the key would leave the button dead.
 function isActivatable(target: KeyEventLike['target']): boolean {
