@@ -48,6 +48,8 @@ export function armContacts(chain: ArmChain, arm: ArmParams, near: Proximity, ra
 }
 
 export const PUSH_ITERATIONS = 30
+// A rung is dropped after this many rounds in a row in which the deepest contact did not shrink by half a millimetre.
+export const PUSH_STALE_ROUNDS = 3
 // Share of the deepest contact removed per round; a full push throws the chain far enough that FABRIK often cannot settle.
 const PUSH_FRACTION = 0.5
 
@@ -57,12 +59,14 @@ export type ArmSolution =
   | { ok: true; chain: ArmChain; tipErrorMm: number; axisErrorDeg: number; iterations: number }
   | { ok: false; reason: ArmFailure; chain: ArmChain | null; iterations: number }
 
-// Three active link counts to try, starting with the fewest that span the wrist distance. A longer chain has slack to
-// buckle around an obstacle, which a chain stretched straight does not.
+// Active link counts to try: the count that spans the wrist distance, the one below it (the straight part makes up the
+// difference, so a wrist a hair past a whole number of links is a straight reach, where the longer chain would have to be
+// folded into a shorter span) and two above it. A longer chain has slack to buckle around an obstacle, which a chain
+// stretched straight does not.
 export function linkLadder(port: Port, goal: WristGoal, arm: ArmParams): number[] {
   const distance = length(sub(goal.wrist, port.position))
-  const first = Math.min(Math.max(Math.ceil(distance / arm.linkLengthMm), 1), arm.links)
-  return [first, first + 1, first + 2].filter((n) => n <= arm.links)
+  const spanning = Math.min(Math.max(Math.ceil(distance / arm.linkLengthMm), 1), arm.links)
+  return [spanning - 1, spanning, spanning + 1, spanning + 2].filter((n) => n >= 1 && n <= arm.links)
 }
 
 const ESCAPE_STEPS = 8
@@ -138,21 +142,35 @@ export function solveArm(port: Port, goal: WristGoal, arm: ArmParams, near: Prox
   if (arm.diameterMm > port.diameterMm) return { ok: false, reason: 'port-too-small', chain: null, iterations: 0 }
 
   const radius = capsuleRadius(arm)
+  // The wrist is the last joint of every chain, so a wrist inside the capsule radius is a contact no push can remove.
+  const wristHit = near(goal.wrist, radius)
+  if (wristHit && wristHit.distanceMm < radius) return { ok: false, reason: 'collision', chain: null, iterations: 0 }
+
   const axis = normalize(port.direction)
   const startLinks = start ? start.joints.length - 2 : -1
   const ladder = linkLadder(port, goal, arm)
-  const rungs = startLinks >= 1 && startLinks <= arm.links ? [startLinks, ...ladder.filter((n) => n !== startLinks)] : ladder
+  // The warm rung goes first and does not use up its link count: if the refinement of the start fails, the same count is
+  // tried again from cold starts, which often succeed where the neighbouring station's shape is a poor start.
+  const warmRung = startLinks >= 1 && startLinks <= arm.links ? [{ links: startLinks, warm: true }] : []
+  const rungs = [...warmRung, ...ladder.map((links) => ({ links, warm: false }))]
 
   let iterations = 0
   let last: ArmSolution = { ok: false, reason: 'no-convergence', chain: null, iterations: 0 }
-  for (const links of rungs) {
-    let chain = links === startLinks ? start : undefined
+  for (const { links, warm } of rungs) {
+    let chain = warm ? start : undefined
+    let bestDepth = Infinity
+    let stale = 0
     for (let round = 0; round < PUSH_ITERATIONS; round++) {
       iterations++
       const solved = fabrik(port, goal, arm, links, chain)
       const current = solved.chain
       if (current === null) return { ok: false, reason: solved.ok ? 'no-convergence' : solved.reason, chain: null, iterations }
 
+      // A miss of more than a link is the bend limit, not the part: pushing joints away from the surface cannot fix it.
+      if (!solved.ok && solved.tipErrorMm > arm.linkLengthMm) {
+        last = { ok: false, reason: 'no-convergence', chain: current, iterations }
+        break
+      }
       const contacts = armContacts(current, arm, near, radius)
       if (contacts.length === 0) {
         if (solved.ok) return { ok: true, chain: current, tipErrorMm: solved.tipErrorMm, axisErrorDeg: solved.axisErrorDeg, iterations }
@@ -160,6 +178,11 @@ export function solveArm(port: Port, goal: WristGoal, arm: ArmParams, near: Prox
         break
       }
       last = { ok: false, reason: 'collision', chain: current, iterations }
+      const deepest = Math.max(...contacts.map((c) => c.depthMm))
+      if (deepest < bestDepth - 0.5) {
+        bestDepth = deepest
+        stale = 0
+      } else if (++stale >= PUSH_STALE_ROUNDS) break
       chain = pushOut(current, contacts, axis, near, radius)
     }
   }

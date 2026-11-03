@@ -134,6 +134,21 @@ export type JobIssue = z.output<typeof issueSchema>
 
 export const seamPointSchema = z.looseObject({ s: nonNegative, p: vec3Schema, t: vec3Schema, n1: vec3Schema, n2: vec3Schema })
 
+export const portSchema = z.looseObject({ id: z.string().min(1), position: vec3Schema, direction: vec3Schema, diameterMm: positiveNum })
+
+export type JobPort = z.output<typeof portSchema>
+
+// The spec lists five arm fields; insertionMm and clearanceMm are the planner's own and default when a file has none.
+export const armSchema = z.looseObject({
+  links: z.int().min(1),
+  linkLengthMm: positiveNum,
+  diameterMm: positiveNum,
+  maxBendDeg: positiveNum,
+  torchLengthMm: nonNegative,
+  insertionMm: nonNegative.default(500),
+  clearanceMm: nonNegative.default(10),
+})
+
 export const seamAccessSchema = z.looseObject({
   clearanceDeg: num.nullable(),
   // Free cone half-angle out to 60 mm; null in files written before the field existed.
@@ -274,8 +289,8 @@ export const jobSchema = z
       .meta({ description: 'Strategy used, ordered seam list with direction, air moves.' }),
     access: z
       .looseObject({
-        ports: z.array(z.looseObject({ id: z.string().min(1), position: vec3Schema, direction: vec3Schema, diameterMm: positiveNum })),
-        arm: z.looseObject({}).nullable(),
+        ports: z.array(portSchema),
+        arm: armSchema.nullable(),
       })
       .meta({ description: 'Access ports and snake-arm parameters used for reach analysis.' }),
     summary: z

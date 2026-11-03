@@ -10,7 +10,7 @@ import { reconcileOrder } from '../sequence/order'
 import { resolveSeam, torchParamsFor, type Explained, type Plan, type PlannedSeam } from './plan'
 import type { PlanTiming } from './timing'
 import { preflight, toJobIssue, type Issue } from './preflight'
-import { FRAME_CONVENTION, JOB_UNITS, jobSchema, SCHEMA_URL, type JobIssue, type WeldJob } from './schema'
+import { FRAME_CONVENTION, JOB_UNITS, jobSchema, SCHEMA_URL, type JobIssue, type SeamAccess, type WeldJob } from './schema'
 
 export const GENERATOR = { name: 'Weld Seam Planner', version: '1.0.0' }
 
@@ -65,6 +65,17 @@ export interface BuiltSeam {
 
 // The Reverse tool gives the seam a new id and marks it manual; travelling a seam the other way needs neither.
 export const travelledBackwards = (seam: SeamCandidate): SeamCandidate => ({ ...reverseSeam(seam), id: seam.id, source: seam.source })
+
+const NO_ACCESS: SeamAccess = { clearanceDeg: null, nearClearanceDeg: null, class: null, portId: null, reachCoverage: null, unreachable: [] }
+
+// The unreachable intervals are measured along the stored seam, while poses and s run along the travel direction, so a
+// seam travelled backwards gets each [a, b] as [L - b, L - a], in ascending order.
+function accessOut(access: SeamAccess | null, lengthMm: number, backwards: boolean): SeamAccess {
+  if (access === null) return NO_ACCESS
+  if (!backwards) return access
+  const unreachable = access.unreachable.map(([a, b]): [number, number] => [r3(lengthMm - b), r3(lengthMm - a)]).sort((x, y) => x[0] - y[0])
+  return { ...access, unreachable }
+}
 
 // A seam is built along its travel direction: poses, start and end follow it, while points stay as stored so that an
 // imported file restores the seam itself and the order says which way it was welded.
@@ -136,7 +147,7 @@ function buildSeam(plan: Plan, planned: PlannedSeam, issues: JobIssue[], reverse
       touch: [scale(mid.n1, -1), scale(mid.n2, -1)].map((direction) => ({ direction: vec(direction, 6), searchMm: SENSING_SEARCH_MM })),
       seamTracking: procedure?.process === 'GTAW' ? 'none' : 'through-arc',
     },
-    access: planned.access ?? { clearanceDeg: null, nearClearanceDeg: null, class: null, portId: null, reachCoverage: null, unreachable: [] },
+    access: accessOut(planned.access, lengthMm, backwards),
     estimates: {
       arcTimeS: r1(est.arcTimeS),
       heatInputKJmm: r3(resolved.heatInputKJmm ?? 0),
@@ -209,6 +220,24 @@ export function buildOrdered(plan: Plan, issues: JobIssue[] = []): BuiltSeam[] {
   return reconcileOrder(plan.sequence.order, plan.seams.map((p) => p.seam.id)).map((entry) => buildSeam(plan, byId.get(entry.seamId)!, issues, entry.reversed))
 }
 
+// The arm is written only when at least one port exists, so files for parts without ports stay as they were.
+function accessSection(plan: Plan): WeldJob['access'] {
+  const { ports, arm } = plan.access
+  if (ports.length === 0) return { ports: [], arm: null }
+  return {
+    ports: ports.map((port) => ({ id: port.id, position: port.position, direction: port.direction, diameterMm: port.diameterMm })),
+    arm: {
+      links: arm.links,
+      linkLengthMm: arm.linkLengthMm,
+      diameterMm: arm.diameterMm,
+      maxBendDeg: arm.maxBendDeg,
+      torchLengthMm: arm.torchLengthMm,
+      insertionMm: arm.insertionMm,
+      clearanceMm: arm.clearanceMm,
+    },
+  }
+}
+
 export function buildJob(plan: Plan, options: { createdAt: string }, issues: JobIssue[] = []): WeldJob {
   const { part, settings, gravity } = plan
   const built = buildOrdered(plan, issues)
@@ -253,7 +282,7 @@ export function buildJob(plan: Plan, options: { createdAt: string }, issues: Job
       order: built.map((b) => ({ seamId: b.seam.id, reversed: b.reversed })),
       airMoves: timing.moves.map((m) => ({ from: m.from, to: m.to, lengthMm: r3(m.lengthMm) })),
     },
-    access: { ports: [], arm: null },
+    access: accessSection(plan),
     summary: {
       seamCount: built.length,
       weldLengthMm: r3(sum((b) => b.seam.lengthMm)),

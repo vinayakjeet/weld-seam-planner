@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { buildJob } from '../../../src/core/job/build'
 import { importJob } from '../../../src/core/job/importJob'
 import type { Explained, Plan } from '../../../src/core/job/plan'
+import { DEFAULT_ARM, type Port } from '../../../src/core/snake/arm'
 import { splitSeam } from '../../../src/core/seams/manual'
 import { CREATED_AT, samplePlan, specExamplePlan } from '../helpers/jobs'
 
@@ -167,5 +168,28 @@ describe('round trip', () => {
     const { text, again } = roundTrip(plan)
     expect(again).toBe(text)
     expect(JSON.parse(text).seams[3].legMm).toBe(7)
+  })
+})
+
+describe('importJob access', () => {
+  const P1: Port = { id: 'P1', position: [400, 500, 1000], direction: [0, 0, -1], diameterMm: 600 }
+  const arm = { ...DEFAULT_ARM, maxBendDeg: 25 }
+
+  it('round trips the ports and the arm', () => {
+    const job = buildJob({ ...spec(), access: { ports: [P1], arm } }, opts)
+    const result = importJob(JSON.parse(JSON.stringify(job)), 'a'.repeat(64))
+    expect(result.status).toBe('ok')
+    if (result.status !== 'ok') return
+    expect(result.plan.access).toEqual({ ports: [P1], arm })
+  })
+
+  it('imports the default arm when the file has none, and the ports as given', () => {
+    const job = JSON.parse(JSON.stringify(buildJob({ ...spec(), access: { ports: [], arm: DEFAULT_ARM } }, opts)))
+    expect(job.access.arm).toBeNull()
+    job.access.ports = [P1]
+    const result = importJob(job, 'a'.repeat(64))
+    expect(result.status).toBe('ok')
+    if (result.status !== 'ok') return
+    expect(result.plan.access).toEqual({ ports: [P1], arm: DEFAULT_ARM })
   })
 })

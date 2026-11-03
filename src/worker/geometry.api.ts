@@ -28,6 +28,12 @@ import { isManualError } from '../core/seams/manual'
 import { probeFromBvhs, seamThickness } from '../core/seams/thickness'
 import { torchPoses, type TorchParams, type TorchPose } from '../core/torch/frames'
 import { gravityProblem, seamPosition, type Gravity, type SeamPosition } from '../core/torch/positions'
+import type { ArmParams, Port } from '../core/snake/arm'
+import { proximityFromBvh, solveArm } from '../core/snake/collision'
+import { approachGoal, insertion as insertArm, type InsertionFrame } from '../core/snake/ftl'
+import { seamReach, type SeamReach } from '../core/snake/reach'
+import { rotate } from '../core/math/quat'
+import { poseAt, DEFAULT_TORCH } from '../core/torch/frames'
 
 export type { DetectSettings, DrawClick, SeamCandidate, Units }
 
@@ -37,7 +43,7 @@ export interface UserError {
   next: string
 }
 
-export type Stage = 'read' | 'weld' | 'topology' | 'index' | 'contact' | 'detect' | 'access'
+export type Stage = 'read' | 'weld' | 'topology' | 'index' | 'contact' | 'detect' | 'access' | 'reach'
 
 // fraction is the overall progress of the current call, 0 to 1, and never decreases.
 export type Progress = (stage: Stage, fraction: number) => void
@@ -93,6 +99,12 @@ export type AccessOutcome =
   | { status: 'ok'; results: Record<string, AccessAnalysis>; ms: number }
   | { status: 'error'; error: UserError }
 
+export type ReachOutcome =
+  | { status: 'ok'; results: Record<string, SeamReach>; ms: number }
+  | { status: 'error'; error: UserError }
+
+export type InsertionOutcome = { status: 'ok'; frames: InsertionFrame[] } | { status: 'error'; error: UserError }
+
 export type ExportOutcome = ExportResult
 
 export interface GeometryApi {
@@ -108,6 +120,10 @@ export interface GeometryApi {
   torchPoses(seam: SeamCandidate, params: TorchParams): Promise<TorchPosesOutcome>
   // Free torch cone of every seam, keyed by seam id. Needs the loaded part: it casts rays against the whole mesh.
   access(seams: SeamCandidate[], onProgress: Progress): Promise<AccessOutcome>
+  // Snake-arm reach of every seam from the ports, keyed by seam id. Needs the loaded part: the arm is kept off its surface.
+  reach(seams: SeamCandidate[], ports: Port[], arm: ArmParams, onProgress: Progress): Promise<ReachOutcome>
+  // The arm entering follow-the-leader through the port to the approach point of the torch pose at arc length s.
+  insertion(seam: SeamCandidate, s: number, port: Port, arm: ArmParams, approachMm: number): Promise<InsertionOutcome>
   // Both read only the plan they are given, so they need no part in the worker.
   preflight(plan: Plan): Promise<PreflightOutcome>
   exportJob(plan: Plan, createdAt: string): Promise<ExportOutcome>
@@ -351,6 +367,77 @@ export function createGeometryApi(): GeometryApi {
           report('access', (i + 1) / seams.length)
         })
         return { status: 'ok', results, ms: performance.now() - start }
+      } catch (error) {
+        return { status: 'error', error: toUserError(error) }
+      }
+    },
+
+    async reach(seams, ports, arm, onProgress) {
+      if (!current) {
+        return {
+          status: 'error',
+          error: {
+            what: 'There is no part to run the snake arm reach on.',
+            why: 'The reach check keeps the arm off the surface of the part and none has been loaded in this session.',
+            next: 'Choose an STL file or a sample, then run reach again.',
+          },
+        }
+      }
+      if (ports.length === 0) {
+        return {
+          status: 'error',
+          error: {
+            what: 'There is no access port to run the reach from.',
+            why: 'The snake arm enters the part through a port, so without one nothing can be reached.',
+            next: 'Add a port on the part where the arm can enter, then run reach again.',
+          },
+        }
+      }
+      const report = reporter(onProgress)
+      try {
+        const start = performance.now()
+        report('reach', 0)
+        accessBvh ??= buildWholeBvh(current)
+        const near = proximityFromBvh(accessBvh.bvh)
+        const results: Record<string, SeamReach> = {}
+        seams.forEach((seam, i) => {
+          results[seam.id] = seamReach(seam, ports, arm, near)
+          report('reach', (i + 1) / seams.length)
+        })
+        return { status: 'ok', results, ms: performance.now() - start }
+      } catch (error) {
+        return { status: 'error', error: toUserError(error) }
+      }
+    },
+
+    async insertion(seam, s, port, arm, approachMm) {
+      if (!current) {
+        return {
+          status: 'error',
+          error: {
+            what: 'There is no part to insert the arm into.',
+            why: 'The insertion keeps the arm off the surface of the part and none has been loaded in this session.',
+            next: 'Choose an STL file or a sample, then try again.',
+          },
+        }
+      }
+      try {
+        accessBvh ??= buildWholeBvh(current)
+        const near = proximityFromBvh(accessBvh.bvh)
+        const poses = torchPoses(seam.points, seam.closed, DEFAULT_TORCH)
+        const pose = poseAt(poses, s, seam.closed)
+        const solved = solveArm(port, approachGoal(pose.p, rotate(pose.q, [0, 0, 1]), arm, approachMm), arm, near)
+        if (!solved.ok) {
+          return {
+            status: 'error',
+            error: {
+              what: `The arm cannot reach seam ${seam.label} at ${Math.round(s)} mm from port ${port.id}.`,
+              why: 'No chain of the arm gets the torch to its approach point there without touching the part or bending past its limit.',
+              next: 'Pick a stretch that reach shows as reached, or move the port.',
+            },
+          }
+        }
+        return { status: 'ok', frames: insertArm(port, solved.chain, arm) }
       } catch (error) {
         return { status: 'error', error: toUserError(error) }
       }

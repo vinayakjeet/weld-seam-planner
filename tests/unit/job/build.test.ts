@@ -7,6 +7,7 @@ import { rotate } from '../../../src/core/math/quat'
 import { length, sub, type Vec3 } from '../../../src/core/math/vec3'
 import { torchPoses } from '../../../src/core/torch/frames'
 import { WPS_PRESETS } from '../../../src/core/process/wps'
+import { DEFAULT_ARM, type Port } from '../../../src/core/snake/arm'
 import { CREATED_AT, samplePlan, specExamplePlan } from '../helpers/jobs'
 
 const opts = { createdAt: CREATED_AT }
@@ -392,5 +393,55 @@ describe('access in the job', () => {
     plan.seams[0]!.access = found
     const r = jobSchema.safeParse(JSON.parse(JSON.stringify(buildJob(plan, opts))))
     expect(r.success).toBe(true)
+  })
+})
+
+describe('buildJob access section', () => {
+  const P1: Port = { id: 'P1', position: [400, 500, 1000], direction: [0, 0, -1], diameterMm: 600 }
+  const snake = { clearanceDeg: 0, nearClearanceDeg: 45, class: 'snake' as const, portId: 'P1', reachCoverage: 0.667, unreachable: [[10, 30]] as Array<[number, number]> }
+
+  it('writes the ports and the seven arm fields when a port exists', () => {
+    const job = buildJob({ ...specExamplePlan(), access: { ports: [P1], arm: DEFAULT_ARM } }, opts)
+    expect(job.access.ports).toEqual([P1])
+    expect(job.access.arm).toEqual(DEFAULT_ARM)
+    expect(Object.keys(job.access.arm!)).toHaveLength(7)
+  })
+
+  it('writes empty ports and a null arm when there is no port', () => {
+    const job = buildJob({ ...specExamplePlan(), access: { ports: [], arm: DEFAULT_ARM } }, opts)
+    expect(job.access).toEqual({ ports: [], arm: null })
+  })
+
+  it('copies the port, the coverage and the unreachable intervals of a seam', () => {
+    const plan = specExamplePlan()
+    plan.seams[0] = { ...plan.seams[0]!, access: snake }
+    const job = buildJob({ ...plan, access: { ports: [P1], arm: DEFAULT_ARM } }, opts)
+    expect(job.seams[0]!.access).toMatchObject({ portId: 'P1', reachCoverage: 0.667, unreachable: [[10, 30]] })
+  })
+
+  it('maps the intervals of a reversed open 100 mm seam onto the travel direction', () => {
+    const base = specExamplePlan([{ id: 's1', from: [0, 0, 0], to: [100, 0, 0] }])
+    const plan: Plan = {
+      ...base,
+      seams: [{ ...base.seams[0]!, access: snake }],
+      sequence: { strategy: 'table-order', order: [{ seamId: 's1', reversed: true }] },
+      access: { ports: [P1], arm: DEFAULT_ARM },
+    }
+    const job = buildJob(plan, opts)
+    expect(job.seams[0]!.direction).toBe('reverse')
+    expect(job.seams[0]!.access.unreachable).toEqual([[70, 90]])
+  })
+
+  it('keeps the intervals of a seam travelled forward', () => {
+    const plan = specExamplePlan()
+    plan.seams[0] = { ...plan.seams[0]!, access: snake }
+    const forward = { ...plan, access: { ports: [P1], arm: DEFAULT_ARM } }
+    expect(buildJob(forward, opts).seams[0]!.access.unreachable).toEqual([[10, 30]])
+  })
+
+  it('passes the job schema with a port', () => {
+    const job = buildJob({ ...specExamplePlan(), access: { ports: [P1], arm: DEFAULT_ARM } }, opts)
+    const r = jobSchema.safeParse(JSON.parse(JSON.stringify(job)))
+    expect(r.success, r.success ? '' : JSON.stringify(r.error.issues.slice(0, 3))).toBe(true)
   })
 })

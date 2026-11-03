@@ -1,7 +1,7 @@
 import { BufferAttribute, BufferGeometry, Vector3 } from 'three'
 import { MeshBVH } from 'three-mesh-bvh'
 import { describe, expect, it, vi } from 'vitest'
-import { length, sub, type Vec3 } from '../../../src/core/math/vec3'
+import type { Vec3 } from '../../../src/core/math/vec3'
 import { DEFAULT_ARM, bendAngles, capsuleRadius, type ArmChain, type Port } from '../../../src/core/snake/arm'
 import {
   PUSH_ITERATIONS,
@@ -12,43 +12,9 @@ import {
   type Proximity,
 } from '../../../src/core/snake/collision'
 import { AXIS_TOLERANCE_DEG, TIP_TOLERANCE_MM, fabrik } from '../../../src/core/snake/fabrik'
+import { boxProximity, nearest, plane } from '../helpers/snake'
 
 const RADIUS = capsuleRadius(DEFAULT_ARM)
-
-// Closest point on the surface of a solid axis aligned box, or null beyond maxMm.
-function boxProximity(min: Vec3, max: Vec3): Proximity {
-  return (p, maxMm) => {
-    const clamped = p.map((v, c) => Math.min(Math.max(v, min[c]!), max[c]!)) as Vec3
-    let point = clamped
-    if (clamped.every((v, c) => v === p[c])) {
-      // Inside: the nearest face.
-      let best = Infinity
-      for (let c = 0; c < 3; c++) {
-        for (const face of [min[c]!, max[c]!]) {
-          const d = Math.abs(p[c]! - face)
-          if (d < best) {
-            best = d
-            point = [...p] as Vec3
-            point[c] = face
-          }
-        }
-      }
-    }
-    const distanceMm = length(sub(p, point))
-    return distanceMm <= maxMm ? { point, distanceMm } : null
-  }
-}
-
-const nearest = (...proximities: Proximity[]): Proximity => (p, maxMm) => {
-  let best: ReturnType<Proximity> = null
-  for (const near of proximities) {
-    const hit = near(p, maxMm)
-    if (hit && (!best || hit.distanceMm < best.distanceMm)) best = hit
-  }
-  return best
-}
-
-const plane: Proximity = (p, maxMm) => (Math.abs(p[2]) <= maxMm ? { point: [p[0], p[1], 0], distanceMm: Math.abs(p[2]) } : null)
 
 function straightAlongX(z: number, links = 4): ArmChain {
   const joints: Vec3[] = [[0, 0, z], [0, 0, z]]
@@ -107,13 +73,21 @@ describe('proximityFromBvh', () => {
 })
 
 describe('linkLadder', () => {
-  it('starts at the links that span the wrist distance and goes up by one, capped at the arm', () => {
+  it('starts one link below the count that spans the wrist distance and goes up by two, within 1 and the arm', () => {
     const goal = { wrist: [1300, 0, 0] as Vec3, toolZ: [1, 0, 0] as Vec3 }
-    expect(linkLadder(portX(), goal, DEFAULT_ARM)).toEqual([9, 10, 11])
+    expect(linkLadder(portX(), goal, DEFAULT_ARM)).toEqual([8, 9, 10, 11])
     const far = { wrist: [3500, 0, 0] as Vec3, toolZ: [1, 0, 0] as Vec3 }
-    expect(linkLadder(portX(), far, DEFAULT_ARM)).toEqual([24])
+    expect(linkLadder(portX(), far, DEFAULT_ARM)).toEqual([23, 24])
     const here = { wrist: [0, 0, 0] as Vec3, toolZ: [1, 0, 0] as Vec3 }
     expect(linkLadder(portX(), here, DEFAULT_ARM)).toEqual([1, 2, 3])
+  })
+
+  // The straight part makes up the difference, so a wrist a hair past a whole number of links is a straight reach with
+  // one link fewer, not a 5 link chain folded into 600 mm.
+  it('offers the exact fit for a wrist just past a whole number of links', () => {
+    const goal = { wrist: [600.3, 0, 0] as Vec3, toolZ: [1, 0, 0] as Vec3 }
+    expect(linkLadder(portX(), goal, DEFAULT_ARM)).toContain(4)
+    expect(solveArm(portX(), goal, DEFAULT_ARM, () => null).ok).toBe(true)
   })
 })
 
@@ -160,6 +134,40 @@ describe('solveArm', () => {
     expect(['collision', 'no-convergence']).toContain(result.reason)
     expect(result.iterations).toBeLessThanOrEqual(3 * PUSH_ITERATIONS)
     if (result.chain) for (const joint of result.chain.joints) expect(joint.every(Number.isFinite)).toBe(true)
+  })
+
+  it('gives up a rung once the deepest contact has stopped shrinking', () => {
+    const at: Vec3 = [1000, 0, 0]
+    const walls = [
+      boxProximity([790, -210, -210], [800, 210, 210]),
+      boxProximity([1200, -210, -210], [1210, 210, 210]),
+      boxProximity([790, -210, -210], [1210, -200, 210]),
+      boxProximity([790, 200, -210], [1210, 210, 210]),
+      boxProximity([790, -210, -210], [1210, 210, -200]),
+      boxProximity([790, -210, 200], [1210, 210, 210]),
+    ]
+    const result = solveArm(portX(), { wrist: at, toolZ: [1, 0, 0] }, DEFAULT_ARM, nearest(...walls))
+    expect(result.ok).toBe(false)
+    // Three rungs of up to 30 rounds each would be 90; giving up after stale rounds keeps the whole ladder under one rung's cap.
+    expect(result.iterations).toBeLessThanOrEqual(PUSH_ITERATIONS)
+  })
+
+  it('does not push a rung whose chain misses the goal by more than a link', () => {
+    // Every sample ahead of the port is in contact, and the wrist behind the port cannot be reached by an arm that can
+    // only bend 18 degrees per joint: pushing cannot help, so each rung of the ladder gets one round.
+    const ahead: Proximity = (p) => (p[0] > 0 ? { point: [p[0], p[1] + 10, p[2]], distanceMm: 10 } : null)
+    const behind = { wrist: [-300, 0, 0] as Vec3, toolZ: [1, 0, 0] as Vec3 }
+    const rungs = linkLadder(portX(), behind, DEFAULT_ARM).length
+    const result = solveArm(portX(), behind, DEFAULT_ARM, ahead)
+    expect(result.ok).toBe(false)
+    expect(result.iterations).toBeLessThanOrEqual(rungs)
+  })
+
+  it('rejects at once a wrist closer to the part than the capsule radius, with one query', () => {
+    const spy = vi.fn(plane)
+    const result = solveArm(portX(), { wrist: [800, 0, RADIUS - 5], toolZ: [1, 0, 0] }, DEFAULT_ARM, spy)
+    expect(result).toMatchObject({ ok: false, reason: 'collision', chain: null, iterations: 0 })
+    expect(spy).toHaveBeenCalledTimes(1)
   })
 
   it('checks the port before any query', () => {

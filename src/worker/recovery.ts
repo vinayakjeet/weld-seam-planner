@@ -116,6 +116,19 @@ export function createRecoveringClient(spawn: (onDead: () => void) => GeometryCl
       return lost ?? target.access(seams, onProgress)
     },
 
+    // Reach and insertion keep the arm off the part, so a replacement worker gets the part back first.
+    async reach(seams, ports, arm, onProgress) {
+      const target = current()
+      const lost = await restoreFailure(target)
+      return lost ?? target.reach(seams, ports, arm, onProgress)
+    },
+
+    async insertion(seam, s, port, arm, approachMm) {
+      const target = current()
+      const lost = await restoreFailure(target)
+      return lost ?? target.insertion(seam, s, port, arm, approachMm)
+    },
+
     preflight: (plan) => current().preflight(plan),
 
     exportJob: (plan, createdAt) => current().exportJob(plan, createdAt),

@@ -5,6 +5,7 @@ import { depositionTravelMmMin, travelSpeedCheck } from '../process/travelSpeed'
 import { resolveProcedure } from '../process/wps'
 import { DEFAULT_DETECT_SETTINGS, type SeamCandidate } from '../seams/detect'
 import type { SequenceStrategy } from '../sequence/types'
+import type { ArmParams, Port } from '../snake/arm'
 import { DEFAULT_TORCH, type TorchParams } from '../torch/frames'
 import type { Procedure, ProcedureOverrides, SeamAccess } from './schema'
 
@@ -62,6 +63,8 @@ export interface Plan {
   procedures: Procedure[]
   seams: PlannedSeam[]
   sequence: PlanSequence | null
+  // Access ports and the snake arm used for reach analysis; the arm is exported only when a port exists.
+  access: { ports: Port[]; arm: ArmParams }
 }
 
 // A drag technique leans the torch back along travel, which is a negative travel angle.

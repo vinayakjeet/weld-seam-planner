@@ -1,6 +1,7 @@
 import { type JobPart, type Plan, type PlannedSeam } from '../core/job/plan'
 import { meshWarnings, type MeshWarning } from '../core/mesh/health'
 import { reconcileOrder, type OrderEntry } from '../core/sequence/order'
+import { DEFAULT_ARM } from '../core/snake/arm'
 import type { SeamCandidate } from '../core/seams/detect'
 import { accessFor } from './accessSlice'
 import type { AppState } from './store'
@@ -90,6 +91,9 @@ export function plannedSeam(state: PlanFields, seam: SeamCandidate): PlannedSeam
   }
 }
 
+// Ports and the arm come from the store in a later task; until then every plan has no port.
+const NO_ACCESS: Plan['access'] = { ports: [], arm: DEFAULT_ARM }
+
 let cachedPlan: { deps: readonly unknown[]; plan: Plan } | null = null
 let cachedOrder: { order: AppState['order']; ids: readonly string[]; result: OrderEntry[] } | null = null
 
@@ -130,6 +134,7 @@ export function selectPlan(state: AppState): Plan {
     procedures: state.procedures,
     seams,
     sequence: null,
+    access: NO_ACCESS,
   }
   // An untouched sequence leaves the plan in table order; once there is a stored order the plan carries it.
   if (state.order.length > 0) {

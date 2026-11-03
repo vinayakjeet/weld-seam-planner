@@ -3,6 +3,7 @@ import { pointsFromPolyline } from '../../../src/core/seams/frames'
 import { DEFAULT_DETECT_SETTINGS, detectSeams, type SeamCandidate } from '../../../src/core/seams/detect'
 import { DEFAULT_JOB_SETTINGS, type Plan, type PlannedSeam } from '../../../src/core/job/plan'
 import { WPS_PRESETS } from '../../../src/core/process/wps'
+import { DEFAULT_ARM } from '../../../src/core/snake/arm'
 import type { Vec3 } from '../../../src/core/math/vec3'
 import { scaleToMm } from '../../../src/core/mesh/units'
 import { loadSampleModel } from './models'
@@ -34,6 +35,7 @@ export function samplePlan(id: string, edit?: (plan: Plan) => Plan): Plan {
     procedures: structuredClone([...WPS_PRESETS]),
     seams,
     sequence: null,
+    access: { ports: [], arm: DEFAULT_ARM },
   }
   return edit ? edit(plan) : plan
 }
@@ -69,6 +71,7 @@ export function specExamplePlan(seams: StraightSeam[] = [{ id: 's07', from: [120
     procedures: structuredClone([...WPS_PRESETS]),
     seams: seams.map((s) => ({ seam: straightSeam(s), procedureId: SPRAY_ID, overrides: {}, legMm: null, access: null })),
     sequence: null,
+    access: { ports: [], arm: DEFAULT_ARM },
   }
 }
 

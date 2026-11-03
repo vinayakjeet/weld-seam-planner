@@ -44,6 +44,24 @@ describe('jobSchema', () => {
     expect(r.success && r.data.seams[0]!.access.nearClearanceDeg).toBe(45)
   })
 
+  it('reads the five field arm of the spec example with insertionMm 500 and clearanceMm 10', () => {
+    const r = jobSchema.safeParse(example)
+    expect(r.success && r.data.access.arm).toEqual({
+      links: 24,
+      linkLengthMm: 150,
+      diameterMm: 80,
+      maxBendDeg: 18,
+      torchLengthMm: 250,
+      insertionMm: 500,
+      clearanceMm: 10,
+    })
+  })
+
+  it('accepts a null arm and rejects a fractional link count, naming the field', () => {
+    expect(jobSchema.safeParse(changed([['access', 'arm'], null])).success).toBe(true)
+    expect(failingPaths(changed([['access', 'arm', 'links'], 2.5]))).toContain('access.arm.links')
+  })
+
   it('rejects a quaternion of 3 numbers, naming the field', () => {
     const j = changed([['seams', 0, 'poses', 0, 'quaternion'], [0, 0, 1]])
     expect(failingPaths(j)).toContain('seams.0.poses.0.quaternion')

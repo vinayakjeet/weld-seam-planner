@@ -86,29 +86,44 @@ export interface AccessAnalysis {
   stations: AccessStation[]
 }
 
-function seamLength(points: SeamPoint[], closed: boolean): number {
+export function seamLength(points: SeamPoint[], closed: boolean): number {
   const last = points[points.length - 1]!
   return closed ? last.s + length(sub(last.p, points[0]!.p)) : last.s
 }
 
-interface Station {
+export interface AccessGridStation {
   // Where along the seam the pose is taken, after pulling the ends in.
   at: number
   // The 20 mm grid position it stands for; intervals are cut from these.
   nominal: number
 }
 
-function stationsFor(lengthMm: number, closed: boolean): Station[] {
+export function accessStations(lengthMm: number, closed: boolean): AccessGridStation[] {
   const nominals: number[] = []
   for (let s = 0; s < lengthMm - EPS; s += POSE_STEP_MM) nominals.push(s)
   if (!closed) nominals.push(lengthMm)
   const margin = Math.min(END_MARGIN_MM, lengthMm / 2)
-  const out: Station[] = []
+  const out: AccessGridStation[] = []
   for (const nominal of nominals) {
     const at = closed ? nominal : Math.min(Math.max(nominal, margin), lengthMm - margin)
     if (out.length > 0 && Math.abs(out[out.length - 1]!.at - at) < EPS) continue
     out.push({ at, nominal })
   }
+  return out
+}
+
+// Each bad station owns the stretch from the middle between it and its neighbours on the nominal grid; touching
+// stretches merge, and the ends of the seam belong to the first and last station.
+export function badIntervals(grid: AccessGridStation[], bad: boolean[], lengthMm: number): Array<[number, number]> {
+  const out: Array<[number, number]> = []
+  grid.forEach((station, i) => {
+    if (!bad[i]) return
+    const lo = i === 0 ? 0 : (grid[i - 1]!.nominal + station.nominal) / 2
+    const hi = i === grid.length - 1 ? lengthMm : (station.nominal + grid[i + 1]!.nominal) / 2
+    const previous = out[out.length - 1]
+    if (previous && lo <= previous[1] + EPS) previous[1] = hi
+    else out.push([lo, hi])
+  })
   return out
 }
 
@@ -120,22 +135,18 @@ export function seamAccess(seam: { points: SeamPoint[]; closed: boolean }, occlu
 
   const lengthMm = seamLength(points, closed)
   const poses = torchPoses(points, closed, DEFAULT_TORCH)
-  const planned = stationsFor(lengthMm, closed)
+  const planned = accessStations(lengthMm, closed)
   const stations = planned.map(({ at }): AccessStation => {
     const pose = poseAt(poses, at, closed)
     const measured = poseClearance(pose.p, rotate(pose.q, [0, 0, 1]), occluded)
     return { s: at, ...measured }
   })
 
-  const unreachable: Array<[number, number]> = []
-  stations.forEach((station, i) => {
-    if (classOf(station.clearanceDeg, station.nearClearanceDeg) !== 'blocked') return
-    const lo = i === 0 ? 0 : (planned[i - 1]!.nominal + planned[i]!.nominal) / 2
-    const hi = i === stations.length - 1 ? lengthMm : (planned[i]!.nominal + planned[i + 1]!.nominal) / 2
-    const previous = unreachable[unreachable.length - 1]
-    if (previous && lo <= previous[1] + EPS) previous[1] = hi
-    else unreachable.push([lo, hi])
-  })
+  const unreachable = badIntervals(
+    planned,
+    stations.map((station) => classOf(station.clearanceDeg, station.nearClearanceDeg) === 'blocked'),
+    lengthMm,
+  )
 
   const clearanceDeg = Math.min(...stations.map((s) => s.clearanceDeg))
   const nearClearanceDeg = Math.min(...stations.map((s) => s.nearClearanceDeg))

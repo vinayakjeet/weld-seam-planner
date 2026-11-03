@@ -31,6 +31,7 @@ const STAGE_LABELS: Record<Stage, string> = {
   contact: 'Indexing bodies for contact',
   detect: 'Detecting seams',
   access: 'Checking torch access',
+  reach: 'Measuring snake arm reach',
 }
 
 // Each import or unit answer takes a generation, so progress from an older call cannot repaint a newer bar.

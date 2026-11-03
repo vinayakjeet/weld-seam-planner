@@ -1,4 +1,5 @@
 import { reconcileOrder } from '../sequence/order'
+import { DEFAULT_ARM } from '../snake/arm'
 import { resolveSeam, type Explained, type Plan, type PlannedSeam } from './plan'
 import { jobSchema } from './schema'
 
@@ -115,6 +116,20 @@ export function importJob(input: string | unknown, expectedSha256: string): Outc
         access: seam.access,
       }),
     ),
+    access: {
+      ports: job.access.ports.map((port) => ({ id: port.id, position: port.position, direction: port.direction, diameterMm: port.diameterMm })),
+      arm: job.access.arm
+        ? {
+            links: job.access.arm.links,
+            linkLengthMm: job.access.arm.linkLengthMm,
+            diameterMm: job.access.arm.diameterMm,
+            maxBendDeg: job.access.arm.maxBendDeg,
+            torchLengthMm: job.access.arm.torchLengthMm,
+            insertionMm: job.access.arm.insertionMm,
+            clearanceMm: job.access.arm.clearanceMm,
+          }
+        : DEFAULT_ARM,
+    },
     sequence: {
       strategy: job.sequence.strategy,
       order: reconcileOrder(
