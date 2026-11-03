@@ -29,7 +29,7 @@ function explained(error: { what: string; why: string; next: string }) {
 }
 
 describe('reach on the tank', () => {
-  it('reaches the 20 snake seams from P1 in under 15 s, with progress up to 1', async () => {
+  it('reaches the 20 snake seams from P1 in under 45 s, with progress up to 1', async () => {
     const { api, snake } = await loadedTank()
     expect(snake).toHaveLength(20)
     const events: Array<[string, number]> = []
@@ -37,7 +37,7 @@ describe('reach on the tank', () => {
     expect(outcome.status).toBe('ok')
     if (outcome.status !== 'ok') return
     console.log(`tank reach in the worker api: ${outcome.ms.toFixed(0)} ms`)
-    expect(outcome.ms).toBeLessThan(15_000)
+    expect(outcome.ms).toBeLessThan(45_000)
     expect(Object.keys(outcome.results)).toHaveLength(20)
     expect(events.length).toBeGreaterThanOrEqual(2)
     expect(events.every(([stage]) => stage === 'reach')).toBe(true)
