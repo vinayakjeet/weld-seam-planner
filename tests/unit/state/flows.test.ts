@@ -1363,6 +1363,19 @@ describe('importPlan', () => {
     expect(state().info).toBe(`Plan restored: ${plan.seams.length} seams, 1 procedure.`)
   })
 
+  it('restores the ports and the arm of the file and keeps the next port id above them', async () => {
+    const plan = samplePlan('double-bottom-cell')
+    plan.access = { ports: [{ id: 'P4', position: [10, 20, 30], direction: [0, 0, -1], diameterMm: 450 }], arm: { ...plan.access.arm, maxBendDeg: 25 } }
+    const { file } = planFile(plan)
+    loadPlanPart(plan)
+    useStore.getState().addPort([0, 0, 0], [0, 0, -1])
+    await importPlan(file, fakeClient({ detect: async () => detected(plan.seams.map((p) => p.seam)) }))
+    expect(state().ports).toEqual(plan.access.ports)
+    expect(state().arm.maxBendDeg).toBe(25)
+    expect(state().selectedPortId).toBeNull()
+    expect(state().addPort([1, 1, 1], [0, 0, -1])).toBe('P5')
+  })
+
   it('keeps the pose spacing, air speed and approach of the file, so a re-export matches', async () => {
     const { plan, job, file } = planFile()
     loadPlanPart(plan)

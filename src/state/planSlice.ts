@@ -7,6 +7,7 @@ import { procedureOverridesSchema, procedureSchema, type Procedure, type Procedu
 import type { PlateThickness } from '../core/process/filletRules'
 import { WPS_PRESETS } from '../core/process/wps'
 import { clearHistory } from './history'
+import { nextNumberAfter } from './portsSlice'
 import type { AppState } from './store'
 
 export interface PlanSlice {
@@ -288,6 +289,11 @@ export const createPlanSlice: StateCreator<AppState, [], [], PlanSlice> = (set, 
         thicknessById: {},
         strategy: plan.sequence?.strategy ?? 'table-order',
         order: (plan.sequence?.order ?? []).map((entry) => ({ ...entry, locked: false })),
+        ports: plan.access.ports,
+        arm: plan.access.arm,
+        nextPortNumber: Math.max(state.nextPortNumber, nextNumberAfter(plan.access.ports)),
+        selectedPortId: null,
+        placingPort: false,
         statusById,
         typeById: {},
         manualSeams: restored,

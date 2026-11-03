@@ -16,7 +16,7 @@ beforeEach(() => {
 
 describe('store basics', () => {
   it('keeps the steps and starts on import', () => {
-    expect(STEPS.map((s) => s.id)).toEqual(['import', 'seams', 'procedures', 'sequence', 'export'])
+    expect(STEPS.map((s) => s.id)).toEqual(['import', 'seams', 'procedures', 'access', 'sequence', 'export'])
     expect(state().activeStep).toBe('import')
     state().setActiveStep('seams')
     expect(state().activeStep).toBe('seams')

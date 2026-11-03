@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { DEFAULT_ARM } from '../../../src/core/snake/arm'
 import { pointsFromPolyline } from '../../../src/core/seams/frames'
 import { offerSummary, parseSaved, savedKey, snapshotOf } from '../../../src/state/savedPlan'
 import { useStore } from '../../../src/state/store'
@@ -49,6 +50,27 @@ describe('snapshotOf and parseSaved', () => {
     if (parsed.status !== 'ok') throw new Error(JSON.stringify(parsed.error))
     expect(parsed.saved).toEqual(snapshot)
     expect(snapshot).toMatchObject({ version: 1, savedAt: NOW, partName: 'a.stl', sha256: 'a'.repeat(64), nextDrawnId: 2, gravity: [1, 0, 0] })
+  })
+
+  it('reads a save without ports or arm as no ports and the default arm', () => {
+    const snapshot = JSON.parse(JSON.stringify(snapshotOf(editedState(), NOW)))
+    delete snapshot.ports
+    delete snapshot.arm
+    const parsed = parseSaved(snapshot)
+    if (parsed.status !== 'ok') throw new Error(JSON.stringify(parsed.error))
+    expect(parsed.saved.ports).toEqual([])
+    expect(parsed.saved.arm).toEqual(DEFAULT_ARM)
+  })
+
+  it('round trips ports and a changed arm', () => {
+    editedState()
+    useStore.getState().addPort([1200, 500, 1000], [0, 0, -1])
+    useStore.getState().setArm({ maxBendDeg: 25 })
+    const snapshot = snapshotOf(useStore.getState(), NOW)
+    const parsed = parseSaved(JSON.parse(JSON.stringify(snapshot)))
+    if (parsed.status !== 'ok') throw new Error(JSON.stringify(parsed.error))
+    expect(parsed.saved.ports).toEqual([{ id: 'P1', position: [1200, 500, 1000], direction: [0, 0, -1], diameterMm: 600 }])
+    expect(parsed.saved.arm.maxBendDeg).toBe(25)
   })
 
   it('has nothing to save without a part', () => {

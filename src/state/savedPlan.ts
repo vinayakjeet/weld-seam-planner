@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { SEQUENCE_STRATEGIES } from '../core/sequence/types'
 import { procedureOverridesSchema, procedureSchema, vec3Schema } from '../core/job/schema'
+import { DEFAULT_ARM } from '../core/snake/arm'
 import type { ManualError } from '../core/seams/manual'
 import type { AppState } from './store'
 
@@ -29,6 +30,18 @@ const seamSchema = z.object({
   approximateNormals: z.boolean().optional(),
 })
 
+const portSchema = z.object({ id: z.string().min(1), position: vec3Schema, direction: vec3Schema, diameterMm: z.number().positive() })
+
+const armSchema = z.object({
+  links: z.number(),
+  linkLengthMm: z.number(),
+  diameterMm: z.number(),
+  maxBendDeg: z.number(),
+  torchLengthMm: z.number(),
+  insertionMm: z.number(),
+  clearanceMm: z.number(),
+})
+
 export const savedPlanSchema = z.object({
   version: z.literal(SAVED_PLAN_VERSION),
   savedAt: z.iso.datetime(),
@@ -47,6 +60,9 @@ export const savedPlanSchema = z.object({
   // Entries written before the sequence was stored have neither field and read as table order.
   strategy: z.enum(SEQUENCE_STRATEGIES).default('table-order'),
   order: z.array(z.object({ seamId: z.string().min(1), reversed: z.boolean(), locked: z.boolean() })).default([]),
+  // Entries written before ports existed have neither field and read as no ports and the default arm.
+  ports: z.array(portSchema).default([]),
+  arm: armSchema.default(DEFAULT_ARM),
   gravity: vec3Schema,
   detectSettings: z.object({ creaseAngleDeg: z.number() }),
   jobSettings: z.object({ poseSpacingMm: z.number().positive(), airSpeedMmS: z.number().positive(), approachMm: z.number().min(0) }),
@@ -76,6 +92,8 @@ export function snapshotOf(state: AppState, savedAt: string): SavedPlan {
     thicknessById: state.thicknessById,
     strategy: state.strategy,
     order: state.order,
+    ports: state.ports,
+    arm: state.arm,
     gravity: state.gravity,
     detectSettings: state.detectSettings,
     jobSettings: state.jobSettings,

@@ -8,6 +8,7 @@ import { createAccessSlice, type AccessSlice } from './accessSlice'
 import { createPartSlice, type PartSlice } from './partSlice'
 import { createPlanSlice, type PlanSlice } from './planSlice'
 import { createPlaybackSlice, type PlaybackSlice } from './playbackSlice'
+import { createPortsSlice, type PortsSlice } from './portsSlice'
 import { createSeamsSlice, type SeamsSlice } from './seamsSlice'
 import { createSequenceSlice, type SequenceSlice } from './sequenceSlice'
 import { createTorchSlice, type TorchSlice } from './torchSlice'
@@ -17,6 +18,7 @@ export const STEPS = [
   { id: 'import', label: 'Import' },
   { id: 'seams', label: 'Seams' },
   { id: 'procedures', label: 'Procedures' },
+  { id: 'access', label: 'Access' },
   { id: 'sequence', label: 'Sequence' },
   { id: 'export', label: 'Validate and Export' },
 ] as const
@@ -39,7 +41,7 @@ interface UiSlice {
   offer: SavedPlan | null
 }
 
-export type AppState = UiSlice & PartSlice & SeamsSlice & PlanSlice & TorchSlice & AccessSlice & ViewSlice & SequenceSlice & PlaybackSlice
+export type AppState = UiSlice & PartSlice & SeamsSlice & PlanSlice & TorchSlice & AccessSlice & PortsSlice & ViewSlice & SequenceSlice & PlaybackSlice
 
 const createUiSlice: StateCreator<AppState, [], [], UiSlice> = (set) => ({
   activeStep: 'import',
@@ -57,9 +59,9 @@ export const HISTORY_LIMIT = 100
 
 // Undo covers accepting and rejecting seams, choosing their joint type, editing seams (drawing, splitting, merging,
 // trimming, reversing, deleting), the plan (the procedure library, assignments, overrides, legs, thickness edits) and
-// the sequence (its strategy, order and locks),
+// the sequence (its strategy, order and locks), the ports and the arm,
 // nothing else. Hover, selection, settings and the loaded part are not history.
-// Comparing the eleven values by reference keeps those changes from adding steps.
+// Comparing the thirteen values by reference keeps those changes from adding steps.
 export const useStore = create<AppState>()(
   temporal(
     (...args) => ({
@@ -69,6 +71,7 @@ export const useStore = create<AppState>()(
       ...createPlanSlice(...args),
       ...createTorchSlice(...args),
       ...createAccessSlice(...args),
+      ...createPortsSlice(...args),
       ...createViewSlice(...args),
       ...createSequenceSlice(...args),
       ...createPlaybackSlice(...args),
@@ -86,6 +89,8 @@ export const useStore = create<AppState>()(
         thicknessById: state.thicknessById,
         strategy: state.strategy,
         order: state.order,
+        ports: state.ports,
+        arm: state.arm,
       }),
       equality: (past, current) =>
         past.statusById === current.statusById &&
@@ -98,7 +103,9 @@ export const useStore = create<AppState>()(
         past.legById === current.legById &&
         past.thicknessById === current.thicknessById &&
         past.strategy === current.strategy &&
-        past.order === current.order,
+        past.order === current.order &&
+        past.ports === current.ports &&
+        past.arm === current.arm,
       limit: HISTORY_LIMIT,
     },
   ),

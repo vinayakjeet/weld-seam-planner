@@ -1,7 +1,6 @@
 import { type JobPart, type Plan, type PlannedSeam } from '../core/job/plan'
 import { meshWarnings, type MeshWarning } from '../core/mesh/health'
 import { reconcileOrder, type OrderEntry } from '../core/sequence/order'
-import { DEFAULT_ARM } from '../core/snake/arm'
 import type { SeamCandidate } from '../core/seams/detect'
 import { accessFor } from './accessSlice'
 import type { AppState } from './store'
@@ -91,9 +90,6 @@ export function plannedSeam(state: PlanFields, seam: SeamCandidate): PlannedSeam
   }
 }
 
-// Ports and the arm come from the store in a later task; until then every plan has no port.
-const NO_ACCESS: Plan['access'] = { ports: [], arm: DEFAULT_ARM }
-
 let cachedPlan: { deps: readonly unknown[]; plan: Plan } | null = null
 let cachedOrder: { order: AppState['order']; ids: readonly string[]; result: OrderEntry[] } | null = null
 
@@ -120,7 +116,7 @@ export function selectSequenceOrder(state: AppState): OrderEntry[] {
 export function selectPlan(state: AppState): Plan {
   const deps = [
     state.part, state.seams, state.manualSeams, state.supersededIds, state.showCorners, state.statusById, state.typeById,
-    state.thicknessById, state.procedures, state.procedureById, state.overridesById, state.legById, state.accessById, state.accessPointsById, state.strategy, state.order, state.gravity,
+    state.thicknessById, state.procedures, state.procedureById, state.overridesById, state.legById, state.accessById, state.accessPointsById, state.strategy, state.order, state.ports, state.arm, state.gravity,
     state.detectSettings.creaseAngleDeg, state.jobSettings,
   ]
   if (cachedPlan && cachedPlan.deps.every((d, i) => d === deps[i])) return cachedPlan.plan
@@ -134,7 +130,7 @@ export function selectPlan(state: AppState): Plan {
     procedures: state.procedures,
     seams,
     sequence: null,
-    access: NO_ACCESS,
+    access: { ports: state.ports, arm: state.arm },
   }
   // An untouched sequence leaves the plan in table order; once there is a stored order the plan carries it.
   if (state.order.length > 0) {

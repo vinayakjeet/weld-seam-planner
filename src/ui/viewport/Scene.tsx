@@ -11,6 +11,8 @@ import { DrawTool } from './DrawTool'
 import { GIZMO_MARGIN } from './gizmo'
 import { PartMesh } from './PartMesh'
 import { PlaybackTorch } from './PlaybackTorch'
+import { PortMarkers } from './PortMarkers'
+import { PortPlacer } from './PortPlacer'
 import { SeamLines } from './SeamLines'
 import { SequenceLabels } from './SequenceLabels'
 import { SplitTool } from './SplitTool'
@@ -70,6 +72,8 @@ export function Scene() {
       <SeamLines partRef={partMesh} />
       <DrawTool partRef={partMesh} />
       <SplitTool />
+      <PortMarkers />
+      <PortPlacer partRef={partMesh} />
       <TorchPreview />
       <AccessCone />
       <AirMoves />

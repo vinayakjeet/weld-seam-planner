@@ -9,6 +9,7 @@ import { Button } from '../kit/Button'
 import { Tooltip } from '../kit/Tooltip'
 import { Tab, TabList, TabPanel, Tabs } from '../kit/Tabs'
 import { AccessChip } from './AccessChip'
+import { AccessPanel } from './AccessPanel'
 import { DetectionSettings } from './DetectionSettings'
 import { ManualTools } from './ManualTools'
 import { PositionChip } from './PositionChip'
@@ -222,6 +223,7 @@ export function SeamPanel() {
   const procedureStep = useStore((s) => s.activeStep === 'procedures')
   const exportStep = useStore((s) => s.activeStep === 'export')
   const sequenceStep = useStore((s) => s.activeStep === 'sequence')
+  const accessStep = useStore((s) => s.activeStep === 'access')
   const empty = useStore((s) => showsNoAccepted(s.activeStep, selectPlan(s).seams.length))
   return (
     <aside aria-label="Seam list" className="flex min-h-0 w-[376px] shrink-0 flex-col border-r border-line bg-surface-1">
@@ -248,6 +250,8 @@ export function SeamPanel() {
             <>
               {procedureStep ? (
                 <ProcedureLibrary />
+              ) : accessStep ? (
+                <AccessPanel />
               ) : (
                 <>
                   <ManualTools />

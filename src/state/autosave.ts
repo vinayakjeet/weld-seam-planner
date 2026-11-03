@@ -1,7 +1,9 @@
 import { get as idbGet, set as idbSet } from 'idb-keyval'
 import type { GeometryClient } from '../worker/client'
 import { registerAfterLoad, runDetect } from './flows'
+import { clampArm } from '../core/snake/arm'
 import { clearHistory } from './history'
+import { nextNumberAfter } from './portsSlice'
 import { parseSaved, savedKey, snapshotOf, type SavedPlan } from './savedPlan'
 import { useStore, type AppState } from './store'
 
@@ -16,7 +18,7 @@ export const AUTOSAVE_DELAY_MS = 1000
 
 // The fields a snapshot is made of. A change to any of them is a change worth saving.
 const read = (s: AppState) =>
-  [s.statusById, s.typeById, s.manualSeams, s.supersededIds, s.nextDrawnId, s.procedures, s.procedureById, s.overridesById, s.legById, s.thicknessById, s.strategy, s.order, s.gravity, s.detectSettings, s.jobSettings] as const
+  [s.statusById, s.typeById, s.manualSeams, s.supersededIds, s.nextDrawnId, s.procedures, s.procedureById, s.overridesById, s.legById, s.thicknessById, s.strategy, s.order, s.ports, s.arm, s.gravity, s.detectSettings, s.jobSettings] as const
 
 interface Active {
   storage: PlanStorage
@@ -130,6 +132,11 @@ function apply(saved: SavedPlan): Partial<AppState> {
     thicknessById: saved.thicknessById,
     strategy: saved.strategy,
     order: saved.order,
+    ports: saved.ports,
+    arm: clampArm(saved.arm),
+    nextPortNumber: nextNumberAfter(saved.ports),
+    selectedPortId: null,
+    placingPort: false,
     gravity: saved.gravity,
     detectSettings: saved.detectSettings,
     jobSettings: saved.jobSettings,
