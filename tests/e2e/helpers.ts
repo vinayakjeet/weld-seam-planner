@@ -50,3 +50,18 @@ export async function loadSample(page: Page, sample: SampleEntry) {
   await expect(seamRows(page)).toHaveCount(expectedSeams(sample), { timeout: 30_000 })
   await expect(page.getByRole('progressbar')).toHaveCount(0)
 }
+
+// Click the first row, then Shift click the last: every seam in the table is selected.
+export async function selectAllRows(page: Page) {
+  const rows = seamRows(page)
+  await rows.first().getByRole('cell').first().click()
+  await rows.last().scrollIntoViewIfNeeded()
+  await rows.last().getByRole('cell').first().click({ modifiers: ['Shift'] })
+}
+
+// Runs the action that starts a download and returns the suggested file name and the parsed JSON.
+export async function downloadJson(page: Page, action: () => Promise<void>): Promise<{ name: string; json: unknown }> {
+  const [download] = await Promise.all([page.waitForEvent('download'), action()])
+  const path = await download.path()
+  return { name: download.suggestedFilename(), json: JSON.parse(readFileSync(path, 'utf8')) as unknown }
+}
