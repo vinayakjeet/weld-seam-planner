@@ -47,7 +47,7 @@ function quaternionOut(q: [number, number, number, number]): [number, number, nu
   return [out[0]!, out[1]!, out[2]!, out[3]!]
 }
 
-interface BuiltSeam {
+export interface BuiltSeam {
   seam: JobSeam
   firstApproach: Vec3
   lastRetract: Vec3
@@ -146,7 +146,7 @@ function buildSeam(plan: Plan, planned: PlannedSeam, issues: JobIssue[]): BuiltS
 }
 
 // Home is above the part centre, clear of the top by the approach distance, along the way up.
-function homePoint(plan: Plan): Vec3 {
+export function homePoint(plan: Plan): Vec3 {
   const { min, max } = plan.part.bbox
   const up = upFromGravity(plan.gravity)
   const centre: Vec3 = [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2]
@@ -175,9 +175,13 @@ interface JobSeamMove {
   lengthMm: number
 }
 
+export function buildSeams(plan: Plan, issues: JobIssue[] = []): BuiltSeam[] {
+  return plan.seams.map((planned) => buildSeam(plan, planned, issues))
+}
+
 export function buildJob(plan: Plan, options: { createdAt: string }, issues: JobIssue[] = []): WeldJob {
   const { part, settings, gravity } = plan
-  const built = plan.seams.map((planned) => buildSeam(plan, planned, issues))
+  const built = buildSeams(plan, issues)
   const moves = airMoves(plan, built)
 
   const referenced = new Set(plan.seams.map((s) => s.procedureId))

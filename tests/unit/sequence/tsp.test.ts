@@ -1,0 +1,120 @@
+import { describe, expect, it } from 'vitest'
+import type { Vec3 } from '../../../src/core/math/vec3'
+import { SEQUENCE_STRATEGIES, type SequenceNode, type Visit } from '../../../src/core/sequence/types'
+import { airEdge, airLengthMm, optimise, tourCost } from '../../../src/core/sequence/tsp'
+import { exactOptimum } from '../helpers/exact'
+import { seededRandom } from '../helpers/random'
+
+const HOME: Vec3 = [0, 0, 500]
+const edge = airEdge(HOME, 0)
+
+function node(id: string, a: Vec3, b: Vec3, options: { closed?: boolean; locked?: boolean } = {}): SequenceNode {
+  return {
+    id,
+    closed: options.closed ?? false,
+    locked: options.locked ?? false,
+    mid: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2],
+    enter: { forward: a, reverse: options.closed ? a : b },
+    leave: { forward: b, reverse: options.closed ? a : a },
+    arcStart: { forward: a, reverse: options.closed ? a : b },
+    arcEnd: { forward: b, reverse: options.closed ? a : a },
+  }
+}
+
+// Short seams on a coarse grid, along x or y, in a random direction.
+function grid(count: number, seed: number): SequenceNode[] {
+  const random = seededRandom(seed)
+  return Array.from({ length: count }, (_, i) => {
+    const x = Math.floor(random() * 9) * 100
+    const y = Math.floor(random() * 9) * 100
+    const along = random() < 0.5
+    const a: Vec3 = [x, y, 0]
+    const b: Vec3 = along ? [x + 40, y, 0] : [x, y + 40, 0]
+    return random() < 0.5 ? node(`s${i}`, a, b) : node(`s${i}`, b, a)
+  })
+}
+
+const tableOrder = (nodes: SequenceNode[]): Visit[] => nodes.map((n) => ({ node: n, reversed: false }))
+const ids = (tour: Visit[]) => tour.map((v) => v.node.id)
+
+describe('strategies', () => {
+  it('lists the four strategies once', () => {
+    expect(SEQUENCE_STRATEGIES).toEqual(['table-order', 'min-air-move', 'balanced-heat', 'manual'])
+  })
+})
+
+describe('optimise', () => {
+  it('is never worse than table order on random grids', () => {
+    for (let seed = 1; seed <= 20; seed++) {
+      const nodes = grid(30, seed)
+      const result = optimise(nodes, edge)
+      expect(ids(result).slice().sort()).toEqual(nodes.map((n) => n.id).sort())
+      expect(tourCost(result, edge)).toBeLessThanOrEqual(tourCost(tableOrder(nodes), edge) + 1e-9)
+    }
+  })
+
+  it('is within 10 percent of the exact optimum for 8 seams', () => {
+    for (let seed = 1; seed <= 20; seed++) {
+      const nodes = grid(8, 100 + seed)
+      const exact = exactOptimum(nodes, edge)
+      expect(tourCost(optimise(nodes, edge), edge)).toBeLessThanOrEqual(exact * 1.1 + 1e-9)
+    }
+  })
+
+  it('enters a seam from the end nearer to where the torch is', () => {
+    const near = node('a', [0, 0, 0], [100, 0, 0])
+    const result = optimise([near], airEdge([100, 0, 0], 0))
+    expect(result).toEqual([{ node: near, reversed: true }])
+  })
+
+  it('keeps a locked seam at its slot and direction while the others move', () => {
+    for (let seed = 1; seed <= 10; seed++) {
+      const nodes = grid(12, 200 + seed).map((n, i) => (i === 3 || i === 7 ? { ...n, locked: true } : n))
+      const start = tableOrder(nodes).map((v, i) => (i === 7 ? { ...v, reversed: true } : v))
+      const result = optimise(nodes, edge, { start })
+      expect(result[3]).toEqual(start[3])
+      expect(result[7]).toEqual(start[7])
+      expect(ids(result).slice().sort()).toEqual(nodes.map((n) => n.id).sort())
+    }
+  })
+
+  it('returns the input when every seam is locked', () => {
+    const nodes = grid(5, 7).map((n) => ({ ...n, locked: true }))
+    expect(optimise(nodes, edge)).toEqual(tableOrder(nodes))
+  })
+
+  it('handles no seams and one seam', () => {
+    expect(optimise([], edge)).toEqual([])
+    expect(optimise([node('only', [1, 2, 3], [4, 5, 6])], edge)).toHaveLength(1)
+    expect(tourCost([], edge)).toBe(0)
+  })
+
+  it('never marks a closed loop reversed', () => {
+    const nodes = [...grid(6, 3), node('loop', [300, 300, 0], [300, 300, 0], { closed: true })]
+    expect(optimise(nodes, edge).every((v) => !v.node.closed || !v.reversed)).toBe(true)
+  })
+
+  it('returns a valid tour no worse than table order when the time box is already spent', () => {
+    const nodes = grid(40, 11)
+    let t = 0
+    const result = optimise(nodes, edge, { timeBoxMs: 50, now: () => (t += 100) })
+    expect(ids(result).slice().sort()).toEqual(nodes.map((n) => n.id).sort())
+    expect(tourCost(result, edge)).toBeLessThanOrEqual(tourCost(tableOrder(nodes), edge) + 1e-9)
+  })
+
+  it('gives the same tour for the same input', () => {
+    const nodes = grid(25, 5)
+    expect(optimise(nodes, edge)).toEqual(optimise(nodes, edge))
+  })
+})
+
+describe('airLengthMm', () => {
+  it('adds the lead twice between seams and once at home', () => {
+    const a = node('a', [0, 0, 0], [10, 0, 0])
+    const b = node('b', [20, 0, 0], [30, 0, 0])
+    const tour: Visit[] = [{ node: a, reversed: false }, { node: b, reversed: false }]
+    const home: Vec3 = [0, 0, 0]
+    // home to a: 0 + lead; a to b: lead + 10 + lead; b to home: lead + 30
+    expect(airLengthMm(tour, home, 50)).toBe(50 + (50 + 10 + 50) + (50 + 30))
+  })
+})
