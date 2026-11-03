@@ -377,3 +377,93 @@ describe('corner candidates', () => {
     expect(all.filter((s) => s.hidden)).toHaveLength(0)
   })
 })
+
+describe('plate thickness per seam', () => {
+  const pairs = (id: string) => detect(id).map((s) => s.thicknessMm)
+  const sorted = (t: SeamCandidate['thicknessMm']) => [...t].sort((a, b) => a! - b!)
+
+  it('measures 10 and 10 on every seam of both T-joints', () => {
+    for (const id of ['t-joint-merged', 't-joint-assembly']) {
+      const t = pairs(id)
+      expect(t.length, id).toBe(2)
+      for (const [a, b] of t) {
+        expect(a, id).toBeCloseTo(10, 2)
+        expect(b, id).toBeCloseTo(10, 2)
+      }
+    }
+  })
+
+  it('measures 8 and 8 on every seam of the L-bracket with gussets', () => {
+    const t = pairs('l-bracket-gussets')
+    expect(t).toHaveLength(16)
+    for (const [a, b] of t) {
+      expect(a).toBeCloseTo(8, 2)
+      expect(b).toBeCloseTo(8, 2)
+    }
+  })
+
+  it('measures 6 and 10 on the outer loop and the bore loop of the pipe on plate', () => {
+    const t = pairs('pipe-on-plate').map(sorted)
+    expect(t).toHaveLength(2)
+    for (const [a, b] of t) {
+      expect(a).toBeCloseTo(6, 1)
+      expect(b).toBeCloseTo(10, 1)
+    }
+  })
+
+  it('measures 50 and 10 on both loops of the bar through the plate', () => {
+    const t = pairs('bar-through-plate').map(sorted)
+    expect(t).toHaveLength(2)
+    for (const [a, b] of t) {
+      expect(a).toBeCloseTo(10, 1)
+      expect(b).toBeCloseTo(50, 1)
+    }
+  })
+
+  it('finds the four plate pairs of the double-bottom cell', () => {
+    const key = (t: SeamCandidate['thicknessMm']) => sorted(t).map((x) => x!.toFixed(1)).join('/')
+    const counts = new Map<string, number>()
+    for (const t of pairs('double-bottom-cell')) counts.set(key(t), (counts.get(key(t)) ?? 0) + 1)
+    expect([...counts.keys()].sort()).toEqual(['10.0/12.0', '8.0/10.0', '8.0/12.0', '8.0/8.0'])
+  })
+
+  it('takes the strip width as the strip entry of a lap, 10 on 10', () => {
+    const lower = cubeTriangles([0, 0, 0], [100, 60, 10])
+    const upper = cubeTriangles([60, 0, 10], [100, 60, 10])
+    const seams = shown(detectSeams(buildMeshModel(soupOf([...lower, ...upper]), 1), DEFAULT_DETECT_SETTINGS))
+    expect(seams.map((s) => s.jointType)).toEqual(['lap', 'lap'])
+    for (const { thicknessMm: [a, b] } of seams) {
+      expect(a).toBeCloseTo(10, 2)
+      expect(b).toBeCloseTo(10, 2)
+    }
+  })
+
+  it('puts the strip width in the strip entry when the strip is thinner than the plate', () => {
+    const lower = cubeTriangles([0, 0, 0], [100, 60, 10])
+    const upper = cubeTriangles([60, 0, 10], [100, 60, 6])
+    const seams = shown(detectSeams(buildMeshModel(soupOf([...lower, ...upper]), 1), DEFAULT_DETECT_SETTINGS))
+    const lap = seams.find((s) => s.jointType === 'lap')!
+    expect(lap).toBeDefined()
+    expect(sorted(lap.thicknessMm)[0]).toBeCloseTo(6, 2)
+    expect(sorted(lap.thicknessMm)[1]).toBeCloseTo(10, 2)
+  })
+
+  it('gives multiples of 0.01 on every sample', () => {
+    for (const { id } of readManifest().samples) {
+      for (const seam of detectAll(id)) {
+        for (const v of seam.thicknessMm) {
+          if (v !== null) expect(Math.abs(v * 100 - Math.round(v * 100)), `${id} ${seam.id}`).toBeLessThan(1e-6)
+        }
+      }
+    }
+  })
+
+  it('measures the corner seams of a box as the plate thickness behind each face', () => {
+    const corners = detectSeams(buildMeshModel(soupOf(cubeTriangles([0, 0, 0], [100, 60, 10])), 1), DEFAULT_DETECT_SETTINGS)
+    expect(corners.length).toBeGreaterThan(0)
+    for (const c of corners) {
+      expect(c.jointType).toBe('corner')
+      expect(c.thicknessMm.every((v) => v !== null)).toBe(true)
+    }
+  })
+})

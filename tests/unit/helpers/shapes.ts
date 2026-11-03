@@ -18,6 +18,21 @@ export function cubeTriangles(min: number[], size: number[]): Tri[] {
   ])
 }
 
+// A box whose six faces are each a k x k grid of quads: 12 k^2 triangles, still one closed body.
+export function gridBoxTriangles(size: number[], k: number): Tri[] {
+  const tris: Tri[] = []
+  for (const [a, b, , d] of QUADS) {
+    const at = (i: number, j: number) =>
+      [0, 1, 2].map((ax) => (a![ax]! + (b![ax]! - a![ax]!) * (i / k) + (d![ax]! - a![ax]!) * (j / k)) * size[ax]!)
+    for (let i = 0; i < k; i++) {
+      for (let j = 0; j < k; j++) {
+        tris.push([...at(i, j), ...at(i + 1, j), ...at(i + 1, j + 1)], [...at(i, j), ...at(i + 1, j + 1), ...at(i, j + 1)])
+      }
+    }
+  }
+  return tris
+}
+
 export function soupOf(tris: Tri[]): Float32Array {
   return Float32Array.from(tris.flat())
 }

@@ -7,10 +7,11 @@ import { computeFaceData } from '../core/mesh/faces'
 import { buildMeshModel, type MeshModel } from '../core/mesh/model'
 import { parseStl, StlError } from '../core/mesh/parseStl'
 import { guessUnits, scaleToMm, type KnownUnits, type Units } from '../core/mesh/units'
-import { buildBodyBvhs, type BodyBvh } from '../core/seams/bodyBvh'
+import { buildBodyBvhs, MAX_WHOLE_BVH_TRIANGLES, wholeBvhFor, type BodyBvh } from '../core/seams/bodyBvh'
 import { detectSeams, type DetectSettings, type SeamCandidate } from '../core/seams/detect'
 import { buildSnapContext, snapPolyline, type DrawClick, type SnapContext } from '../core/seams/draw'
 import { isManualError } from '../core/seams/manual'
+import { probeFromBvhs, seamThickness } from '../core/seams/thickness'
 import { torchPoses, type TorchParams, type TorchPose } from '../core/torch/frames'
 import { gravityProblem, seamPosition, type Gravity, type SeamPosition } from '../core/torch/positions'
 
@@ -144,6 +145,8 @@ export function createGeometryApi(): GeometryApi {
   let current: MeshModel | null = null
   // Built on the first detect of a multi body part and kept until another part replaces it.
   let bodyBvhs: BodyBvh[] | null = null
+  // The single-body counterpart: undefined until the first detect, null when the part is too large to ray cast.
+  let wholeBvh: BodyBvh | null | undefined
   // Feature edges and the surface BVH for drawing, built on the first drawn seam of a part.
   let snapContext: SnapContext | null = null
 
@@ -155,6 +158,7 @@ export function createGeometryApi(): GeometryApi {
     // Only a fully built part replaces the current one, so a failed load leaves the old part usable.
     current = model
     bodyBvhs = null
+    wholeBvh = undefined
     snapContext = null
     const outcome: LoadOutcome = { status: 'ready', part: describePart(model, name, units), display }
     const buffers = [display.positions.buffer, display.indices.buffer, ...display.bvh.roots]
@@ -220,7 +224,8 @@ export function createGeometryApi(): GeometryApi {
           bodyBvhs = buildBodyBvhs(current)
           report('detect', 0.3)
         }
-        const seams = detectSeams(current, settings, { bodyBvhs: bodyBvhs ?? undefined })
+        if (current.bodies.count < 2 && wholeBvh === undefined) wholeBvh = wholeBvhFor(current)
+        const seams = detectSeams(current, settings, { bodyBvhs: bodyBvhs ?? undefined, wholeBvh })
         const ms = performance.now() - start
         report('detect', 1)
         return { status: 'ok', seams, ms }
@@ -243,7 +248,11 @@ export function createGeometryApi(): GeometryApi {
       try {
         snapContext ??= buildSnapContext(current, computeFaceData(current.mesh))
         const result = snapPolyline(clicks, snapContext, snapRadiusMm)
-        return isManualError(result) ? { status: 'error', error: result } : { status: 'ok', seam: result }
+        if (isManualError(result)) return { status: 'error', error: result }
+        const tooLarge = current.bodies.count < 2 && current.mesh.triangleCount > MAX_WHOLE_BVH_TRIANGLES
+        if (result.approximateNormals || tooLarge) return { status: 'ok', seam: result }
+        const thicknessMm = seamThickness(result.points, probeFromBvhs([snapContext.surface()]))
+        return { status: 'ok', seam: { ...result, thicknessMm } }
       } catch (error) {
         return { status: 'error', error: toUserError(error) }
       }

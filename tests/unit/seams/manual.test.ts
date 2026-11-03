@@ -244,3 +244,37 @@ describe('trimSeam', () => {
     expectReadable(trimSeam(original, Number.NaN, 0))
   })
 })
+
+describe('thickness through manual operations', () => {
+  const plated = (id = 's1'): SeamCandidate => ({ ...line(0, 200, id), thicknessMm: [8, 12] })
+
+  it('swaps the pair when reversing and restores it after two reversals', () => {
+    const flipped = reverseSeam(plated())
+    expect(flipped.thicknessMm).toEqual([12, 8])
+    expect(flipped.points[0]!.n1).toEqual(plated().points[0]!.n2)
+    expect(reverseSeam(flipped).thicknessMm).toEqual([8, 12])
+  })
+
+  it('swaps the pair of a closed loop as well', () => {
+    const square = along([[0, 0, 0], [40, 0, 0], [40, 40, 0], [0, 40, 0]], true, 'loop', [
+      [[0, 0, 1], [0, -1, 0]],
+      [[0, 0, 1], [1, 0, 0]],
+      [[0, 0, 1], [0, 1, 0]],
+      [[0, 0, 1], [-1, 0, 0]],
+    ])
+    expect(reverseSeam({ ...square, thicknessMm: [6, 10] }).thicknessMm).toEqual([10, 6])
+  })
+
+  it('keeps the pair on both halves of a split and on a trim', () => {
+    const [a, b] = ok(splitSeam(plated(), 80)) as [SeamCandidate, SeamCandidate]
+    expect(a.thicknessMm).toEqual([8, 12])
+    expect(b.thicknessMm).toEqual([8, 12])
+    expect(ok(trimSeam(plated(), 10, 10)).thicknessMm).toEqual([8, 12])
+  })
+
+  it('keeps the first seam pair on a merge', () => {
+    const first = { ...line(0, 100, 'a'), thicknessMm: [8, 12] as SeamCandidate['thicknessMm'] }
+    const second = { ...line(100, 200, 'b'), thicknessMm: [6, 20] as SeamCandidate['thicknessMm'] }
+    expect(ok(mergeSeams(first, second, 1)).thicknessMm).toEqual([8, 12])
+  })
+})

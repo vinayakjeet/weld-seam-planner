@@ -116,10 +116,11 @@ const reversedPoints = (seam: SeamCandidate): SeamPoint[] => {
   return [flip(points[0]!, 0), ...points.slice(1).map((pt) => flip(pt, lengthMm - pt.s)).reverse()]
 }
 
-// Travel runs the other way; the normals swap so that n1 x n2 still points along the new tangent.
+// Travel runs the other way; the normals swap so that n1 x n2 still points along the new tangent, and the thickness
+// pair swaps with them.
 export function reverseSeam(seam: SeamCandidate): SeamCandidate {
   const id = seam.id.endsWith('~r') ? seam.id.slice(0, -2) : `${seam.id}~r`
-  return { ...seam, id, source: 'manual', points: reversedPoints(seam) }
+  return { ...seam, id, source: 'manual', points: reversedPoints(seam), thicknessMm: [seam.thicknessMm[1], seam.thicknessMm[0]] }
 }
 
 function joined(first: SeamPoint[], second: SeamPoint[]): SeamPoint[] {

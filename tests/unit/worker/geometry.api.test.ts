@@ -15,6 +15,7 @@ import { seam, shown } from '../helpers/state'
 import { pointsFromPolyline } from '../../../src/core/seams/frames'
 import { DEFAULT_TORCH, poseAt } from '../../../src/core/torch/frames'
 import { readSample } from '../helpers/samples'
+import { gridBoxTriangles } from '../helpers/shapes'
 import { makeBinaryStl, TRIANGLES } from '../helpers/stl'
 
 type Stage = 'read' | 'weld' | 'topology' | 'index' | 'contact' | 'detect'
@@ -232,11 +233,26 @@ describe('geometry api: contact seams', () => {
     expect(outcome.status === 'ok' && shown(outcome.seams).map((s) => s.source)).toEqual(['contact', 'contact'])
   })
 
-  it('never builds body BVHs for a single body part', async () => {
+  it('builds no body BVHs for a single body part, only one whole-mesh BVH for thickness, kept across slider changes', async () => {
     const api = createGeometryApi()
     ready(await api.loadStl(readSample('t-joint-merged'), 't-joint-merged.stl', () => {}))
     built.count = 0
     await api.detect(DEFAULT_DETECT_SETTINGS, () => {})
+    expect(built.count).toBe(1)
+    await api.detect({ creaseAngleDeg: 45 }, () => {})
+    expect(built.count).toBe(1)
+  })
+
+  it('measures no thickness and builds no BVH for a single body over 300000 triangles', async () => {
+    const api = createGeometryApi()
+    const stl = makeBinaryStl(gridBoxTriangles([100, 60, 10], 160))
+    ready(await api.loadStl(stl, 'big.stl', () => {}))
+    built.count = 0
+    const outcome = await api.detect(DEFAULT_DETECT_SETTINGS, () => {})
+    expect(outcome.status).toBe('ok')
+    if (outcome.status !== 'ok') return
+    expect(outcome.seams.length).toBeGreaterThan(0)
+    for (const s of outcome.seams) expect(s.thicknessMm).toEqual([null, null])
     expect(built.count).toBe(0)
   })
 
@@ -306,6 +322,23 @@ describe('geometry api: snapDraw', () => {
     if (outcome.status !== 'ok') return
     expect(outcome.seam.lengthMm).toBeGreaterThan(198.5)
     expect(outcome.seam.approximateNormals).toBeFalsy()
+  })
+
+  it('measures the plate thickness of a seam drawn along a crease', async () => {
+    const api = createGeometryApi()
+    ready(await api.loadStl(readSample('t-joint-merged'), 't.stl', () => {}))
+    const outcome = await api.snapDraw(clicks, 3)
+    expect(outcome.status).toBe('ok')
+    if (outcome.status !== 'ok') return
+    for (const v of outcome.seam.thicknessMm) expect(v).toBeCloseTo(10, 2)
+  })
+
+  it('gives no thickness to a seam drawn across open surface with approximate normals', async () => {
+    const api = createGeometryApi()
+    ready(await api.loadStl(readSample('pipe-on-plate'), 'b.stl', () => {}))
+    const outcome = await api.snapDraw(clicks, 3)
+    expect(outcome.status === 'ok' && outcome.seam.approximateNormals).toBe(true)
+    expect(outcome.status === 'ok' && outcome.seam.thicknessMm).toEqual([null, null])
   })
 
   it('hands the drawing error on in the same what, why, next form', async () => {

@@ -34,6 +34,14 @@ export function buildWholeBvh(model: MeshModel): BodyBvh {
   return indexTriangles(model, Uint32Array.from({ length: model.mesh.triangleCount }, (_, t) => t))
 }
 
+// Above this a single-body mesh gets no whole-mesh BVH, so nothing that needs a ray is measured on it.
+export const MAX_WHOLE_BVH_TRIANGLES = 300_000
+
+// The whole-mesh BVH for a single-body part, or null for a multi-body part (which has body BVHs) and a very large one.
+export function wholeBvhFor(model: MeshModel): BodyBvh | null {
+  return model.bodies.count > 1 || model.mesh.triangleCount > MAX_WHOLE_BVH_TRIANGLES ? null : buildWholeBvh(model)
+}
+
 function indexTriangles(model: MeshModel, triangles: Uint32Array): BodyBvh {
   const { positions, indices } = model.mesh
   const index = new Uint32Array(triangles.length * 3)

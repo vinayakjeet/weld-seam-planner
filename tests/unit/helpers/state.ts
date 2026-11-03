@@ -20,6 +20,7 @@ export function seam(id: string, confidence = 0.9, lengthMm = 200, overrides: Pa
     lengthMm,
     openingAngleDeg: 90,
     points: [],
+    thicknessMm: [null, null],
     ...overrides,
   }
 }

@@ -1,7 +1,7 @@
 import { Vector3 } from 'three'
 import { describe, expect, it, vi } from 'vitest'
 import { buildMeshModel } from '../../../src/core/mesh/model'
-import { buildBodyBvhs, buildWholeBvh } from '../../../src/core/seams/bodyBvh'
+import { buildBodyBvhs, buildWholeBvh, wholeBvhFor } from '../../../src/core/seams/bodyBvh'
 import { computeFaceData } from '../../../src/core/mesh/faces'
 import { contactTolerance, findContactEdges } from '../../../src/core/seams/contact'
 import { DEFAULT_DETECT_SETTINGS, detectSeams } from '../../../src/core/seams/detect'
@@ -89,15 +89,26 @@ describe('buildWholeBvh', () => {
 })
 
 describe('detectSeams and the BVH of a single body', () => {
-  it('builds none when every free face is a wall', () => {
+  it('builds one over the whole mesh for the thickness rays even when every free face is a wall', () => {
     built.count = 0
     detectSeams(loadSampleModel('t-joint-merged'), DEFAULT_DETECT_SETTINGS)
-    expect(built.count).toBe(0)
+    expect(built.count).toBe(1)
   })
 
-  it('builds one over the whole mesh when a strip needs the thickness behind it', () => {
+  it('shares that one BVH with the strip rule that needs the thickness behind a strip', () => {
     built.count = 0
     detectSeams(model(steppedLap()), DEFAULT_DETECT_SETTINGS)
     expect(built.count).toBe(1)
+  })
+
+  it('builds none when the caller hands one in, and none at all when it hands in null', () => {
+    const lap = model(steppedLap())
+    const whole = wholeBvhFor(lap)
+    built.count = 0
+    detectSeams(lap, DEFAULT_DETECT_SETTINGS, { wholeBvh: whole })
+    expect(built.count).toBe(0)
+    const seams = detectSeams(lap, DEFAULT_DETECT_SETTINGS, { wholeBvh: null })
+    expect(built.count).toBe(0)
+    for (const s of seams) expect(s.thicknessMm).toEqual([null, null])
   })
 })

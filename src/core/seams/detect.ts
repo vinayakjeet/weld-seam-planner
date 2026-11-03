@@ -1,7 +1,8 @@
-import { normalize, sub, type Vec3 } from '../math/vec3'
+import { dot, normalize, sub, type Vec3 } from '../math/vec3'
 import { computeFaceData, type FaceData } from '../mesh/faces'
 import type { MeshModel } from '../mesh/model'
-import { buildBodyBvhs, buildWholeBvh, type BodyBvh } from './bodyBvh'
+import type { PlateThickness } from '../process/filletRules'
+import { buildBodyBvhs, wholeBvhFor, type BodyBvh } from './bodyBvh'
 import { chainEdges, edgeEnds, type Chain } from './chain'
 import { classifyJoint, patchWidth, thicknessBehind, type JointType } from './classify'
 import { confidence } from './confidence'
@@ -10,6 +11,7 @@ import { extractCreaseEdges, type CreaseEdges } from './crease'
 import { buildSeamPoints, pointsFromPolyline, type NormalsOf, type SeamPoint } from './frames'
 import { chainSegments, findIntersectionSegments } from './intersect'
 import { extractNonManifoldWedges } from './nonManifold'
+import { probeFromBvhs, roundDecimals, seamThickness, type RayProbe } from './thickness'
 
 export interface DetectSettings {
   creaseAngleDeg: number
@@ -20,6 +22,8 @@ export const DEFAULT_DETECT_SETTINGS: DetectSettings = { creaseAngleDeg: 30 }
 // Passes that need per-body BVHs reuse these when given; otherwise they build their own.
 export interface DetectContext {
   bodyBvhs?: BodyBvh[]
+  // The whole-mesh BVH of a single-body part, or null when there is none to use (too large). Built here when absent.
+  wholeBvh?: BodyBvh | null
 }
 
 export type SeamSource = 'crease' | 'contact' | 'intersection' | 'nonmanifold' | 'manual'
@@ -38,6 +42,8 @@ export interface SeamCandidate {
   lengthMm: number
   openingAngleDeg: number
   points: SeamPoint[]
+  // Thickness of the plates behind n1 and n2, in mm; null where it could not be measured.
+  thicknessMm: PlateThickness
   // Drawn across open surface: n1 and n2 are the surface normal there, not the two plates of a joint.
   approximateNormals?: boolean
 }
@@ -52,13 +58,39 @@ export function detectSeams(model: MeshModel, settings: DetectSettings, context:
   const faces = computeFaceData(model.mesh)
   const minLength = Math.max(MIN_LENGTH_MM, MIN_LENGTH_FRACTION * model.bounds.diagonal)
   const bvhs = model.bodies.count > 1 ? (context.bodyBvhs ?? buildBodyBvhs(model)) : []
-  const strips = stripProbe(model, faces, bvhs)
+  let whole = context.wholeBvh
+  const wholeBvh = () => (whole === undefined ? (whole = wholeBvhFor(model)) : whole)
+  const strips = stripProbe(model, faces, bvhs, wholeBvh)
+
+  let probe: RayProbe | null | undefined
+  const rayProbe = () => {
+    if (probe === undefined) {
+      const found = bvhs.length > 0 ? bvhs : [wholeBvh()].filter((b): b is BodyBvh => b !== null)
+      probe = found.length > 0 ? probeFromBvhs(found.map((b) => b.bvh)) : null
+    }
+    return probe
+  }
+  const thicknessOf: ThicknessOf = (points, jointType, strip) => {
+    const ray = rayProbe()
+    if (!ray) return [null, null]
+    const pair = seamThickness(points, ray, 1, jointType === 'corner')
+    const mid = points[points.length >> 1]
+    // A lap's strip face is its end face, so its plate thickness is the width of that face, not a ray through it.
+    if (jointType === 'lap' && strip.stripNormal && mid && Number.isFinite(strip.stripWidthMm)) {
+      pair[dot(mid.n1, strip.stripNormal) >= dot(mid.n2, strip.stripNormal) ? 0 : 1] = roundDecimals(strip.stripWidthMm, 2)
+    }
+    return pair
+  }
 
   const creases = extractCreaseEdges(model, faces, settings.creaseAngleDeg)
   const contact = bvhs.length > 1 ? findContactEdges(model, faces, bvhs, settings.creaseAngleDeg) : null
 
   const found: RawSeam[] = seamsFromEdges('crease', creases, model, faces, minLength, {
-    jointOf: (edge, seam) => classifyJoint({ source: 'crease', ...seam, ...strips.ofCrease(creases.edgeIds[edge]!), convex: false }),
+    thicknessOf,
+    jointOf: (edge, seam) => {
+      const strip = strips.ofCrease(creases.edgeIds[edge]!)
+      return { jointType: classifyJoint({ source: 'crease', ...seam, ...strip, convex: false }), strip }
+    },
   })
   // A convex edge that is a contact seam is already listed as one, so it is not a corner as well.
   const taken = new Set(contact?.edgeIds)
@@ -70,13 +102,14 @@ export function detectSeams(model: MeshModel, settings: DetectSettings, context:
   }
   found.push(
     ...seamsFromEdges('crease', corners, model, faces, minLength, {
-      jointOf: (_, seam) => classifyJoint({ source: 'crease', ...seam, ...NO_STRIP, convex: true }),
+      thicknessOf,
+      jointOf: (_, seam) => ({ jointType: classifyJoint({ source: 'crease', ...seam, ...NO_STRIP, convex: true }), strip: NO_STRIP }),
     }),
   )
-  found.push(...nonManifoldSeams(model, faces, settings, minLength))
+  found.push(...nonManifoldSeams(model, faces, settings, minLength, thicknessOf))
 
   if (contact) {
-    found.push(...contactSeams(model, faces, contact, minLength, strips), ...intersectionSeams(model, bvhs, minLength))
+    found.push(...contactSeams(model, faces, contact, minLength, strips, thicknessOf), ...intersectionSeams(model, bvhs, minLength, thicknessOf))
   }
 
   for (const seam of found) seam.id = seamId(seam)
@@ -98,7 +131,14 @@ export function detectSeams(model: MeshModel, settings: DetectSettings, context:
 
 // The plate normals of a contact seam are the free face of the touching body and the surface it touches, so the
 // opening angle is measured between those two, not between the two faces of the touching body's own edge.
-function contactSeams(model: MeshModel, faces: FaceData, contact: ContactEdges, minLength: number, strips: StripProbe): RawSeam[] {
+function contactSeams(
+  model: MeshModel,
+  faces: FaceData,
+  contact: ContactEdges,
+  minLength: number,
+  strips: StripProbe,
+  thicknessOf: ThicknessOf,
+): RawSeam[] {
   const normalsOfEdge = (k: number): [Vec3, Vec3] => {
     const free = contact.freeFace[k]! * 3
     return [
@@ -114,14 +154,17 @@ function contactSeams(model: MeshModel, faces: FaceData, contact: ContactEdges, 
   const unknown = new Uint8Array(contact.edgeIds.length)
   return seamsFromEdges('contact', { edgeIds: contact.edgeIds, dihedralDeg, unknown }, model, faces, minLength, {
     normalsOfEdge,
-    jointOf: (k, seam) =>
-      classifyJoint({ source: 'contact', ...seam, ...strips.ofContact(contact, k), convex: false }),
+    thicknessOf,
+    jointOf: (k, seam) => {
+      const strip = strips.ofContact(contact, k)
+      return { jointType: classifyJoint({ source: 'contact', ...seam, ...strip, convex: false }), strip }
+    },
   })
 }
 
 // Wedges of one edge run along the same line, so each rank is chained on its own; chaining them together would
 // join the two coincident seams of a fused T into a loop.
-function nonManifoldSeams(model: MeshModel, faces: FaceData, settings: DetectSettings, minLength: number): RawSeam[] {
+function nonManifoldSeams(model: MeshModel, faces: FaceData, settings: DetectSettings, minLength: number, thicknessOf: ThicknessOf): RawSeam[] {
   const wedges = extractNonManifoldWedges(model, settings.creaseAngleDeg)
   const seams: RawSeam[] = []
   for (let rank = 0; wedges.some((w) => w.rank >= rank); rank++) {
@@ -131,7 +174,7 @@ function nonManifoldSeams(model: MeshModel, faces: FaceData, settings: DetectSet
       dihedralDeg: Float32Array.from(group, (w) => 180 - w.openingDeg),
       unknown: new Uint8Array(group.length),
     }
-    seams.push(...seamsFromEdges('nonmanifold', edges, model, faces, minLength, { normalsOfEdge: (k) => [group[k]!.n1, group[k]!.n2] }))
+    seams.push(...seamsFromEdges('nonmanifold', edges, model, faces, minLength, { normalsOfEdge: (k) => [group[k]!.n1, group[k]!.n2], thicknessOf }))
   }
   return seams
 }
@@ -141,7 +184,7 @@ const MIN_WELD_MM = 0.001
 
 // Intersection chains are not mesh edges, so they carry their own plate normals and triangle areas. The opening angle
 // is the length-weighted mean of 180 minus the angle between the two outward triangle normals.
-function intersectionSeams(model: MeshModel, bvhs: BodyBvh[], minLength: number): RawSeam[] {
+function intersectionSeams(model: MeshModel, bvhs: BodyBvh[], minLength: number, thicknessOf: ThicknessOf): RawSeam[] {
   const { diagonal } = model.bounds
   const segments = findIntersectionSegments(model, bvhs, contactTolerance(diagonal))
   const seams: RawSeam[] = []
@@ -159,17 +202,19 @@ function intersectionSeams(model: MeshModel, bvhs: BodyBvh[], minLength: number)
       total += length
     })
     const openingAngleDeg = weighted / total
+    const jointType = classifyJoint({ source: 'intersection', closed: line.closed, points, ...NO_STRIP, convex: false })
     seams.push({
       id: '',
       source: 'intersection',
       concavity: 'known',
-      jointType: classifyJoint({ source: 'intersection', closed: line.closed, points, ...NO_STRIP, convex: false }),
+      jointType,
       hidden: false,
       confidence: confidence({ lengthMm, openingDeg: openingAngleDeg, medianAdjacentAreaMm2: median(line.areas), diagonal }),
       closed: line.closed,
       lengthMm,
       openingAngleDeg,
       points,
+      thicknessMm: thicknessOf(points, jointType, NO_STRIP),
     })
   }
   return seams
@@ -181,11 +226,20 @@ function median(values: number[]): number {
   return sorted.length % 2 === 1 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2
 }
 
+// Where a joint's strip face is and how wide it is, when the joint is a strip on a plate.
+type ThicknessOf = (points: SeamPoint[], jointType: JointType, strip: Strip) => PlateThickness
+
+interface JointInfo {
+  jointType: JointType
+  strip: Strip
+}
+
 interface EdgeOptions {
+  thicknessOf: ThicknessOf
   // Plate normals per entry of the edge list, when they are not the normals of the mesh faces beside the edge.
   normalsOfEdge?: (edge: number) => [Vec3, Vec3]
   // Joint type of a chain, decided from its middle entry of the edge list. Fillet when absent.
-  jointOf?: (edge: number, seam: { closed: boolean; points: SeamPoint[] }) => JointType
+  jointOf?: (edge: number, seam: { closed: boolean; points: SeamPoint[] }) => JointInfo
 }
 
 // Chains the edges, drops chains under minLength and describes the rest. Edge numbers in the options index the edge list.
@@ -195,7 +249,7 @@ function seamsFromEdges(
   model: MeshModel,
   faces: FaceData,
   minLength: number,
-  { normalsOfEdge, jointOf }: EdgeOptions = {},
+  { normalsOfEdge, jointOf, thicknessOf }: EdgeOptions,
 ): RawSeam[] {
   const chains = chainEdges(model.mesh.positions, edgeEnds(model.edges, edges.edgeIds), TURN_BREAK_DEG)
   const seams: RawSeam[] = []
@@ -204,7 +258,9 @@ function seamsFromEdges(
     const { points, lengthMm } = buildSeamPoints(chain, edges.edgeIds, model, faces, normalsOf)
     if (lengthMm < minLength) continue
     const { openingAngleDeg, medianAdjacentAreaMm2 } = describeChain(chain, edges, model, faces)
-    const jointType = jointOf ? jointOf(chain.edges[chain.edges.length >> 1]!, { closed: chain.closed, points }) : 'fillet'
+    const { jointType, strip } = jointOf
+      ? jointOf(chain.edges[chain.edges.length >> 1]!, { closed: chain.closed, points })
+      : { jointType: 'fillet' as const, strip: NO_STRIP }
     seams.push({
       id: '',
       source,
@@ -216,47 +272,48 @@ function seamsFromEdges(
       lengthMm,
       openingAngleDeg,
       points,
+      thicknessMm: thicknessOf(points, jointType, strip),
     })
   }
   return seams
 }
 
-const NO_STRIP = { stripWidthMm: Infinity, touchedThicknessMm: Infinity }
+interface Strip {
+  stripWidthMm: number
+  touchedThicknessMm: number
+  // Normal of the strip's free face, to tell which of a seam's two plates is the strip.
+  stripNormal: Vec3 | null
+}
+
+const NO_STRIP: Strip = { stripWidthMm: Infinity, touchedThicknessMm: Infinity, stripNormal: null }
 
 // The lap rule needs the width of the free face's flat patch and the thickness of the plate behind the touched
 // surface. A patch wider than a tenth of the part is a wall, not a strip, so it costs no ray and, in a single body,
-// no BVH. A single body gets one BVH over the whole mesh the first time a strip needs it, unless the mesh is large.
+// no BVH. A single body shares one BVH over the whole mesh with the thickness rays, unless the mesh is large.
 // The ray starts on the junction line itself; a ray along a face plane still registers the edge it grazes.
 const STRIP_CAP_FRACTION = 0.1
-const MAX_STRIP_BVH_TRIANGLES = 300_000
 
 interface StripProbe {
-  ofCrease: (edge: number) => typeof NO_STRIP
-  ofContact: (contact: ContactEdges, k: number) => typeof NO_STRIP
+  ofCrease: (edge: number) => Strip
+  ofContact: (contact: ContactEdges, k: number) => Strip
 }
 
-function stripProbe(model: MeshModel, faces: FaceData, bvhs: BodyBvh[]): StripProbe {
+function stripProbe(model: MeshModel, faces: FaceData, bvhs: BodyBvh[], wholeBvh: () => BodyBvh | null): StripProbe {
   const { diagonal } = model.bounds
   const { positions } = model.mesh
   const { normals } = faces
   const cap = STRIP_CAP_FRACTION * diagonal
-  let whole: BodyBvh | null = null
-  const bvhOf = (body: number) => {
-    if (bvhs[body]) return bvhs[body]!.bvh
-    if (model.bodies.count > 1 || model.mesh.triangleCount > MAX_STRIP_BVH_TRIANGLES) return null
-    whole ??= buildWholeBvh(model)
-    return whole.bvh
-  }
+  const bvhOf = (body: number) => bvhs[body]?.bvh ?? wholeBvh()?.bvh ?? null
   const faceNormal = (f: number): Vec3 => [normals[f * 3]!, normals[f * 3 + 1]!, normals[f * 3 + 2]!]
 
   // Free face x on the seam at mid with tangent t, touched surface with normal nY in the given body.
-  const measure = (x: number, nY: Vec3, body: number, mid: Vec3, t: Vec3): typeof NO_STRIP => {
+  const measure = (x: number, nY: Vec3, body: number, mid: Vec3, t: Vec3): Strip => {
     const widthMm = patchWidth(model, faces, x, mid, t, cap)
     if (widthMm > cap) return NO_STRIP
     const bvh = bvhOf(body)
-    return bvh ? { stripWidthMm: widthMm, touchedThicknessMm: thicknessBehind(bvh, mid, nY) } : NO_STRIP
+    return bvh ? { stripWidthMm: widthMm, touchedThicknessMm: thicknessBehind(bvh, mid, nY), stripNormal: faceNormal(x) } : NO_STRIP
   }
-  const ratio = (m: typeof NO_STRIP) => (Number.isFinite(m.touchedThicknessMm) ? m.stripWidthMm / m.touchedThicknessMm : Infinity)
+  const ratio = (m: Strip) => (Number.isFinite(m.touchedThicknessMm) ? m.stripWidthMm / m.touchedThicknessMm : Infinity)
   const ends = (e: number): { mid: Vec3; t: Vec3 } => {
     const a = model.edges.edgeA[e]! * 3
     const b = model.edges.edgeB[e]! * 3

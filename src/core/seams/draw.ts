@@ -243,6 +243,8 @@ export function snapPolyline(clicks: DrawClick[], ctx: SnapContext, snapRadiusMm
     lengthMm,
     openingAngleDeg: opening / segmentNormals.length,
     points,
+    // The worker measures this where it has the BVH; open surface has no plate to measure.
+    thicknessMm: [null, null],
     ...(approximate.some(Boolean) ? { approximateNormals: true } : {}),
   }
 }
