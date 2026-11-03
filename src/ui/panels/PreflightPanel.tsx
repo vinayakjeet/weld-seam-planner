@@ -3,9 +3,11 @@ import { selectAllSeams, selectPlan } from '../../state/selectors'
 import { useStore } from '../../state/store'
 import { groupIssues, type Row } from './preflightGroups'
 
-const TONE = { error: 'text-err', warning: 'text-warn' } as const
+const TONE = { error: 'text-err', warning: 'text-warn', info: 'text-info' } as const
 
-function IssueRow({ row, severity, open, onToggle }: { row: Row; severity: 'error' | 'warning'; open: boolean; onToggle: () => void }) {
+type Severity = keyof typeof TONE
+
+function IssueRow({ row, severity, open, onToggle }: { row: Row; severity: Severity; open: boolean; onToggle: () => void }) {
   const select = useStore((s) => s.select)
   const selected = useStore((s) => row.issue.seamId !== null && s.selectedId === row.issue.seamId)
   const { issue } = row
@@ -35,7 +37,7 @@ function IssueRow({ row, severity, open, onToggle }: { row: Row; severity: 'erro
   )
 }
 
-function Group({ title, severity, rows, open, toggle }: { title: string; severity: 'error' | 'warning'; rows: Row[]; open: Set<string>; toggle: (key: string) => void }) {
+function Group({ title, severity, rows, open, toggle }: { title: string; severity: Severity; rows: Row[]; open: Set<string>; toggle: (key: string) => void }) {
   return (
     <section aria-label={title}>
       <h3 className="flex items-center gap-2 border-b border-line px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-2">
@@ -91,6 +93,7 @@ export function PreflightPanel() {
       ) : null}
       <Group title="Errors" severity="error" rows={grouped.errors} open={open} toggle={toggle} />
       <Group title="Warnings" severity="warning" rows={grouped.warnings} open={open} toggle={toggle} />
+      {grouped.info.length > 0 && <Group title="Notes" severity="info" rows={grouped.info} open={open} toggle={toggle} />}
     </div>
   )
 }

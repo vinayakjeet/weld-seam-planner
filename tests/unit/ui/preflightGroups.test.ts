@@ -17,12 +17,18 @@ describe('groupIssues', () => {
     issue('NO_PROCEDURE', 'error', 's2'),
     issue('NO_SEAMS', 'error', null),
     issue('MULTI_PASS', 'warning', 's2'),
+    issue('SNAKE_NOT_RUN', 'info', null),
   ]
   const grouped = groupIssues(issues, (id) => id.toUpperCase())
 
   it('splits by severity and keeps the order within each group', () => {
     expect(grouped.errors.map((r) => r.issue.code)).toEqual(['NO_PROCEDURE', 'NO_SEAMS'])
     expect(grouped.warnings.map((r) => r.issue.code)).toEqual(['SHORT_SEAM', 'MULTI_PASS'])
+  })
+
+  it('puts info rows in their own group, apart from the warnings', () => {
+    expect(grouped.info.map((r) => r.issue.code)).toEqual(['SNAKE_NOT_RUN'])
+    expect(grouped.info.map((r) => r.label)).toEqual(['Plan'])
   })
 
   it('labels a seam issue with the seam label and a plan issue "Plan"', () => {
@@ -36,6 +42,6 @@ describe('groupIssues', () => {
   })
 
   it('returns empty groups for no issues', () => {
-    expect(groupIssues([], (id) => id)).toEqual({ errors: [], warnings: [] })
+    expect(groupIssues([], (id) => id)).toEqual({ errors: [], warnings: [], info: [] })
   })
 })

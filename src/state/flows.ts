@@ -735,7 +735,7 @@ export async function copySummary(client: GeometryClient, write: (text: string) 
   }
   const summary = outcome.status === 'ok' ? outcome.job.summary : outcome.summary
   const errors = outcome.issues.filter((issue) => issue.severity === 'error').length
-  const warnings = outcome.issues.length - errors
+  const warnings = outcome.issues.filter((issue) => issue.severity === 'warning').length
   try {
     await write(summaryText(state.part.name, summary, { errors, warnings }))
   } catch (error) {

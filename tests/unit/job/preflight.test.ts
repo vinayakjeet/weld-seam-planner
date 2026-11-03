@@ -231,7 +231,7 @@ describe('access', () => {
     only(preflight(plan), 'ACCESS_BLOCKED', 'warning', 's07')
   })
 
-  it.each(['standard', 'slim', 'snake'] as const)('raises nothing for a %s seam', (cls) => {
+  it.each(['standard', 'slim'] as const)('raises nothing for a %s seam', (cls) => {
     const plan = specExamplePlan()
     plan.seams[0]!.access = access(cls)
     expect(preflight(plan)).toEqual([])
@@ -249,6 +249,89 @@ describe('access', () => {
 
   it('is silent until access exists', () => {
     expect(preflight(specExamplePlan())).toEqual([])
+  })
+
+  it('ACCESS_BLOCKED: a slim seam with unreachable intervals keeps the warning', () => {
+    const plan = specExamplePlan()
+    plan.seams[0]!.access = access('slim', [[0, 40]])
+    only(preflight(plan), 'ACCESS_BLOCKED', 'warning', 's07')
+  })
+})
+
+describe('snake reach', () => {
+  const snake = (reachCoverage: number | null, unreachable: Array<[number, number]> = [], portId: string | null = 'P1') => ({
+    clearanceDeg: 0,
+    nearClearanceDeg: 45,
+    class: 'snake' as const,
+    portId,
+    reachCoverage,
+    unreachable,
+  })
+  const planWith = (coverages: Array<ReturnType<typeof snake>>): Plan => {
+    const plan = specExamplePlan(coverages.map((_, i) => ({ id: `s${i}`, from: [0, i * 300, 0] as [number, number, number], to: [100, i * 300, 0] as [number, number, number] })))
+    plan.seams.forEach((planned, i) => (planned.access = coverages[i]!))
+    return plan
+  }
+  const text = (issue: Issue) => `${issue.what} ${issue.why} ${issue.next}`
+
+  it('SNAKE_UNREACHABLE: coverage 0.6 warns with the percentage and the stretches, and ACCESS_BLOCKED stays quiet', () => {
+    const issues = preflight(planWith([snake(0.6, [[10, 30], [60, 70]])]))
+    only(issues, 'SNAKE_UNREACHABLE', 'warning', 's0')
+    expect(issues[0]!.what).toBe('The snake arm reaches 60 % of seam S0.')
+    expect(issues[0]!.why).toBe('2 stretches of it (10 to 30 mm, 60 to 70 mm) are out of reach from port P1 with the current arm.')
+    expect(issues[0]!.next).toContain('The rest can be welded by hand.')
+  })
+
+  it('SNAKE_UNREACHABLE: one stretch agrees in number, and a seam with no port says every port', () => {
+    const issues = preflight(planWith([snake(0, [[0, 100]], null)]))
+    expect(issues[0]!.why).toBe('1 stretch of it (0 to 100 mm) is out of reach from every port with the current arm.')
+    expect(issues[0]!.what).toBe('The snake arm reaches 0 % of seam S0.')
+  })
+
+  it('gives nothing for a fully reached snake seam', () => {
+    expect(preflight(planWith([snake(1)]))).toEqual([])
+  })
+
+  it('SNAKE_NOT_RUN: three snake seams with no result give one info for the plan, with the count', () => {
+    const issues = preflight(planWith([snake(null), snake(null), snake(null)]))
+    only(issues, 'SNAKE_NOT_RUN', 'info', null)
+    expect(issues[0]!.what).toBe('3 snake seams have no reach result.')
+    expect(issues[0]!.next).toContain('The file can be exported without it.')
+  })
+
+  it('SNAKE_NOT_RUN: one seam agrees in number', () => {
+    expect(preflight(planWith([snake(null)]))[0]!.what).toBe('1 snake seam has no reach result.')
+  })
+
+  it('counts only the seams without a result when others have one', () => {
+    const issues = preflight(planWith([snake(null), snake(1), snake(0.5, [[0, 50]])]))
+    expect(issues.map((i) => [i.code, i.severity])).toEqual([['SNAKE_UNREACHABLE', 'warning'], ['SNAKE_NOT_RUN', 'info']])
+    expect(issues[1]!.what).toBe('1 snake seam has no reach result.')
+  })
+
+  it('gives nothing when no seam is snake', () => {
+    const plan = specExamplePlan()
+    plan.seams[0]!.access = { clearanceDeg: 40, nearClearanceDeg: 40, class: 'standard', portId: null, reachCoverage: null, unreachable: [] }
+    expect(preflight(plan)).toEqual([])
+  })
+
+  it('lists errors, then warnings, then info', () => {
+    const plan = planWith([snake(null), snake(0.5, [[0, 50]])])
+    plan.seams[0]!.procedureId = null
+    expect(preflight(plan).map((i) => i.severity)).toEqual(['error', 'warning', 'info'])
+  })
+
+  it('exports with only warnings and info, writing the info to validation.warnings', () => {
+    const result = exportJob(planWith([snake(null), snake(0.5, [[0, 50]])]), { createdAt: CREATED_AT })
+    expect(result.status).toBe('ok')
+    if (result.status !== 'ok') return
+    expect(result.job.validation.warnings.map((w) => w.code)).toEqual(['SNAKE_UNREACHABLE', 'SNAKE_NOT_RUN'])
+    expect(result.job.validation.errors).toEqual([])
+  })
+
+  it('writes no en or em dash in any message', () => {
+    const issues = preflight(planWith([snake(null), snake(0.5, [[0, 50]]), snake(0, [[0, 100]], null)]))
+    for (const issue of issues) expect(text(issue)).not.toMatch(new RegExp('[\\u2013\\u2014]'))
   })
 })
 

@@ -10,13 +10,14 @@ export interface Row {
 export interface GroupedIssues {
   errors: Row[]
   warnings: Row[]
+  info: Row[]
 }
 
 export function groupIssues(issues: Issue[], labelOf: (seamId: string) => string): GroupedIssues {
-  const grouped: GroupedIssues = { errors: [], warnings: [] }
+  const grouped: GroupedIssues = { errors: [], warnings: [], info: [] }
   issues.forEach((issue, index) => {
     const row: Row = { key: `${index}:${issue.code}:${issue.seamId ?? ''}`, label: issue.seamId === null ? 'Plan' : labelOf(issue.seamId), issue }
-    ;(issue.severity === 'error' ? grouped.errors : grouped.warnings).push(row)
+    grouped[issue.severity === 'error' ? 'errors' : issue.severity === 'warning' ? 'warnings' : 'info'].push(row)
   })
   return grouped
 }

@@ -22,10 +22,13 @@ export type IssueCode =
   | 'POSITION_NOT_COVERED'
   | 'THICKNESS_UNKNOWN'
   | 'THICKNESS_OUTSIDE_WPS'
+  | 'SNAKE_UNREACHABLE'
+  | 'SNAKE_NOT_RUN'
 
 export interface Issue extends Explained {
   code: IssueCode
-  severity: 'error' | 'warning'
+  // Info never blocks an export and is not counted as a warning.
+  severity: 'error' | 'warning' | 'info'
   seamId: string | null
 }
 
@@ -41,6 +44,10 @@ const OVERLAP_STEP_MM = 0.5
 const OVERLAP_COS = Math.cos((20 * Math.PI) / 180)
 
 const n = (value: number) => String(Math.round(value * 100) / 100)
+
+// The same text the Access panel shows for the unreachable stretches of a seam.
+const intervalsText = (intervals: ReadonlyArray<readonly [number, number]>): string =>
+  intervals.map(([from, to]) => `${Math.round(from)} to ${Math.round(to)} mm`).join(', ')
 
 interface Segment {
   a: Vec3
@@ -197,7 +204,8 @@ export function preflight(plan: Plan): Issue[] {
     }
 
     const access = planned.access
-    if (access && (access.class === 'blocked' || access.unreachable.length > 0)) {
+    // A snake seam with a reach result is described by SNAKE_UNREACHABLE instead, so it is never warned twice.
+    if (access && (access.class === 'blocked' || (access.class !== 'snake' && access.unreachable.length > 0))) {
       out('ACCESS_BLOCKED', 'warning', {
         what: `No torch can reach all of seam ${label}.`,
         why:
@@ -205,6 +213,15 @@ export function preflight(plan: Plan): Issue[] {
             ? 'The access check found the cone in front of the torch blocked by the part, so neither a standard, a slim nor a snake arm fits.'
             : `${access.unreachable.length} stretch${access.unreachable.length === 1 ? '' : 'es'} of it lie outside the reach of the arm.`,
         next: 'The seam can still be welded by hand. To weld it with a robot, turn the part, add or widen an access port, or leave the seam out.',
+      })
+    }
+
+    if (access?.class === 'snake' && access.reachCoverage !== null && access.reachCoverage < 1) {
+      const stretches = access.unreachable.length
+      out('SNAKE_UNREACHABLE', 'warning', {
+        what: `The snake arm reaches ${Math.round(access.reachCoverage * 100)} % of seam ${label}.`,
+        why: `${stretches} stretch${stretches === 1 ? '' : 'es'} of it (${intervalsText(access.unreachable)}) ${stretches === 1 ? 'is' : 'are'} out of reach from ${access.portId === null ? 'every port' : `port ${access.portId}`} with the current arm.`,
+        next: 'Move or add a port, lengthen the arm or raise its bend limit in Access, then run reach again. The rest can be welded by hand.',
       })
     }
 
@@ -271,6 +288,15 @@ export function preflight(plan: Plan): Issue[] {
     }
   })
 
+  const notRun = plan.seams.filter((p) => p.access?.class === 'snake' && p.access.reachCoverage === null).length
+  if (notRun > 0) {
+    add(planLevel, 'SNAKE_NOT_RUN', 'info', null, {
+      what: `${notRun} snake seam${notRun === 1 ? ' has' : 's have'} no reach result.`,
+      why: 'Their torch cone is too narrow for a standard or slim torch, and the snake arm reach has not been run for them since they last changed.',
+      next: 'Open Access, place a port over an opening and run reach. The file can be exported without it.',
+    })
+  }
+
   const all = [...planLevel, ...seamLevel]
-  return [...all.filter((i) => i.severity === 'error'), ...all.filter((i) => i.severity === 'warning')]
+  return (['error', 'warning', 'info'] as const).flatMap((severity) => all.filter((i) => i.severity === severity))
 }

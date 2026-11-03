@@ -1400,6 +1400,15 @@ describe('copySummary', () => {
     expect(write.mock.calls[0]![0]).toContain('Pre-flight: 1 errors, 1 warnings.')
   })
 
+  it('does not count an info note as a warning', async () => {
+    const plan = loadPlanPart()
+    const summary = buildJob(plan, { createdAt: CREATED_AT }, []).summary
+    const write = vi.fn<(text: string) => Promise<void>>(async () => {})
+    const issues = [{ ...err('SNAKE_NOT_RUN', null), severity: 'info' as const }, { ...err('SHORT_SEAM', 'a'), severity: 'warning' as const }]
+    await copySummary(fakeClient({ exportJob: async () => ({ status: 'blocked', issues, summary }) }), write)
+    expect(write.mock.calls[0]![0]).toContain('Pre-flight: 0 errors, 1 warnings.')
+  })
+
   it('explains a refused clipboard in the banner', async () => {
     const plan = loadPlanPart()
     const job = buildJob(plan, { createdAt: CREATED_AT }, [])
