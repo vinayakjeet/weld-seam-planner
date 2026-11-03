@@ -1,4 +1,5 @@
-import { length, sub, type Vec3 } from '../math/vec3'
+import type { Vec3 } from '../math/vec3'
+import { airMoveMm } from './air'
 import type { EdgeCost, SequenceNode, Visit } from './types'
 
 const EPS = 1e-9
@@ -8,14 +9,9 @@ const MAX_RUN = 3
 export const enterOf = (v: Visit): Vec3 => (v.reversed ? v.node.enter.reverse : v.node.enter.forward)
 export const leaveOf = (v: Visit): Vec3 => (v.reversed ? v.node.leave.reverse : v.node.leave.forward)
 
-// The air move lengths of the export: a lead before and after every seam, and the distance between the torch points.
+// The cost of an air move is the export's own measure, see airMoveMm.
 export function airEdge(home: Vec3, leadMm: number): EdgeCost {
-  return (from, to) => {
-    if (from === null && to === null) return 0
-    if (from === null) return length(sub(enterOf(to!), home)) + leadMm
-    if (to === null) return leadMm + length(sub(home, leaveOf(from)))
-    return leadMm + length(sub(enterOf(to), leaveOf(from))) + leadMm
-  }
+  return (from, to) => airMoveMm(from === null ? null : leaveOf(from), to === null ? null : enterOf(to), home, leadMm)
 }
 
 export function tourCost(tour: Visit[], edge: EdgeCost): number {

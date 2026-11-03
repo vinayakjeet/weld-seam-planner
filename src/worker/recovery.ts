@@ -119,5 +119,7 @@ export function createRecoveringClient(spawn: (onDead: () => void) => GeometryCl
     preflight: (plan) => current().preflight(plan),
 
     exportJob: (plan, createdAt) => current().exportJob(plan, createdAt),
+
+    planTiming: (plan) => current().planTiming(plan),
   }
 }

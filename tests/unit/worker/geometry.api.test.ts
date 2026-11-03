@@ -246,6 +246,8 @@ describe('geometry client over a real message channel', () => {
     expect(checked.status).toBe('ok')
     const exported = await client.exportJob(plan, CREATED_AT)
     expect(exported.status).toBe('ok')
+    const timed = await client.planTiming(plan)
+    expect(timed.status === 'ok' && timed.timing.cycleTimeS).toBeGreaterThan(0)
   })
 })
 

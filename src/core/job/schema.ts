@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { PROCESSES } from '../process/heatInput'
+import { SEQUENCE_STRATEGIES } from '../sequence/types'
 
 export const ISO_POSITIONS = ['PA', 'PB', 'PC', 'PD', 'PE', 'PF', 'PG'] as const
 
@@ -266,7 +267,7 @@ export const jobSchema = z
     seams: z.array(seamSchema).meta({ description: 'Every accepted seam, in no particular order.' }),
     sequence: z
       .looseObject({
-        strategy: z.enum(['table-order', 'min-air-move', 'manual']),
+        strategy: z.enum(SEQUENCE_STRATEGIES),
         order: z.array(z.looseObject({ seamId: z.string().min(1), reversed: z.boolean() })),
         airMoves: z.array(z.looseObject({ from: z.string().min(1), to: z.string().min(1), lengthMm: nonNegative })),
       })

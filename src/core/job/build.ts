@@ -1,9 +1,14 @@
-import { add, length, scale, sub, type Vec3 } from '../math/vec3'
+import { add, scale, type Vec3 } from '../math/vec3'
 import { seamEstimates } from '../process/estimates'
 import { throatMm } from '../process/filletRules'
 import { DEFAULT_TORCH, poseAt, torchPoses, type TorchPose } from '../torch/frames'
 import { awsFor, seamPosition, upFromGravity } from '../torch/positions'
+import { reverseSeam } from '../seams/manual'
+import type { SeamCandidate } from '../seams/detect'
+import { airMoveMm } from '../sequence/air'
+import { reconcileOrder } from '../sequence/order'
 import { resolveSeam, torchParamsFor, type Explained, type Plan, type PlannedSeam } from './plan'
+import type { PlanTiming } from './timing'
 import { preflight, toJobIssue, type Issue } from './preflight'
 import { FRAME_CONVENTION, JOB_UNITS, jobSchema, SCHEMA_URL, type JobIssue, type WeldJob } from './schema'
 
@@ -49,6 +54,7 @@ function quaternionOut(q: [number, number, number, number]): [number, number, nu
 
 export interface BuiltSeam {
   seam: JobSeam
+  reversed: boolean
   firstApproach: Vec3
   lastRetract: Vec3
   arcTimeS: number
@@ -57,10 +63,17 @@ export interface BuiltSeam {
   startS: number
 }
 
-function buildSeam(plan: Plan, planned: PlannedSeam, issues: JobIssue[]): BuiltSeam {
-  const { seam } = planned
+// The Reverse tool gives the seam a new id and marks it manual; travelling a seam the other way needs neither.
+export const travelledBackwards = (seam: SeamCandidate): SeamCandidate => ({ ...reverseSeam(seam), id: seam.id, source: seam.source })
+
+// A seam is built along its travel direction: poses, start and end follow it, while points stay as stored so that an
+// imported file restores the seam itself and the order says which way it was welded.
+function buildSeam(plan: Plan, planned: PlannedSeam, issues: JobIssue[], reversed = false): BuiltSeam {
+  const stored = planned.seam
+  const backwards = reversed && !stored.closed
+  const seam = backwards ? travelledBackwards(stored) : stored
   const { settings, gravity } = plan
-  const resolved = resolveSeam(plan, planned)
+  const resolved = resolveSeam(plan, { ...planned, seam })
   const { procedure } = resolved
 
   const lengthMm = r3(seam.lengthMm)
@@ -102,7 +115,7 @@ function buildSeam(plan: Plan, planned: PlannedSeam, issues: JobIssue[]): BuiltS
     boxing: { start: false, end: false, lengthMm: 0 },
     closed: seam.closed,
     lengthMm,
-    direction: 'forward',
+    direction: backwards ? 'reverse' : 'forward',
     geometry: {
       openingAngleDeg: r2(seam.openingAngleDeg),
       plateNormals: [vec(mid.n1, 6), vec(mid.n2, 6)],
@@ -131,11 +144,12 @@ function buildSeam(plan: Plan, planned: PlannedSeam, issues: JobIssue[]): BuiltS
       gasL: r1(est.gasL),
     },
     warnings: issues.filter((issue) => issue.seamId === seam.id),
-    points: seam.points.map((p) => ({ s: p.s, p: p.p, t: p.t, n1: p.n1, n2: p.n2 })),
+    points: stored.points.map((p) => ({ s: p.s, p: p.p, t: p.t, n1: p.n1, n2: p.n2 })),
   }
 
   return {
     seam: job,
+    reversed: backwards,
     firstApproach: poses[0]!.approach,
     lastRetract: poses[poses.length - 1]!.retract,
     arcTimeS: est.arcTimeS,
@@ -154,40 +168,54 @@ export function homePoint(plan: Plan): Vec3 {
   return add(centre, scale(up, halfAlongUp + plan.settings.approachMm))
 }
 
-function airMoves(plan: Plan, built: BuiltSeam[]): JobSeamMove[] {
-  if (built.length === 0) return []
-  const home = homePoint(plan)
-  const lead = plan.settings.approachMm
-  const moves: JobSeamMove[] = [{ from: 'home', to: built[0]!.seam.id, lengthMm: length(sub(built[0]!.firstApproach, home)) + lead }]
-  for (let i = 1; i < built.length; i++) {
-    const a = built[i - 1]!
-    const b = built[i]!
-    moves.push({ from: a.seam.id, to: b.seam.id, lengthMm: lead + length(sub(b.firstApproach, a.lastRetract)) + lead })
-  }
-  const end = built[built.length - 1]!
-  moves.push({ from: end.seam.id, to: 'home', lengthMm: lead + length(sub(home, end.lastRetract)) })
-  return moves
-}
-
-interface JobSeamMove {
+interface Move {
   from: string
   to: string
   lengthMm: number
 }
 
+// Home to the first seam, between the seams, and the last seam back to home. The one air move measure, airMoveMm, is
+// shared with the sequence optimiser, so the plan is costed the way it is exported.
+function airMoves(plan: Plan, built: BuiltSeam[]): Move[] {
+  if (built.length === 0) return []
+  const home = homePoint(plan)
+  const lead = plan.settings.approachMm
+  const ids = ['home', ...built.map((b) => b.seam.id), 'home']
+  const leaves = [null, ...built.map((b) => b.lastRetract)]
+  const enters = [...built.map((b) => b.firstApproach), null]
+  return enters.map((enter, i) => ({ from: ids[i]!, to: ids[i + 1]!, lengthMm: airMoveMm(leaves[i]!, enter, home, lead) }))
+}
+
+// Cycle time is arc time, the strike and stop time of every seam, and the air moves at air speed. The summary of the
+// exported job and the live figure of the status bar both come from this.
+export function timingOf(plan: Plan, built: BuiltSeam[]): PlanTiming {
+  const moves = airMoves(plan, built).map((m) => ({ ...m, timeS: m.lengthMm / plan.settings.airSpeedMmS }))
+  const seams = built.map((b) => ({ seamId: b.seam.id, arcTimeS: b.arcTimeS, overheadS: b.startS }))
+  const arcTimeS = seams.reduce((total, s) => total + s.arcTimeS, 0)
+  const airTimeS = moves.reduce((total, m) => total + m.timeS, 0)
+  const overheadS = seams.reduce((total, s) => total + s.overheadS, 0)
+  return { seams, moves, arcTimeS, airTimeS, cycleTimeS: arcTimeS + airTimeS + overheadS }
+}
+
+// Seams in table order, every one forward.
 export function buildSeams(plan: Plan, issues: JobIssue[] = []): BuiltSeam[] {
   return plan.seams.map((planned) => buildSeam(plan, planned, issues))
 }
 
+// Seams in the order of the plan's sequence, each travelled in its chosen direction. Without a sequence this is table order.
+export function buildOrdered(plan: Plan, issues: JobIssue[] = []): BuiltSeam[] {
+  if (plan.sequence === null) return buildSeams(plan, issues)
+  const byId = new Map(plan.seams.map((planned) => [planned.seam.id, planned]))
+  return reconcileOrder(plan.sequence.order, plan.seams.map((p) => p.seam.id)).map((entry) => buildSeam(plan, byId.get(entry.seamId)!, issues, entry.reversed))
+}
+
 export function buildJob(plan: Plan, options: { createdAt: string }, issues: JobIssue[] = []): WeldJob {
   const { part, settings, gravity } = plan
-  const built = buildSeams(plan, issues)
-  const moves = airMoves(plan, built)
+  const built = buildOrdered(plan, issues)
+  const timing = timingOf(plan, built)
 
   const referenced = new Set(plan.seams.map((s) => s.procedureId))
   const sum = (pick: (b: BuiltSeam) => number) => built.reduce((total, b) => total + pick(b), 0)
-  const airTimeS = moves.reduce((total, m) => total + m.lengthMm, 0) / settings.airSpeedMmS
-  const arcTimeS = sum((b) => b.arcTimeS)
 
   return {
     $schema: SCHEMA_URL,
@@ -221,17 +249,17 @@ export function buildJob(plan: Plan, options: { createdAt: string }, issues: Job
     procedures: plan.procedures.filter((p) => referenced.has(p.id)),
     seams: built.map((b) => b.seam),
     sequence: {
-      strategy: 'table-order',
-      order: built.map((b) => ({ seamId: b.seam.id, reversed: false })),
-      airMoves: moves.map((m) => ({ ...m, lengthMm: r3(m.lengthMm) })),
+      strategy: plan.sequence?.strategy ?? 'table-order',
+      order: built.map((b) => ({ seamId: b.seam.id, reversed: b.reversed })),
+      airMoves: timing.moves.map((m) => ({ from: m.from, to: m.to, lengthMm: r3(m.lengthMm) })),
     },
     access: { ports: [], arm: null },
     summary: {
       seamCount: built.length,
       weldLengthMm: r3(sum((b) => b.seam.lengthMm)),
-      arcTimeS: r1(arcTimeS),
-      airTimeS: r1(airTimeS),
-      cycleTimeS: r1(r1(arcTimeS) + r1(airTimeS) + sum((b) => b.startS)),
+      arcTimeS: r1(timing.arcTimeS),
+      airTimeS: r1(timing.airTimeS),
+      cycleTimeS: r1(r1(timing.arcTimeS) + r1(timing.airTimeS) + timing.seams.reduce((total, s) => total + s.overheadS, 0)),
       wireKg: r3(sum((b) => b.wireKg)),
       gasL: r1(sum((b) => b.gasL)),
     },

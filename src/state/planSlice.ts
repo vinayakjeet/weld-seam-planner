@@ -2,6 +2,7 @@ import type { StateCreator } from 'zustand'
 import type { Explained, JobSettings, Plan } from '../core/job/plan'
 import { DEFAULT_JOB_SETTINGS } from '../core/job/plan'
 import type { Issue } from '../core/job/preflight'
+import type { PlanTiming } from '../core/job/timing'
 import { procedureOverridesSchema, procedureSchema, type Procedure, type ProcedureOverrides } from '../core/job/schema'
 import type { PlateThickness } from '../core/process/filletRules'
 import { WPS_PRESETS } from '../core/process/wps'
@@ -24,6 +25,11 @@ export interface PlanSlice {
   issues: Issue[]
   issuesFor: Plan | null
   setIssues: (plan: Plan, issues: Issue[]) => void
+  // The last timing answer and the plan it was computed for; current only while timingFor is the plan selectPlan returns
+  // now, otherwise the status bar shows it dimmed. Not history.
+  timing: PlanTiming | null
+  timingFor: Plan | null
+  setTiming: (plan: Plan, timing: PlanTiming) => void
   // Every action returns null when it worked, or what went wrong. Each one is a single undo step.
   addProcedure: (procedure: Procedure) => Explained | null
   // The id may change; the seams that use the procedure follow it in the same step.
@@ -109,8 +115,12 @@ export const createPlanSlice: StateCreator<AppState, [], [], PlanSlice> = (set, 
   jobSettings: { poseSpacingMm: DEFAULT_JOB_SETTINGS.poseSpacingMm, airSpeedMmS: DEFAULT_JOB_SETTINGS.airSpeedMmS, approachMm: DEFAULT_JOB_SETTINGS.approachMm },
   issues: [],
   issuesFor: null,
+  timing: null,
+  timingFor: null,
 
   setIssues: (plan, issues) => set({ issues, issuesFor: plan }),
+
+  setTiming: (plan, timing) => set({ timing, timingFor: plan }),
 
   addProcedure: (procedure) => {
     const problem = procedureProblem(procedure)

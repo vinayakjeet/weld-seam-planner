@@ -4,6 +4,7 @@ import type {
   DetectOutcome,
   ExportOutcome,
   PreflightOutcome,
+  TimingOutcome,
   GeometryApi,
   LoadOutcome,
   Progress,
@@ -126,6 +127,7 @@ export function wrapGeometryApi(endpoint: Endpoint, options: ClientOptions = {})
       supervise<AccessOutcome>(options, 'checking torch access', (activity) => remote.access(seams, watching(activity, onProgress))),
     preflight: (plan) => supervise<PreflightOutcome>(options, 'checking the plan', () => remote.preflight(plan)),
     exportJob: (plan, createdAt) => supervise<ExportOutcome>(options, 'building the job file', () => remote.exportJob(plan, createdAt)),
+    planTiming: (plan) => supervise<TimingOutcome>(options, 'working out the cycle time', () => remote.planTiming(plan)),
   }
 }
 

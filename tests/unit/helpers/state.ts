@@ -89,6 +89,9 @@ export function fakeClient(impl: Partial<GeometryApi> = {}): GeometryApi {
     access: async () => {
       throw new Error('unexpected access')
     },
+    planTiming: async () => {
+      throw new Error('unexpected planTiming')
+    },
     exportJob: async () => {
       throw new Error('unexpected exportJob')
     },

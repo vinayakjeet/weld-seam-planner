@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { buildJob, exportJob } from '../../../src/core/job/build'
 import { toJobIssue } from '../../../src/core/job/preflight'
 import { jobSchema, type WeldJob } from '../../../src/core/job/schema'
-import { DEFAULT_JOB_SETTINGS, torchParamsFor } from '../../../src/core/job/plan'
+import { DEFAULT_JOB_SETTINGS, torchParamsFor, type Plan } from '../../../src/core/job/plan'
+import { rotate } from '../../../src/core/math/quat'
 import { length, sub, type Vec3 } from '../../../src/core/math/vec3'
 import { torchPoses } from '../../../src/core/torch/frames'
 import { WPS_PRESETS } from '../../../src/core/process/wps'
@@ -212,6 +213,24 @@ describe('air moves', () => {
     expect(job.summary.airTimeS).toBeCloseTo(air, 1)
   })
 
+  it('counts the approach and retract distance once: a to b by hand is 50 + sqrt(100^2 + 200^2) + 50', () => {
+    // Both seams run along +x with the same torch, so the torch points differ by exactly the seams' end to start gap.
+    const gap = Math.hypot(100, 200)
+    expect(job.sequence.airMoves[1]!.lengthMm).toBeCloseTo(50 + gap + 50, 2)
+  })
+
+  it('sums to the hand-computed tour length, with the home legs taken from the exported poses', () => {
+    const [a, b] = job.seams
+    const axis = (pose: { quaternion: [number, number, number, number] }): Vec3 => rotate(pose.quaternion, [0, 0, 1])
+    const back = (p: Vec3, z: Vec3): Vec3 => [p[0] - 50 * z[0], p[1] - 50 * z[1], p[2] - 50 * z[2]]
+    const home: Vec3 = [1200, 800, 950]
+    const toHome = length(sub(back(a!.poses[0]!.position, axis(a!.poses[0]!)), home)) + 50
+    const fromHome = 50 + length(sub(home, back(b!.poses[b!.poses.length - 1]!.position, axis(b!.poses[b!.poses.length - 1]!))))
+    const total = toHome + (50 + Math.hypot(100, 200) + 50) + fromHome
+    expect(job.sequence.airMoves.reduce((sum, m) => sum + m.lengthMm, 0)).toBeCloseTo(total, 2)
+    expect(job.summary.airTimeS).toBeCloseTo(total / 250, 1)
+  })
+
   it('has no air moves without seams', () => {
     expect(buildJob({ ...plan, seams: [] }, opts).sequence.airMoves).toEqual([])
   })
@@ -284,5 +303,71 @@ describe('exportJob', () => {
     if (r.status !== 'error') return
     expect(r.error.why).toContain('settings.poseSpacingMm')
     for (const part of [r.error.what, r.error.why, r.error.next]) expect(part.trim().length).toBeGreaterThan(0)
+  })
+})
+
+describe('a plan with a sequence', () => {
+  const base = specExamplePlan([
+    { id: 's1', from: [0, 0, 0], to: [100, 0, 0] },
+    { id: 's2', from: [0, 200, 0], to: [100, 200, 0] },
+  ])
+  const withSequence = (strategy: NonNullable<Plan['sequence']>['strategy'], order: NonNullable<Plan['sequence']>['order']): Plan => ({
+    ...base,
+    sequence: { strategy, order },
+  })
+  const plan = withSequence('min-air-move', [{ seamId: 's2', reversed: true }, { seamId: 's1', reversed: false }])
+  const job = buildJob(plan, opts)
+
+  it('exports the order and the strategy of the plan', () => {
+    expect(job.sequence.order).toEqual([{ seamId: 's2', reversed: true }, { seamId: 's1', reversed: false }])
+    expect(job.sequence.strategy).toBe('min-air-move')
+    expect(job.seams.map((s) => s.id)).toEqual(['s2', 's1'])
+  })
+
+  it('starts and ends the air moves at home and follows the order', () => {
+    expect(job.sequence.airMoves.map((m) => [m.from, m.to])).toEqual([['home', 's2'], ['s2', 's1'], ['s1', 'home']])
+  })
+
+  it('puts the first pose of a reversed seam where its stored last point was, and keeps the stored points', () => {
+    const s2 = job.seams[0]!
+    expect(s2.direction).toBe('reverse')
+    expect(s2.poses[0]!.position).toEqual([100, 200, 0])
+    expect(s2.poses[s2.poses.length - 1]!.position).toEqual([0, 200, 0])
+    expect(s2.geometry.start).toEqual([100, 200, 0])
+    expect(s2.points![0]!.p).toEqual([0, 200, 0])
+    expect(job.seams[1]!.direction).toBe('forward')
+  })
+
+  it('lists every seam once', () => {
+    expect([...job.seams.map((s) => s.id)].sort()).toEqual(['s1', 's2'])
+    expect(job.summary.seamCount).toBe(2)
+  })
+
+  it('measures the reversed order, not the table order', () => {
+    const table = buildJob(base, opts)
+    expect(job.sequence.airMoves.reduce((sum, m) => sum + m.lengthMm, 0)).not.toBeCloseTo(table.sequence.airMoves.reduce((sum, m) => sum + m.lengthMm, 0), 1)
+  })
+
+  it('validates for balanced-heat', () => {
+    const balanced = JSON.parse(JSON.stringify(buildJob(withSequence('balanced-heat', plan.sequence!.order), opts)))
+    const r = jobSchema.safeParse(balanced)
+    expect(r.success, r.success ? '' : JSON.stringify(r.error.issues.slice(0, 3))).toBe(true)
+    expect(balanced.sequence.strategy).toBe('balanced-heat')
+  })
+
+  it('falls back to table order for an order that names no accepted seam, and appends seams it misses', () => {
+    const partial = buildJob(withSequence('manual', [{ seamId: 's2', reversed: false }]), opts)
+    expect(partial.sequence.order.map((o) => o.seamId)).toEqual(['s2', 's1'])
+    const stale = buildJob(withSequence('manual', [{ seamId: 'gone', reversed: true }]), opts)
+    expect(stale.sequence.order).toEqual([{ seamId: 's1', reversed: false }, { seamId: 's2', reversed: false }])
+  })
+
+  it('never reverses a closed loop', () => {
+    const loop = samplePlan('pipe-on-plate')
+    const closed = loop.seams.find((p) => p.seam.closed)!
+    const reversed = buildJob({ ...loop, sequence: { strategy: 'manual', order: loop.seams.map((p) => ({ seamId: p.seam.id, reversed: p.seam.id === closed.seam.id })) } }, opts)
+    const entry = reversed.sequence.order.find((o) => o.seamId === closed.seam.id)!
+    expect(entry.reversed).toBe(false)
+    expect(reversed.seams.find((s) => s.id === closed.seam.id)!.direction).toBe('forward')
   })
 })

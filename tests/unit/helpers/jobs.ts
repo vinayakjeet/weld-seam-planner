@@ -33,6 +33,7 @@ export function samplePlan(id: string, edit?: (plan: Plan) => Plan): Plan {
     settings: { ...DEFAULT_JOB_SETTINGS },
     procedures: structuredClone([...WPS_PRESETS]),
     seams,
+    sequence: null,
   }
   return edit ? edit(plan) : plan
 }
@@ -67,6 +68,7 @@ export function specExamplePlan(seams: StraightSeam[] = [{ id: 's07', from: [120
     settings: { ...DEFAULT_JOB_SETTINGS },
     procedures: structuredClone([...WPS_PRESETS]),
     seams: seams.map((s) => ({ seam: straightSeam(s), procedureId: SPRAY_ID, overrides: {}, legMm: null, access: null })),
+    sequence: null,
   }
 }
 

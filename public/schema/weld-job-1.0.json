@@ -1547,6 +1547,7 @@
           "enum": [
             "table-order",
             "min-air-move",
+            "balanced-heat",
             "manual"
           ]
         },

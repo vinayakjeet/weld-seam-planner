@@ -104,6 +104,37 @@ describe('importJob', () => {
   })
 })
 
+describe('sequence', () => {
+  const two = (): Plan => ({
+    ...specExamplePlan([
+      { id: 's1', from: [0, 0, 0], to: [100, 0, 0] },
+      { id: 's2', from: [0, 200, 0], to: [100, 200, 0] },
+    ]),
+    sequence: { strategy: 'balanced-heat', order: [{ seamId: 's2', reversed: true }, { seamId: 's1', reversed: false }] },
+  })
+
+  it('restores the exported sequence into the plan', () => {
+    const r = importJob(JSON.stringify(buildJob(two(), opts)), SHA)
+    if (r.status !== 'ok') throw new Error(r.error.what)
+    expect(r.plan.sequence).toEqual({ strategy: 'balanced-heat', order: [{ seamId: 's2', reversed: true }, { seamId: 's1', reversed: false }] })
+    expect(r.plan.seams.map((p) => p.seam.id)).toEqual(['s2', 's1'])
+  })
+
+  it('is byte identical when seams are reordered and one is reversed', () => {
+    const job = buildJob(two(), opts)
+    const r = importJob(JSON.stringify(job), SHA)
+    if (r.status !== 'ok') throw new Error(r.error.what)
+    expect(JSON.stringify(buildJob(r.plan, opts))).toBe(JSON.stringify(job))
+  })
+
+  it('restores the stored points of a reversed seam, so it is not reversed twice', () => {
+    const r = importJob(JSON.stringify(buildJob(two(), opts)), SHA)
+    if (r.status !== 'ok') throw new Error(r.error.what)
+    const s2 = r.plan.seams.find((p) => p.seam.id === 's2')!
+    expect(s2.seam.points[0]!.p).toEqual([0, 200, 0])
+  })
+})
+
 describe('round trip', () => {
   const roundTrip = (plan: Plan) => {
     const job = buildJob(plan, opts)

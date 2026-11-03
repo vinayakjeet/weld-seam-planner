@@ -78,7 +78,7 @@ async function guarded(work: () => Promise<void>): Promise<void> {
   }
 }
 
-async function attempt<T extends { status: string }>(work: () => Promise<T>): Promise<T | { status: 'error'; error: UserError }> {
+export async function attempt<T extends { status: string }>(work: () => Promise<T>): Promise<T | { status: 'error'; error: UserError }> {
   try {
     return await work()
   } catch (error) {
@@ -332,7 +332,7 @@ export async function importSample(entry: SampleEntry, client: GeometryClient, f
 }
 
 
-const setNotice = (notice: ManualError | null) => useStore.getState().setNotice(notice)
+export const setNotice = (notice: ManualError | null) => useStore.getState().setNotice(notice)
 
 export const dismissNotice = () => setNotice(null)
 

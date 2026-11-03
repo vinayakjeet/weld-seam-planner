@@ -1,11 +1,6 @@
-import { buildSeams } from '../job/build'
+import { buildSeams, travelledBackwards } from '../job/build'
 import type { Plan } from '../job/plan'
-import { reverseSeam } from '../seams/manual'
-import type { SeamCandidate } from '../seams/detect'
 import type { SequenceNode } from './types'
-
-// The Reverse tool gives the seam a new id and marks it manual; the order of a plan needs neither.
-const travelledBackwards = (seam: SeamCandidate): SeamCandidate => ({ ...reverseSeam(seam), id: seam.id, source: seam.source })
 
 // Nodes in table order. Each seam is built both ways with the export's own pose maths, so the approach and retract
 // points the optimiser costs are the ones the exported air moves use. A closed loop starts and stops at s = 0 either

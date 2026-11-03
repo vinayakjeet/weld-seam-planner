@@ -8,12 +8,14 @@ import { TopBar } from './TopBar'
 import { useAutosave } from './useAutosave'
 import { useDropGuard } from './useDropGuard'
 import { usePreflightSync } from './usePreflightSync'
+import { useTimingSync } from './useTimingSync'
 import { useTorchSync } from './useTorchSync'
 
 export function AppShell() {
   useDropGuard()
   useTorchSync()
   usePreflightSync()
+  useTimingSync()
   useAutosave()
   return (
     <TooltipProvider>

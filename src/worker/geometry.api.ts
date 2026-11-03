@@ -7,6 +7,7 @@ import { seamAccess, type AccessAnalysis } from '../core/access/clearance'
 import { exportJob, type ExportResult } from '../core/job/build'
 import type { Plan } from '../core/job/plan'
 import { preflight, type Issue } from '../core/job/preflight'
+import { planTiming, type PlanTiming } from '../core/job/timing'
 import { computeBounds } from '../core/mesh/bounds'
 import { computeFaceData } from '../core/mesh/faces'
 import { sha256Hex } from '../core/mesh/hash'
@@ -72,6 +73,8 @@ export type TorchPosesOutcome = { status: 'ok'; poses: TorchPose[] } | { status:
 
 export type PreflightOutcome = { status: 'ok'; issues: Issue[] } | { status: 'error'; error: UserError }
 
+export type TimingOutcome = { status: 'ok'; timing: PlanTiming } | { status: 'error'; error: UserError }
+
 // ExportResult already has an error arm with the same what, why and next fields.
 export type AccessOutcome =
   | { status: 'ok'; results: Record<string, AccessAnalysis>; ms: number }
@@ -95,6 +98,8 @@ export interface GeometryApi {
   // Both read only the plan they are given, so they need no part in the worker.
   preflight(plan: Plan): Promise<PreflightOutcome>
   exportJob(plan: Plan, createdAt: string): Promise<ExportOutcome>
+  // Arc, air and cycle time of the plan in its sequence order; the same figures as the exported summary.
+  planTiming(plan: Plan): Promise<TimingOutcome>
 }
 
 // Where each load stage starts on the overall bar; the index stage runs to 1.
@@ -343,6 +348,14 @@ export function createGeometryApi(): GeometryApi {
 
     async exportJob(plan, createdAt) {
       return exportJob(plan, { createdAt })
+    },
+
+    async planTiming(plan) {
+      try {
+        return { status: 'ok', timing: planTiming(plan) }
+      } catch (error) {
+        return { status: 'error', error: toUserError(error) }
+      }
     },
   }
 }

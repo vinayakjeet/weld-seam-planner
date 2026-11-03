@@ -4,6 +4,7 @@ import { heatInputCheck, heatInputKJmm, type Check } from '../process/heatInput'
 import { depositionTravelMmMin, travelSpeedCheck } from '../process/travelSpeed'
 import { resolveProcedure } from '../process/wps'
 import { DEFAULT_DETECT_SETTINGS, type SeamCandidate } from '../seams/detect'
+import type { SequenceStrategy } from '../sequence/types'
 import { DEFAULT_TORCH, type TorchParams } from '../torch/frames'
 import type { Procedure, ProcedureOverrides, SeamAccess } from './schema'
 
@@ -47,13 +48,20 @@ export interface PlannedSeam {
   access: SeamAccess | null
 }
 
-// Accepted seams in table order.
+// The order the seams are welded in and which end each one starts from. A reversed flag on a closed loop is ignored.
+export interface PlanSequence {
+  strategy: SequenceStrategy
+  order: { seamId: string; reversed: boolean }[]
+}
+
+// Accepted seams in table order. A null sequence means table order, every seam forward.
 export interface Plan {
   part: JobPart
   gravity: Vec3
   settings: JobSettings
   procedures: Procedure[]
   seams: PlannedSeam[]
+  sequence: PlanSequence | null
 }
 
 // A drag technique leans the torch back along travel, which is a negative travel angle.

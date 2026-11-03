@@ -1,3 +1,4 @@
+import { reconcileOrder } from '../sequence/order'
 import { resolveSeam, type Explained, type Plan, type PlannedSeam } from './plan'
 import { jobSchema } from './schema'
 
@@ -114,6 +115,13 @@ export function importJob(input: string | unknown, expectedSha256: string): Outc
         access: seam.access,
       }),
     ),
+    sequence: {
+      strategy: job.sequence.strategy,
+      order: reconcileOrder(
+        job.sequence.order.map((entry) => ({ seamId: entry.seamId, reversed: entry.reversed })),
+        job.seams.map((seam) => seam.id),
+      ),
+    },
   }
 
   // A leg equal to the default stays a default, so changing the procedure later still moves it.

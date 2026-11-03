@@ -42,6 +42,7 @@ function harness() {
       torchPoses: (seam, params) => real.torchPoses(seam, params),
       access: (seams, onProgress) => real.access(seams, onProgress),
       preflight: (plan) => real.preflight(plan),
+      planTiming: (plan) => real.planTiming(plan),
       exportJob: (plan, createdAt) => real.exportJob(plan, createdAt),
     }
     const { port1, port2 } = new MessageChannel()

@@ -106,6 +106,7 @@ export function selectPlan(state: AppState): Plan {
     settings: { ...state.jobSettings, creaseAngleDeg: state.detectSettings.creaseAngleDeg },
     procedures: state.procedures,
     seams,
+    sequence: null,
   }
   cachedPlan = { deps, plan }
   return plan

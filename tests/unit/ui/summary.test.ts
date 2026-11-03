@@ -3,7 +3,7 @@ import { importBuffer } from '../../../src/state/flows'
 import { selectStats } from '../../../src/state/selectors'
 import { useStore } from '../../../src/state/store'
 import { seamRows } from '../../../src/ui/panels/seamRows'
-import { partChip, statusFields } from '../../../src/ui/shell/summary'
+import { cycleField, formatCycle, partChip, statusFields } from '../../../src/ui/shell/summary'
 import { detected, fakeClient, partInfo, readyOutcome, resetStore, seam } from '../helpers/state'
 
 const fields = () => {
@@ -82,5 +82,35 @@ describe('seamRows', () => {
 
   it('is empty for no seams', () => {
     expect(seamRows([], {}, {})).toEqual([])
+  })
+})
+
+describe('formatCycle', () => {
+  it('writes minutes and seconds, and hours from one hour', () => {
+    expect(formatCycle(0)).toBe('0:00')
+    expect(formatCycle(75)).toBe('1:15')
+    expect(formatCycle(3599.4)).toBe('59:59')
+    expect(formatCycle(3725)).toBe('1:02:05')
+  })
+
+  it('shows 0:00 for a value that is not a time', () => {
+    expect(formatCycle(-5)).toBe('0:00')
+    expect(formatCycle(Number.NaN)).toBe('0:00')
+  })
+})
+
+describe('cycleField', () => {
+  const timing = { seams: [], moves: [], arcTimeS: 60, airTimeS: 15, cycleTimeS: 75 }
+
+  it('shows the timing of the current plan as it is', () => {
+    expect(cycleField(timing, true)).toEqual({ value: '1:15', stale: false })
+  })
+
+  it('shows the previous timing dimmed while the plan has moved on', () => {
+    expect(cycleField(timing, false)).toEqual({ value: '1:15', stale: true })
+  })
+
+  it('shows 0:00 before any timing, never dimmed', () => {
+    expect(cycleField(null, false)).toEqual({ value: '0:00', stale: false })
   })
 })
