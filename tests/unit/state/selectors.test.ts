@@ -1,6 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { buildJob } from '../../../src/core/job/build'
+import { reachKey } from '../../../src/core/snake/reach'
 import { selectAllSeams, selectPlan, selectStats, visibleSeams } from '../../../src/state/selectors'
 import { useStore } from '../../../src/state/store'
+import { CREATED_AT } from '../helpers/jobs'
+import { loadSnakeSeams, reachOf, SNAKE } from '../helpers/reach'
 import { corner, partInfo, resetStore, seam } from '../helpers/state'
 
 describe('selectStats', () => {
@@ -163,5 +167,56 @@ describe('selectPlan', () => {
     const plan = selectPlan(useStore.getState())
     expect(plan.seams).toEqual([])
     expect(plan.part.sourceUnits).toBe('unknown')
+  })
+})
+
+describe('selectPlan with a reach result', () => {
+  const merge = (ids: string[], coverage = 0.6, unreachable: Array<[number, number]> = [[10, 20]]) => {
+    const { seams } = useStore.getState()
+    useStore.getState().mergeReach(
+      Object.fromEntries(
+        ids.map((id) => [id, { ...reachOf(coverage, unreachable), points: seams.find((s) => s.id === id)!.points, key: reachKey(useStore.getState().ports, useStore.getState().arm) }]),
+      ),
+    )
+  }
+  const accessOf = (id: string) => selectPlan(useStore.getState()).seams.find((p) => p.seam.id === id)!.access
+
+  beforeEach(resetStore)
+
+  it('merges the port, coverage and stretches of a current reach into the plan access and the built job', () => {
+    const [first] = loadSnakeSeams()
+    merge([first!.id])
+    expect(accessOf(first!.id)).toMatchObject({ class: 'snake', portId: 'P1', reachCoverage: 0.6, unreachable: [[10, 20]] })
+    const job = buildJob(selectPlan(useStore.getState()), { createdAt: CREATED_AT }, [])
+    expect(job.seams.find((s) => s.id === first!.id)!.access).toMatchObject({ portId: 'P1', reachCoverage: 0.6 })
+  })
+
+  it('falls back to the plain access after a port moves by 1 mm', () => {
+    const [first] = loadSnakeSeams()
+    merge([first!.id])
+    useStore.getState().movePort('P1', [1, 0, 500])
+    expect(accessOf(first!.id)).toMatchObject({ portId: null, reachCoverage: null, unreachable: [] })
+  })
+
+  it('falls back to the plain access after any arm field changes', () => {
+    const [first] = loadSnakeSeams()
+    merge([first!.id])
+    useStore.getState().setArm({ maxBendDeg: 25 })
+    expect(accessOf(first!.id)).toMatchObject({ portId: null, reachCoverage: null })
+  })
+
+  it('falls back to the plain access when the seam points are replaced', () => {
+    const [first] = loadSnakeSeams()
+    merge([first!.id])
+    useStore.setState((s) => ({ seams: s.seams.map((x) => (x.id === first!.id ? { ...x, points: [...x.points] } : x)) }))
+    useStore.getState().mergeAccess({ [first!.id]: { access: SNAKE, stations: [], points: useStore.getState().seams[0]!.points } })
+    expect(accessOf(first!.id)).toMatchObject({ portId: null, reachCoverage: null })
+  })
+
+  it('leaves a seam that is not classed snake untouched', () => {
+    const [first] = loadSnakeSeams()
+    useStore.getState().mergeAccess({ [first!.id]: { access: { ...SNAKE, class: 'standard' }, stations: [], points: first!.points } })
+    merge([first!.id])
+    expect(accessOf(first!.id)).toMatchObject({ class: 'standard', portId: null, reachCoverage: null })
   })
 })

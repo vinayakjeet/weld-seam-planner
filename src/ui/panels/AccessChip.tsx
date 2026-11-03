@@ -10,7 +10,7 @@ export const ACCESS_TONE: Record<AccessClass, string> = {
 }
 
 // The class of a seam as a chip, a neutral dash when it has none, and a neutral dot while the check runs.
-export function AccessChip({ cls, pending }: { cls: AccessClass | null; pending: boolean }) {
+export function AccessChip({ cls, pending, title }: { cls: AccessClass | null; pending: boolean; title?: string }) {
   if (cls === null) {
     return pending ? (
       <span aria-label="Checking torch access" title="Checking torch access" className="text-ink-2">
@@ -26,7 +26,7 @@ export function AccessChip({ cls, pending }: { cls: AccessClass | null; pending:
     <Tooltip
       content={
         <div className="flex flex-col gap-0.5">
-          <span className="text-ink-0">{accessLabel(cls)}</span>
+          <span className="text-ink-0">{title ? title : accessLabel(cls)}</span>
           <span className="text-ink-1">{accessLine(cls)}</span>
         </div>
       }

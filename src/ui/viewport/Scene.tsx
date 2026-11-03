@@ -6,6 +6,7 @@ import { useStore } from '../../state/store'
 import { useShortcuts } from '../shell/useShortcuts'
 import { AccessCone } from './AccessCone'
 import { AirMoves } from './AirMoves'
+import { ArmCapsules } from './ArmCapsules'
 import { cssVar } from './cssVar'
 import { DrawTool } from './DrawTool'
 import { GIZMO_MARGIN } from './gizmo'
@@ -73,6 +74,7 @@ export function Scene() {
       <DrawTool partRef={partMesh} />
       <SplitTool />
       <PortMarkers />
+      <ArmCapsules />
       <PortPlacer partRef={partMesh} />
       <TorchPreview />
       <AccessCone />

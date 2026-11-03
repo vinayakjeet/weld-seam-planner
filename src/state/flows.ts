@@ -155,6 +155,7 @@ async function applyLoad(outcome: LoadOutcome, fileName: string, client: Geometr
   accessRequest++
   useStore.getState().clearAccess()
   useStore.getState().setAccessBusy(false)
+  useStore.getState().clearReach()
   // A slider change still waiting would run the old angle on the new part.
   clearTimeout(scheduledDetect)
   await runDetect(DEFAULT_DETECT_SETTINGS, client)

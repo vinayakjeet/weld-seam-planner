@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { SeamPosition } from '../../../src/core/torch/positions'
 import type { SeamAccess } from '../../../src/core/job/schema'
 import { acceptAllState, positionLines, seamRows } from '../../../src/ui/panels/seamRows'
+import { reachOf } from '../helpers/reach'
 import { seam } from '../helpers/state'
 
 describe('seamRows type column', () => {
@@ -155,5 +156,25 @@ describe('acceptAllState', () => {
     expect(state.disabled).toBe(true)
     expect(state.label).toBe('Accept all above 0.70')
     expect(state.reason).toBe('There are no seams to accept. Load a part, or lower the crease angle in the Detection tab.')
+  })
+})
+
+describe('seamRows reach', () => {
+  const access = { clearanceDeg: 5, nearClearanceDeg: 5, class: 'snake' as const, portId: null, reachCoverage: null, unreachable: [] }
+
+  it('writes the Acc tooltip with the reach share and port when a current reach exists', () => {
+    const [row] = seamRows([seam('a')], { a: 'accepted' }, {}, undefined, {}, () => access, false, () => reachOf(0.734))
+    expect(row!.accTitle).toBe('Snake, 73 % reached from P1')
+  })
+
+  it('says reach was not run for a snake seam without a current reach', () => {
+    const [row] = seamRows([seam('a')], { a: 'accepted' }, {}, undefined, {}, () => access, false, () => null)
+    expect(row!.accTitle).toBe('Snake, reach not run')
+  })
+
+  it('is the class name alone for a standard seam, and empty without a class', () => {
+    const standard = { ...access, class: 'standard' as const }
+    expect(seamRows([seam('a')], {}, {}, undefined, {}, () => standard)[0]!.accTitle).toBe('Standard')
+    expect(seamRows([seam('a')], {}, {})[0]!.accTitle).toBe('')
   })
 })

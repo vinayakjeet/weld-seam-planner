@@ -1,8 +1,10 @@
 import { useStore } from '../../state/store'
 import { accessFor } from '../../state/accessSlice'
+import { reachFor } from '../../state/reachSlice'
 import { useVisibleSeams } from '../../state/useVisibleSeams'
 import { AccessChip } from './AccessChip'
 import { accessLine, clearanceText, intervalsText } from './accessText'
+import { reachLine } from './reachText'
 
 const EMPTY = 'Select a seam to see whether the torch can reach it.'
 
@@ -14,8 +16,15 @@ export function AccessSection() {
   const accessById = useStore((s) => s.accessById)
   const accessPointsById = useStore((s) => s.accessPointsById)
   const busy = useStore((s) => s.accessBusy)
+  const reachById = useStore((s) => s.reachById)
+  const reachPointsById = useStore((s) => s.reachPointsById)
+  const reachKeyById = useStore((s) => s.reachKeyById)
+  const ports = useStore((s) => s.ports)
+  const arm = useStore((s) => s.arm)
   const seam = useVisibleSeams().find((s) => s.id === selectedId)
   const access = seam ? accessFor({ accessById, accessPointsById }, seam) : null
+  const reach = seam ? reachFor({ reachById, reachPointsById, reachKeyById, ports, arm }, seam) : null
+  const reachText = reachLine(reach, access?.class ?? null)
 
   let body: React.ReactNode
   if (!seam) {
@@ -38,6 +47,17 @@ export function AccessSection() {
           </dd>
         </dl>
         <p className="text-ink-1">{accessLine(access.class)}</p>
+        {reachText !== '' && (
+          <p className="text-ink-1">
+            Reach <span className="num text-ink-0">{reachText}</span>
+            {reach && reach.unreachable.length > 0 && (
+              <>
+                , missed at <span className="num text-ink-0">{intervalsText(reach.unreachable)}</span>
+              </>
+            )}
+            .
+          </p>
+        )}
         {access.unreachable.length > 0 && (
           <p className="text-ink-1">
             No tool fits at <span className="num text-ink-0">{intervalsText(access.unreachable)}</span> along the seam.

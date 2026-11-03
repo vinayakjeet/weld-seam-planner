@@ -1,8 +1,11 @@
 import { type JobPart, type Plan, type PlannedSeam } from '../core/job/plan'
 import { meshWarnings, type MeshWarning } from '../core/mesh/health'
 import { reconcileOrder, type OrderEntry } from '../core/sequence/order'
+import type { SeamAccess } from '../core/job/schema'
 import type { SeamCandidate } from '../core/seams/detect'
+import { withReach } from '../core/snake/reach'
 import { accessFor } from './accessSlice'
+import { reachFor } from './reachSlice'
 import type { AppState } from './store'
 
 export interface Stats {
@@ -77,7 +80,7 @@ const NO_PART: JobPart = {
 
 // The access maps are optional: a caller that only needs the procedure numbers does not have to subscribe to them.
 type PlanFields = Pick<AppState, 'typeById' | 'thicknessById' | 'procedureById' | 'overridesById' | 'legById'> &
-  Partial<Pick<AppState, 'accessById' | 'accessPointsById'>>
+  Partial<Pick<AppState, 'accessById' | 'accessPointsById' | 'reachById' | 'reachPointsById' | 'reachKeyById' | 'ports' | 'arm'>>
 
 // One seam as the job builder sees it, whether or not it is accepted, so the Inspector can show the same numbers.
 export function plannedSeam(state: PlanFields, seam: SeamCandidate): PlannedSeam {
@@ -86,8 +89,17 @@ export function plannedSeam(state: PlanFields, seam: SeamCandidate): PlannedSeam
     procedureId: state.procedureById[seam.id] ?? null,
     overrides: state.overridesById[seam.id] ?? {},
     legMm: state.legById[seam.id] ?? null,
-    access: state.accessById && state.accessPointsById ? accessFor({ accessById: state.accessById, accessPointsById: state.accessPointsById }, seam) : null,
+    access: accessOf(state, seam),
   }
+}
+
+// The access answer, with the arm's reach merged in while that reach is current for the seam, the ports and the arm.
+function accessOf(state: PlanFields, seam: SeamCandidate): SeamAccess | null {
+  if (!state.accessById || !state.accessPointsById) return null
+  const access = accessFor({ accessById: state.accessById, accessPointsById: state.accessPointsById }, seam)
+  if (access === null || !state.reachById || !state.reachPointsById || !state.reachKeyById || !state.ports || !state.arm) return access
+  const reach = reachFor({ reachById: state.reachById, reachPointsById: state.reachPointsById, reachKeyById: state.reachKeyById, ports: state.ports, arm: state.arm }, seam)
+  return reach === null ? access : withReach(access, reach)
 }
 
 let cachedPlan: { deps: readonly unknown[]; plan: Plan } | null = null
@@ -116,7 +128,7 @@ export function selectSequenceOrder(state: AppState): OrderEntry[] {
 export function selectPlan(state: AppState): Plan {
   const deps = [
     state.part, state.seams, state.manualSeams, state.supersededIds, state.showCorners, state.statusById, state.typeById,
-    state.thicknessById, state.procedures, state.procedureById, state.overridesById, state.legById, state.accessById, state.accessPointsById, state.strategy, state.order, state.ports, state.arm, state.gravity,
+    state.thicknessById, state.procedures, state.procedureById, state.overridesById, state.legById, state.accessById, state.accessPointsById, state.reachById, state.reachPointsById, state.reachKeyById, state.strategy, state.order, state.ports, state.arm, state.gravity,
     state.detectSettings.creaseAngleDeg, state.jobSettings,
   ]
   if (cachedPlan && cachedPlan.deps.every((d, i) => d === deps[i])) return cachedPlan.plan

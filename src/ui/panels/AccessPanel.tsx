@@ -1,10 +1,17 @@
 import { ARM_BOUNDS, type ArmParams, type Port } from '../../core/snake/arm'
+import { reachKey } from '../../core/snake/reach'
 import type { Explained } from '../../core/job/plan'
+import { cancelReach, reachTargets, runReach } from '../../state/reachFlow'
+import { reachFor } from '../../state/reachSlice'
+import { selectPlan } from '../../state/selectors'
 import { useStore } from '../../state/store'
+import { getGeometryClient } from '../../worker/client'
 import { Button } from '../kit/Button'
 import { NumberField } from '../kit/NumberField'
 import { Tooltip } from '../kit/Tooltip'
+import { InsertionControls } from './InsertionControls'
 import { portRows } from './portRows'
+import { reachSummary } from './reachText'
 
 export const NEED_PART_FOR_PORT = 'Load a part first. A port is a hole in the part, so there is nothing to place it on yet.'
 
@@ -144,11 +151,79 @@ function PortList() {
   )
 }
 
+const NO_PORT_REASON = 'Add a port first. The snake arm enters the part through a port.'
+const NO_TARGET_REASON = 'No snake seams to measure. Select the seams to measure, or wait for the Acc column to classify the accepted seams.'
+
+function ReachSection() {
+  const hasPorts = useStore((s) => s.ports.length > 0)
+  const count = useStore((s) => reachTargets(s).length)
+  const fromSelection = useStore((s) => selectPlan(s).seams.some((p) => s.selectedIds.includes(p.seam.id)))
+  const busy = useStore((s) => s.reachBusy)
+  const progress = useStore((s) => s.reachProgress)
+  const stale = useStore((s) => {
+    const now = reachKey(s.ports, s.arm)
+    return Object.values(s.reachKeyById).some((key) => key !== now)
+  })
+  const summary = useStore((s) =>
+    reachSummary(
+      selectPlan(s)
+        .seams.map((p) => (p.access?.class === 'snake' ? reachFor(s, p.seam) : null))
+        .flatMap((reach) => (reach ? [reach.coverage] : [])),
+    ),
+  )
+  const reason = !hasPorts ? NO_PORT_REASON : count === 0 ? NO_TARGET_REASON : null
+  const label = fromSelection ? `Run reach on ${count} selected ${count === 1 ? 'seam' : 'seams'}` : `Run reach on ${count} snake ${count === 1 ? 'seam' : 'seams'}`
+  const run = (
+    <Button variant="primary" disabled={reason !== null || busy} onClick={() => void runReach(getGeometryClient())}>
+      {label}
+    </Button>
+  )
+  return (
+    <section aria-label="Reach" className="flex flex-col gap-2 border-b border-line px-3 py-3">
+      <h3 className="text-xs font-semibold text-ink-0">Reach</h3>
+      {reason !== null && !busy ? (
+        <Tooltip content={reason}>
+          <span tabIndex={0} className="self-start rounded-sm outline-none focus-visible:ring-1 focus-visible:ring-brand">
+            {run}
+          </span>
+        </Tooltip>
+      ) : (
+        run
+      )}
+      {busy && progress && (
+        <div className="flex flex-col gap-1.5">
+          <div
+            role="progressbar"
+            aria-label="Reach progress"
+            aria-valuemin={0}
+            aria-valuemax={progress.total}
+            aria-valuenow={progress.done}
+            className="h-1.5 overflow-hidden rounded-full bg-surface-2"
+          >
+            <div className="h-full bg-brand transition-[width]" style={{ width: `${(progress.done / Math.max(1, progress.total)) * 100}%` }} />
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="num text-ink-1">{`Measured ${progress.done} of ${progress.total} ${progress.total === 1 ? 'seam' : 'seams'}`}</span>
+            <Button onClick={cancelReach}>Cancel</Button>
+          </div>
+        </div>
+      )}
+      {stale && !busy && (
+        <p className="text-warn">The ports or the arm changed since the last run, so the earlier results are out of date and are not used. Run reach again.</p>
+      )}
+      {summary !== '' && !stale && <p className="text-ink-1">{summary}</p>}
+      <p className="text-ink-2">Seams are coloured blue where the arm reaches them and red where it does not. Select a seam and move the scrub to see the arm.</p>
+    </section>
+  )
+}
+
 export function AccessPanel() {
   return (
     <div className="shrink-0">
       <PortList />
       <ArmFields />
+      <ReachSection />
+      <InsertionControls />
     </div>
   )
 }

@@ -3,6 +3,7 @@ import { useEffect, useMemo, type RefObject } from 'react'
 import { Color, Raycaster, Vector2, Vector3, type Mesh } from 'three'
 import { toolEvent } from '../../state/flows'
 import { accessFor } from '../../state/accessSlice'
+import { reachFor } from '../../state/reachSlice'
 import { MERGE_TOLERANCE_MM } from '../../state/seamsSlice'
 import { useStore } from '../../state/store'
 import { useVisibleSeams } from '../../state/useVisibleSeams'
@@ -36,6 +37,7 @@ function readPalette(): SeamPalette {
     accepted: rgb('--seam-accepted'),
     rejected: rgb('--err'),
     access: { standard: rgb('--access-standard'), slim: rgb('--access-slim'), snake: rgb('--access-snake'), blocked: rgb('--access-blocked') },
+    reach: { ok: rgb('--reach-ok'), miss: rgb('--reach-miss') },
   }
 }
 
@@ -47,6 +49,12 @@ export function SeamLines({ partRef }: { partRef: RefObject<Mesh | null> }) {
   const colourBy = useStore((s) => s.colourBy)
   const accessById = useStore((s) => s.accessById)
   const accessPointsById = useStore((s) => s.accessPointsById)
+  const accessStep = useStore((s) => s.activeStep === 'access')
+  const reachById = useStore((s) => s.reachById)
+  const reachPointsById = useStore((s) => s.reachPointsById)
+  const reachKeyById = useStore((s) => s.reachKeyById)
+  const ports = useStore((s) => s.ports)
+  const arm = useStore((s) => s.arm)
   const hoverId = useStore((s) => s.hoverId)
   const selectedId = useStore((s) => s.selectedId)
   const mergeFrom = useStore((s) => (s.tool.tool === 'merge' ? s.tool.from : null))
@@ -65,8 +73,10 @@ export function SeamLines({ partRef }: { partRef: RefObject<Mesh | null> }) {
         statusById,
         palette,
         colourBy === 'access' ? (seam) => accessFor({ accessById, accessPointsById }, seam)?.class ?? null : undefined,
+        // Only while the Access step is open, and only for a seam whose reach is current.
+        accessStep ? (seam) => reachFor({ reachById, reachPointsById, reachKeyById, ports, arm }, seam)?.unreachable ?? null : undefined,
       ),
-    [seams, statusById, palette, colourBy, accessById, accessPointsById],
+    [seams, statusById, palette, colourBy, accessById, accessPointsById, accessStep, reachById, reachPointsById, reachKeyById, ports, arm],
   )
   const base = useMemo(
     () => (built.segmentSeam.length > 0 ? lineSet(built.positions, { width: BASE_WIDTH_PX, colors: built.colors, opacity: dim ? DIM_OPACITY : 1, overlay: xray, renderOrder: xray ? 1 : 0 }) : null),

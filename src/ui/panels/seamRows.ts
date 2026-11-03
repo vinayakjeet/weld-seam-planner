@@ -4,7 +4,9 @@ import type { JointType } from '../../core/seams/classify'
 import type { SeamCandidate } from '../../core/seams/detect'
 import { awsFor, type SeamPosition } from '../../core/torch/positions'
 import type { SeamStatus } from '../../state/seamsSlice'
+import type { SeamReach } from '../../core/snake/reach'
 import { accessChipText } from './accessText'
+import { accessTitle } from './reachText'
 import { acceptAllLabel } from './seamText'
 
 export interface SeamRow {
@@ -27,6 +29,8 @@ export interface SeamRow {
   // The Acc column: the class chip text, or a dash while there is no class for the seam.
   acc: string
   accClass: AccessClass | null
+  // The Acc tooltip: the class and, for a snake seam, how much of it the arm reaches.
+  accTitle: string
   // An accepted seam whose analysis is running or still to be asked for.
   accPending: boolean
 }
@@ -69,6 +73,7 @@ export function seamRows(
   procedureById: Record<string, string> = {},
   accessOf: (seam: SeamCandidate) => SeamAccess | null = () => null,
   analysing = false,
+  reachOf: (seam: SeamCandidate) => SeamReach | null = () => null,
 ): SeamRow[] {
   return seams.map((seam, i) => {
     const override = typeById[seam.id]
@@ -91,6 +96,7 @@ export function seamRows(
       status,
       acc: accClass === null ? '-' : accessChipText(accClass),
       accClass,
+      accTitle: accessTitle(accClass, reachOf(seam)),
       accPending: analysing && status === 'accepted' && accClass === null,
     }
   })

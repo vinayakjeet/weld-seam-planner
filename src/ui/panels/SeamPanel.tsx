@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { accessFor } from '../../state/accessSlice'
+import { reachFor } from '../../state/reachSlice'
 import { positionFor } from '../../state/torchSlice'
 import type { SelectMode } from '../../state/seamsSlice'
 import { selectPlan } from '../../state/selectors'
@@ -109,6 +110,11 @@ function SeamTable() {
   const accessById = useStore((s) => s.accessById)
   const accessPointsById = useStore((s) => s.accessPointsById)
   const accessBusy = useStore((s) => s.accessBusy)
+  const reachById = useStore((s) => s.reachById)
+  const reachPointsById = useStore((s) => s.reachPointsById)
+  const reachKeyById = useStore((s) => s.reachKeyById)
+  const ports = useStore((s) => s.ports)
+  const arm = useStore((s) => s.arm)
   const rows = useMemo(
     () =>
       seamRows(
@@ -119,8 +125,9 @@ function SeamTable() {
         procedureById,
         (seam) => accessFor({ accessById, accessPointsById }, seam),
         accessBusy,
+        (seam) => reachFor({ reachById, reachPointsById, reachKeyById, ports, arm }, seam),
       ),
-    [seams, statusById, typeById, positionsById, gravity, procedureById, accessById, accessPointsById, accessBusy],
+    [seams, statusById, typeById, positionsById, gravity, procedureById, accessById, accessPointsById, accessBusy, reachById, reachPointsById, reachKeyById, ports, arm],
   )
   const body = useRef<HTMLDivElement>(null)
 
@@ -197,7 +204,7 @@ function SeamTable() {
                 <PositionChip position={row.position} />
               </span>
               <span role="cell">
-                <AccessChip cls={row.accClass} pending={row.accPending} />
+                <AccessChip cls={row.accClass} pending={row.accPending} title={row.accTitle} />
               </span>
               <span role="cell">
                 <button
