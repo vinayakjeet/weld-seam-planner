@@ -3,6 +3,7 @@ import { create, type StateCreator } from 'zustand'
 import type { ManualError } from '../core/seams/manual'
 import { initialTool, type ToolState } from '../ui/tools/toolMachine'
 import { registerHistoryClear } from './history'
+import type { SavedPlan } from './savedPlan'
 import { createPartSlice, type PartSlice } from './partSlice'
 import { createPlanSlice, type PlanSlice } from './planSlice'
 import { createSeamsSlice, type SeamsSlice } from './seamsSlice'
@@ -30,6 +31,8 @@ interface UiSlice {
   // A plain confirmation (a plan restored, a file exported) shown over the viewport until dismissed.
   info: string | null
   setInfo: (info: string | null) => void
+  // The saved plan of the loaded part, while the question "restore or start fresh" is open. Not history.
+  offer: SavedPlan | null
 }
 
 export type AppState = UiSlice & PartSlice & SeamsSlice & PlanSlice & TorchSlice
@@ -43,6 +46,7 @@ const createUiSlice: StateCreator<AppState, [], [], UiSlice> = (set) => ({
   setNotice: (notice) => set({ notice }),
   info: null,
   setInfo: (info) => set({ info }),
+  offer: null,
 })
 
 export const HISTORY_LIMIT = 100

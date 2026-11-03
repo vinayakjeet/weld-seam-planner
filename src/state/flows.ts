@@ -39,6 +39,16 @@ let scheduledDetect: ReturnType<typeof setTimeout> | undefined
 
 export const DETECT_DEBOUNCE_MS = 250
 
+// Called once a part has loaded and been analysed. Autosave registers here, so this file does not import it (it imports this one).
+let afterLoad: () => Promise<void> = async () => {}
+
+export function registerAfterLoad(fn: () => Promise<void>): () => void {
+  afterLoad = fn
+  return () => {
+    if (afterLoad === fn) afterLoad = async () => {}
+  }
+}
+
 function workerFailure(error: unknown): UserError {
   const detail = error instanceof Error ? error.message : String(error)
   return {
@@ -125,6 +135,7 @@ async function applyLoad(outcome: LoadOutcome, fileName: string, client: Geometr
     detectBusy: false,
     activeStep: 'seams',
     info: null,
+    offer: null,
     tool: initialTool,
     notice: null,
   })
@@ -132,6 +143,7 @@ async function applyLoad(outcome: LoadOutcome, fileName: string, client: Geometr
   // A slider change still waiting would run the old angle on the new part.
   clearTimeout(scheduledDetect)
   await runDetect(DEFAULT_DETECT_SETTINGS, client)
+  await afterLoad()
 }
 
 // The buffer is handed to the worker, so it is empty once this call returns.
