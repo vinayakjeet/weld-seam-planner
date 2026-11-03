@@ -80,6 +80,36 @@ describe('contact seams', () => {
   })
 })
 
+describe('tank with manhole', () => {
+  const seams = detect('tank-with-manhole')
+  const lengths = (source: SeamCandidate['source']) =>
+    seams.filter((s) => s.source === source).map((s) => s.lengthMm).sort((a, b) => a - b)
+  const count = (source: SeamCandidate['source'], lengthMm: number, tolerance: number) =>
+    seams.filter((s) => s.source === source && Math.abs(s.lengthMm - lengthMm) <= tolerance).length
+
+  it('shows 21 seams: 12 crease and 9 contact', () => {
+    expect(seams).toHaveLength(21)
+    expect(countBy(seams, 'crease')).toBe(12)
+    expect(countBy(seams, 'contact')).toBe(9)
+    expect(countBy(seams, 'intersection')).toBe(0)
+  })
+
+  it('measures the crease lengths: 4 of 1584 mm and 8 of 984 mm', () => {
+    expect(count('crease', 1584, 1)).toBe(4)
+    expect(count('crease', 984, 1)).toBe(8)
+    expect(lengths('crease')).toHaveLength(12)
+  })
+
+  it('measures the contact lengths: 4 of 864 mm, 4 of 272 mm and one closed loop of 1934 mm, all fillets', () => {
+    expect(count('contact', 864, 2)).toBe(4)
+    expect(count('contact', 272, 2)).toBe(4)
+    const loops = seams.filter((s) => s.source === 'contact' && s.closed)
+    expect(loops).toHaveLength(1)
+    expect(Math.abs(loops[0]!.lengthMm - 1934)).toBeLessThanOrEqual(2)
+    for (const seam of seams) expect(seam.jointType).toBe('fillet')
+  })
+})
+
 describe('intersection seams', () => {
   const loops = detect('bar-through-plate')
 

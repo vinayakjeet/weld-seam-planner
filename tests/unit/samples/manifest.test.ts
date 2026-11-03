@@ -13,6 +13,7 @@ const IDS = [
   'double-bottom-cell',
   'bar-through-plate',
   'flipped-normals',
+  'tank-with-manhole',
 ]
 
 const entry = {
@@ -62,7 +63,7 @@ describe('public/samples', () => {
   const manifest = readManifest()
   const byId = new Map(manifest.samples.map((s) => [s.id, s]))
 
-  it('lists the ten samples once each', () => {
+  it('lists the eleven samples once each', () => {
     expect(manifest.samples.map((s) => s.id).sort()).toEqual([...IDS].sort())
   })
 
@@ -90,7 +91,7 @@ describe('public/samples', () => {
 
   it('declares t-joint-inch in inches and the rest in millimetres', () => {
     expect(byId.get('t-joint-inch')?.units).toBe('in')
-    expect(manifest.samples.filter((s) => s.units === 'mm')).toHaveLength(9)
+    expect(manifest.samples.filter((s) => s.units === 'mm')).toHaveLength(10)
   })
 
   it('describes box-beam as the welded box girder', () => {
@@ -112,7 +113,17 @@ describe('public/samples', () => {
       'box-beam': 0,
       'pipe-on-plate': 0,
       'double-bottom-cell': 50,
+      'tank-with-manhole': 9,
     })
+  })
+
+  it('names the tank sample and gives it six bodies', () => {
+    const tank = byId.get('tank-with-manhole')
+    expect(tank?.name).toBe('Tank with manhole')
+    expect(tank?.description).toBe(
+      'Closed 8 mm steel tank with floor stiffeners and a 600 mm manhole: inside seams only a snake arm can reach',
+    )
+    expect([tank?.units, tank?.bodies, tank?.expectedIntersectionSeams]).toEqual(['mm', 6, 0])
   })
 
   it('records the hand-derived intersection counts and the bar sample label', () => {
@@ -141,6 +152,7 @@ describe('public/samples', () => {
       'double-bottom-cell': [7, 6],
       'bar-through-plate': [2, 0],
       'flipped-normals': [2, 4],
+      'tank-with-manhole': [6, 12],
     }
     for (const [id, [bodies, seams]] of Object.entries(expected)) {
       expect([byId.get(id)?.bodies, byId.get(id)?.expectedCreaseSeams], id).toEqual([bodies, seams])

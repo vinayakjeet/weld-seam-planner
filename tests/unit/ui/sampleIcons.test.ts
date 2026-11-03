@@ -7,6 +7,10 @@ describe('iconForSample', () => {
     expect(iconForSample(id)).not.toBe(GenericPartIcon)
   })
 
+  it('has a tank icon of its own', () => {
+    expect(iconForSample('tank-with-manhole')).not.toBe(GenericPartIcon)
+  })
+
   it('uses the generic icon for a sample it does not know', () => {
     expect(iconForSample('turbine-blade')).toBe(GenericPartIcon)
   })

@@ -74,6 +74,21 @@ function doubleBottomCell(): Manifold[] {
   return [bottom, innerBottom, ...girders, ...floors]
 }
 
+// Closed 8 mm tank, 1600 x 1000 x 1000 mm outside, as six bodies: the shell (one body, so its inside corners are
+// crease seams), two transverse and two longitudinal stiffeners standing on the floor, and a coaming ring on the roof.
+function tankWithManhole(): Manifold[] {
+  const SEGMENTS = 64
+  const hole = (r: number, z0: number, z1: number): Manifold =>
+    M.cylinder(z1 - z0, r, r, SEGMENTS).translate([400, 500, z0])
+  const shell = box(0, 1600, 0, 1000, 0, 1000)
+    .subtract(box(8, 1592, 8, 992, 8, 992))
+    .subtract(hole(300, 990, 1010))
+  const transverse = [746, 1146].map((x) => box(x, x + 8, 68, 932, 8, 408))
+  const longitudinal = [331, 661].map((y) => box(814, 1086, y, y + 8, 8, 338))
+  const coaming = hole(308, 1000, 1050).subtract(hole(302, 999, 1051))
+  return [shell, ...transverse, ...longitudinal, coaming]
+}
+
 type Soup = number[]
 
 type Flip = (solid: number, centroid: number[], normal: number[]) => boolean
@@ -260,6 +275,17 @@ const samples: Sample[] = [
     // Left body: every triangle reversed. Right body: only the two web side faces reversed, so its winding is mixed.
     flip: (solid, centroid, normal) => solid === 0 || (Math.abs(normal[1]!) > 0.99 && Math.abs(centroid[1]!) < 10),
     expectedCreaseSeams: 2 * 2, // 2 T-joints x 2 concave lines (web to plate top, 200 mm) = 4, once the winding is repaired
+  }),
+  sample({
+    id: 'tank-with-manhole',
+    name: 'Tank with manhole',
+    description: 'Closed 8 mm steel tank with floor stiffeners and a 600 mm manhole: inside seams only a snake arm can reach',
+    units: 'mm',
+    solids: tankWithManhole(),
+    expectedCreaseSeams: 4 + 4 + 4, // 4 floor to wall, 4 roof to wall, 4 vertical corners (the shell is one body)
+    // 4 stiffeners x 2 long bottom edges on the floor; their 8 mm end edges are under the length filter. The coaming
+    // adds its outer loop on the roof; its inner edge fails the overhang test (2 mm land to the hole rim).
+    expectedContactSeams: 4 * 2 + 1,
   }),
 ]
 

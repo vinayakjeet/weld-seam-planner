@@ -3,6 +3,8 @@ import { computeFaceData } from '../../../src/core/mesh/faces'
 import { buildMeshModel, type MeshModel } from '../../../src/core/mesh/model'
 import { buildBodyBvhs } from '../../../src/core/seams/bodyBvh'
 import { contactTolerance, findContactEdges } from '../../../src/core/seams/contact'
+import { Vector3 } from 'three'
+import { loadSampleModel } from '../helpers/models'
 import { cubeTriangles, soupOf } from '../helpers/shapes'
 
 const CREASE_DEG = 30
@@ -103,5 +105,56 @@ describe('findContactEdges', () => {
 
   it('finds nothing for two separated bodies', () => {
     expect(contactOf(plate, cubeTriangles([-100, -5, 40], [200, 10, 80])).found).toHaveLength(0)
+  })
+})
+
+describe('findContactEdges on a hollow part', () => {
+  const model = loadSampleModel('tank-with-manhole')
+  const faces = computeFaceData(model.mesh)
+  const bvhs = buildBodyBvhs(model)
+  const edges = findContactEdges(model, faces, bvhs, CREASE_DEG)
+  const tolerance = contactTolerance(model.bounds.diagonal)
+  const p = model.mesh.positions
+  const ends = (k: number) => {
+    const id = edges.edgeIds[k]!
+    const a = model.edges.edgeA[id]! * 3
+    const b = model.edges.edgeB[id]! * 3
+    return [
+      [p[a]!, p[a + 1]!, p[a + 2]!],
+      [p[b]!, p[b + 1]!, p[b + 2]!],
+    ] as const
+  }
+
+  it('returns an edge only when both ends lie within the tolerance of the touched body', () => {
+    expect(edges.edgeIds.length).toBeGreaterThan(0)
+    const hit = { point: new Vector3(), distance: 0, faceIndex: 0 }
+    for (let k = 0; k < edges.edgeIds.length; k++) {
+      const target = bvhs[edges.touchedBody[k]!]!
+      for (const [x, y, z] of ends(k)) {
+        const found = target.bvh.closestPointToPoint(new Vector3(x, y, z), hit)
+        expect(found, `edge ${k}`).not.toBeNull()
+        expect(found!.distance, `edge ${k}`).toBeLessThanOrEqual(tolerance)
+      }
+    }
+  })
+
+  // The coaming sits 2 mm outside the hole rim. Its inner edge and the rim are not fillets: the overhang probe steps
+  // into the hole, where there is no surface, so only a range check on the hit keeps them out.
+  it('finds no edge on the manhole rim or the coaming inner edge', () => {
+    for (let k = 0; k < edges.edgeIds.length; k++) {
+      const [a, b] = ends(k)
+      const radius = Math.hypot((a[0] + b[0]) / 2 - 400, (a[1] + b[1]) / 2 - 500)
+      const onRoof = Math.abs(a[2] - 1000) < 1e-3
+      expect(onRoof && radius < 305, `edge ${k} at radius ${radius.toFixed(1)}`).toBe(false)
+    }
+  })
+
+  it('finds no edge on a stiffener top or end', () => {
+    for (let k = 0; k < edges.edgeIds.length; k++) {
+      const [a, b] = ends(k)
+      const level = Math.abs(a[2] - b[2]) < 1e-3
+      expect(level, `edge ${k} is vertical`).toBe(true)
+      for (const z of [408, 338]) expect(Math.abs(a[2] - z), `edge ${k} at z ${z}`).toBeGreaterThan(1e-3)
+    }
   })
 })

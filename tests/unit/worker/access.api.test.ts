@@ -103,6 +103,54 @@ describe('access on the generated samples', () => {
     expect(Object.keys(outcome.results)).toHaveLength(56)
   })
 
+  it('tank-with-manhole: 20 snake inside seams and the coaming loop standard, by group', async () => {
+    const t0 = performance.now()
+    const { seams, outcome } = await analyse('tank-with-manhole')
+    expect(seams).toHaveLength(21)
+    expect(histogram(seams, outcome)).toEqual({ snake: 20, standard: 1 })
+
+    const groups: Record<string, number> = {}
+    const near = (a: number, b: number) => Math.abs(a - b) < 2
+    for (const seam of seams) {
+      const { access } = outcome.results[seam.id]!
+      expect(access.unreachable, seam.label).toEqual([])
+      const [x, , z] = mid(seam)
+      const longitudinal = near(seam.lengthMm, 272)
+      const transverse = near(seam.lengthMm, 864)
+      let group: string
+      let far = 0
+      let nearDeg = 10
+      if (access.class === 'standard') {
+        group = 'coaming'
+        far = 45
+        nearDeg = 45
+      } else if (longitudinal) {
+        group = 'longitudinal'
+        far = 10
+        nearDeg = 45
+      } else if (transverse) {
+        // faces at x 746 and 1154 look at the walls, faces at x 754 and 1146 look into the middle bay
+        const outer = near(x, 746) || near(x, 1154)
+        group = outer ? 'transverse-outer' : 'transverse-inner'
+        far = outer ? 10 : 0
+        nearDeg = outer ? 45 : 35
+      } else {
+        group = z < 500 ? 'floor-or-corner' : 'roof-or-corner'
+      }
+      groups[group] = (groups[group] ?? 0) + 1
+      expect(access, `${seam.label} (${group})`).toMatchObject({ clearanceDeg: far, nearClearanceDeg: nearDeg })
+    }
+    expect(groups).toEqual({
+      coaming: 1,
+      longitudinal: 4,
+      'transverse-outer': 2,
+      'transverse-inner': 2,
+      'floor-or-corner': expect.any(Number),
+      'roof-or-corner': expect.any(Number),
+    })
+    expect(performance.now() - t0).toBeLessThan(3000)
+  })
+
   it('says what to do when there is no part', async () => {
     const outcome = await createGeometryApi().access([], () => {})
     expect(outcome.status).toBe('error')

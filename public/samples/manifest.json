@@ -110,6 +110,17 @@
       "expectedCreaseSeams": 4,
       "expectedContactSeams": 0,
       "expectedIntersectionSeams": 0
+    },
+    {
+      "id": "tank-with-manhole",
+      "file": "tank-with-manhole.stl",
+      "name": "Tank with manhole",
+      "description": "Closed 8 mm steel tank with floor stiffeners and a 600 mm manhole: inside seams only a snake arm can reach",
+      "units": "mm",
+      "bodies": 6,
+      "expectedCreaseSeams": 12,
+      "expectedContactSeams": 9,
+      "expectedIntersectionSeams": 0
     }
   ]
 }

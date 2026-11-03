@@ -79,9 +79,13 @@ export function findContactEdges(model: MeshModel, faces: FaceData, bvhs: BodyBv
         continue
       }
 
-      const near = (p: number[]) => target.bvh.closestPointToPoint(probe.set(p[0]!, p[1]!, p[2]!), hit, 0, tolerance) !== null
-      if (!near(p0) || !near(p1)) continue
-      if (target.bvh.closestPointToPoint(probe.set(mid[0]!, mid[1]!, mid[2]!), hit, 0, tolerance) === null) continue
+      // closestPointToPoint can return a triangle farther than the range when it shares a leaf with one inside it, so
+      // the distance is checked here. On a hollow part the leaf holds walls hundreds of mm away.
+      const near = (p: number[]) => {
+        const found = target.bvh.closestPointToPoint(probe.set(p[0]!, p[1]!, p[2]!), hit, 0, tolerance)
+        return found !== null && found.distance <= tolerance
+      }
+      if (!near(p0) || !near(p1) || !near(mid)) continue
 
       const touchedFace = target.triangles[hit.faceIndex]! * 3
       const touched = [normals[touchedFace]!, normals[touchedFace + 1]!, normals[touchedFace + 2]!]
@@ -109,7 +113,8 @@ export function findContactEdges(model: MeshModel, faces: FaceData, bvhs: BodyBv
         onSurface.y + (step[1]! / stepLength) * OVERHANG_REACH * tolerance,
         onSurface.z + (step[2]! / stepLength) * OVERHANG_REACH * tolerance,
       )
-      if (target.bvh.closestPointToPoint(probe, hit, 0, tolerance) === null) continue
+      const beside = target.bvh.closestPointToPoint(probe, hit, 0, tolerance)
+      if (beside === null || beside.distance > tolerance) continue
 
       edgeIds.push(e)
       freeFace.push(aligned === fa ? fb : fa)

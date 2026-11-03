@@ -105,6 +105,20 @@ export function DoubleBottomCellIcon() {
   )
 }
 
+export function TankWithManholeIcon() {
+  return (
+    <Frame>
+      <rect x="10" y="14" width="76" height="38" />
+      <rect x="14" y="18" width="68" height="30" />
+      <line x1="46" y1="38" x2="46" y2="48" />
+      <line x1="62" y1="38" x2="62" y2="48" />
+      <rect x="22" y="9" width="14" height="5" />
+      <Bead x={46} y={48} dx={-1} dy={-1} size={5} />
+      <Bead x={62} y={48} dx={1} dy={-1} size={5} />
+    </Frame>
+  )
+}
+
 export function GenericPartIcon() {
   return (
     <Frame>
@@ -123,6 +137,7 @@ const ICONS_BY_PREFIX: [string, ComponentType][] = [
   ['bar-through-plate', BarThroughPlateIcon],
   ['flipped-normals', FlippedNormalsIcon],
   ['double-bottom-cell', DoubleBottomCellIcon],
+  ['tank-with-manhole', TankWithManholeIcon],
 ]
 
 export function iconForSample(id: string): ComponentType {
