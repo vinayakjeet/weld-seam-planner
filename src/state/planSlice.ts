@@ -1,5 +1,7 @@
 import type { StateCreator } from 'zustand'
-import type { Explained, Plan } from '../core/job/plan'
+import type { Explained, JobSettings, Plan } from '../core/job/plan'
+import { DEFAULT_JOB_SETTINGS } from '../core/job/plan'
+import type { Issue } from '../core/job/preflight'
 import { procedureOverridesSchema, procedureSchema, type Procedure, type ProcedureOverrides } from '../core/job/schema'
 import type { PlateThickness } from '../core/process/filletRules'
 import { WPS_PRESETS } from '../core/process/wps'
@@ -15,6 +17,13 @@ export interface PlanSlice {
   overridesById: Record<string, ProcedureOverrides>
   legById: Record<string, number>
   thicknessById: Record<string, PlateThickness>
+  // Set by importing a plan; there is no editor for them yet. Not history. Back to the defaults when another part loads.
+  jobSettings: Pick<JobSettings, 'poseSpacingMm' | 'airSpeedMmS' | 'approachMm'>
+  // The last pre-flight answer and the plan it was computed for. The answer is current only while issuesFor is the plan
+  // selectPlan returns now. Not history.
+  issues: Issue[]
+  issuesFor: Plan | null
+  setIssues: (plan: Plan, issues: Issue[]) => void
   // Every action returns null when it worked, or what went wrong. Each one is a single undo step.
   addProcedure: (procedure: Procedure) => Explained | null
   // The id may change; the seams that use the procedure follow it in the same step.
@@ -27,6 +36,7 @@ export interface PlanSlice {
   setLeg: (seamIds: string[], legMm: number | null) => Explained | null
   setThickness: (seamId: string, thicknessMm: PlateThickness | null) => Explained | null
   // Replaces the plan with an imported one, restores its seams as manual seams, and empties the undo history.
+  // Detection has to have run with the file's crease angle first: the seams it superseded come from state.seams.
   applyImportedPlan: (plan: Plan) => void
 }
 
@@ -96,6 +106,11 @@ export const createPlanSlice: StateCreator<AppState, [], [], PlanSlice> = (set, 
   overridesById: {},
   legById: {},
   thicknessById: {},
+  jobSettings: { poseSpacingMm: DEFAULT_JOB_SETTINGS.poseSpacingMm, airSpeedMmS: DEFAULT_JOB_SETTINGS.airSpeedMmS, approachMm: DEFAULT_JOB_SETTINGS.approachMm },
+  issues: [],
+  issuesFor: null,
+
+  setIssues: (plan, issues) => set({ issues, issuesFor: plan }),
 
   addProcedure: (procedure) => {
     const problem = procedureProblem(procedure)
@@ -267,6 +282,7 @@ export const createPlanSlice: StateCreator<AppState, [], [], PlanSlice> = (set, 
         supersededIds: state.seams.filter((s) => restoredIds.has(s.id)).map((s) => s.id),
         nextDrawnId,
         gravity: plan.gravity,
+        jobSettings: { poseSpacingMm: plan.settings.poseSpacingMm, airSpeedMmS: plan.settings.airSpeedMmS, approachMm: plan.settings.approachMm },
         detectSettings: { ...state.detectSettings, creaseAngleDeg: plan.settings.creaseAngleDeg },
         selectedId: null,
         selectedIds: [],

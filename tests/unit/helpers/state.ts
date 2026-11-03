@@ -83,6 +83,12 @@ export function fakeClient(impl: Partial<GeometryApi> = {}): GeometryApi {
     torchPoses: async () => {
       throw new Error('unexpected torchPoses')
     },
+    preflight: async () => {
+      throw new Error('unexpected preflight')
+    },
+    exportJob: async () => {
+      throw new Error('unexpected exportJob')
+    },
     ...impl,
   }
 }

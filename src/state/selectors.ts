@@ -1,4 +1,4 @@
-import { DEFAULT_JOB_SETTINGS, type JobPart, type Plan, type PlannedSeam } from '../core/job/plan'
+import { type JobPart, type Plan, type PlannedSeam } from '../core/job/plan'
 import { meshWarnings, type MeshWarning } from '../core/mesh/health'
 import type { SeamCandidate } from '../core/seams/detect'
 import type { AppState } from './store'
@@ -94,7 +94,7 @@ export function selectPlan(state: AppState): Plan {
   const deps = [
     state.part, state.seams, state.manualSeams, state.supersededIds, state.showCorners, state.statusById, state.typeById,
     state.thicknessById, state.procedures, state.procedureById, state.overridesById, state.legById, state.gravity,
-    state.detectSettings.creaseAngleDeg,
+    state.detectSettings.creaseAngleDeg, state.jobSettings,
   ]
   if (cachedPlan && cachedPlan.deps.every((d, i) => d === deps[i])) return cachedPlan.plan
   const seams = visibleSeams(selectAllSeams(state), state.showCorners)
@@ -103,7 +103,7 @@ export function selectPlan(state: AppState): Plan {
   const plan: Plan = {
     part: state.part ?? NO_PART,
     gravity: state.gravity,
-    settings: { ...DEFAULT_JOB_SETTINGS, creaseAngleDeg: state.detectSettings.creaseAngleDeg },
+    settings: { ...state.jobSettings, creaseAngleDeg: state.detectSettings.creaseAngleDeg },
     procedures: state.procedures,
     seams,
   }

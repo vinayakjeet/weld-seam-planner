@@ -9,7 +9,12 @@ import {
   chooseUnits,
   DETECT_DEBOUNCE_MS,
   dismissNotice,
+  copySummary,
   dropFile,
+  exportPlan,
+  importPlan,
+  PREFLIGHT_DEBOUNCE_MS,
+  startPreflightSync,
   drawSeam,
   fetchManifest,
   importBuffer,
@@ -27,9 +32,12 @@ import {
   trimSelected,
   undoEdit,
 } from '../../../src/state/flows'
-import { selectAllSeams, selectStats } from '../../../src/state/selectors'
+import { selectAllSeams, selectPlan, selectStats } from '../../../src/state/selectors'
 import { useStore } from '../../../src/state/store'
 import { createGeometryApi, type DetectOutcome, type GeometryApi, type LoadOutcome, type Progress } from '../../../src/worker/geometry.api'
+import { buildJob } from '../../../src/core/job/build'
+import type { Issue } from '../../../src/core/job/preflight'
+import { CREATED_AT, samplePlan } from '../helpers/jobs'
 import { readManifest, readSample } from '../helpers/samples'
 import { deferred, detected, fakeClient, partInfo, readyOutcome, resetStore, seam } from '../helpers/state'
 
@@ -1175,3 +1183,230 @@ describe('torch flows', () => {
   })
 })
 
+
+const err = (code: Issue['code'], seamId: string | null = null): Issue => ({ code, severity: 'error', seamId, what: 'w', why: 'y', next: 'n' })
+
+function loadPlanPart(plan = samplePlan('t-joint-merged')) {
+  useStore.setState({ part: partInfo({ ...plan.part, sourceUnits: 'mm' }) })
+  return plan
+}
+
+describe('startPreflightSync', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  it('calls the worker once, after the plan has been still for the delay, and stores the answer for that plan', async () => {
+    const calls: unknown[] = []
+    const client = fakeClient({
+      preflight: async (plan) => {
+        calls.push(plan)
+        return { status: 'ok', issues: [err('NO_SEAMS')] }
+      },
+    })
+    const stop = startPreflightSync(client)
+    await vi.advanceTimersByTimeAsync(PREFLIGHT_DEBOUNCE_MS)
+    calls.length = 0
+
+    useStore.setState({ statusById: { a: 'accepted' } })
+    useStore.setState({ statusById: { a: 'accepted', b: 'accepted' } })
+    await vi.advanceTimersByTimeAsync(PREFLIGHT_DEBOUNCE_MS - 1)
+    expect(calls).toHaveLength(0)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(calls).toHaveLength(1)
+    expect(state().issuesFor).toBe(selectPlan(state()))
+    expect(state().issues.map((i) => i.code)).toEqual(['NO_SEAMS'])
+    stop()
+  })
+
+  it('does not call the worker for a change that is not part of the plan', async () => {
+    const preflight = vi.fn(async () => ({ status: 'ok' as const, issues: [] }))
+    const stop = startPreflightSync(fakeClient({ preflight }))
+    await vi.advanceTimersByTimeAsync(PREFLIGHT_DEBOUNCE_MS)
+    preflight.mockClear()
+    state().hover('x')
+    state().select('x')
+    await vi.advanceTimersByTimeAsync(PREFLIGHT_DEBOUNCE_MS * 2)
+    expect(preflight).not.toHaveBeenCalled()
+    stop()
+  })
+
+  it('drops the answer for an older plan, so the panel keeps saying checking until the newest one lands', async () => {
+    const first = deferred<{ status: 'ok'; issues: Issue[] }>()
+    const second = deferred<{ status: 'ok'; issues: Issue[] }>()
+    const gates = [first, second]
+    let n = 0
+    const stop = startPreflightSync(fakeClient({ preflight: () => gates[n++]!.promise }))
+    await vi.advanceTimersByTimeAsync(PREFLIGHT_DEBOUNCE_MS)
+    const older = selectPlan(state())
+    useStore.setState({ statusById: { a: 'accepted' } })
+    await vi.advanceTimersByTimeAsync(PREFLIGHT_DEBOUNCE_MS)
+    first.resolve({ status: 'ok', issues: [err('NO_SEAMS')] })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(state().issuesFor).not.toBe(older)
+    expect(state().issues).toEqual([])
+    second.resolve({ status: 'ok', issues: [err('NO_PROCEDURE', 'a')] })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(state().issuesFor).toBe(selectPlan(state()))
+    expect(state().issues.map((i) => i.code)).toEqual(['NO_PROCEDURE'])
+    stop()
+  })
+
+  it('stops listening once stopped', async () => {
+    const preflight = vi.fn(async () => ({ status: 'ok' as const, issues: [] }))
+    const stop = startPreflightSync(fakeClient({ preflight }))
+    await vi.advanceTimersByTimeAsync(PREFLIGHT_DEBOUNCE_MS)
+    preflight.mockClear()
+    stop()
+    useStore.setState({ statusById: { a: 'accepted' } })
+    await vi.advanceTimersByTimeAsync(PREFLIGHT_DEBOUNCE_MS * 2)
+    expect(preflight).not.toHaveBeenCalled()
+  })
+})
+
+describe('exportPlan', () => {
+  it('downloads nothing and says why when the plan is blocked', async () => {
+    loadPlanPart()
+    const save = vi.fn()
+    const client = fakeClient({
+      exportJob: async () => ({ status: 'blocked', issues: [err('NO_PROCEDURE', 'a'), err('NO_SEAMS')], summary: {} as never }),
+    })
+    await exportPlan(client, save, () => CREATED_AT)
+    expect(save).not.toHaveBeenCalled()
+    expect(state().notice?.what).toContain('2 errors')
+    expectReadable(state().notice!)
+  })
+
+  it('downloads once with the file name and the pretty printed job when the export is ok', async () => {
+    const plan = loadPlanPart()
+    const job = buildJob(plan, { createdAt: CREATED_AT }, [])
+    const save = vi.fn()
+    await exportPlan(fakeClient({ exportJob: async () => ({ status: 'ok', job, issues: [] }) }), save, () => CREATED_AT)
+    expect(save).toHaveBeenCalledTimes(1)
+    expect(save).toHaveBeenCalledWith('weldjob-t-joint-merged-2026-11-04.json', JSON.stringify(job, null, 2))
+    expect(state().info).toContain('weldjob-t-joint-merged-2026-11-04.json')
+  })
+
+  it('shows the worker error in the banner and downloads nothing', async () => {
+    loadPlanPart()
+    const save = vi.fn()
+    await exportPlan(fakeClient({ exportJob: async () => ({ status: 'error', error: { what: 'w', why: 'y', next: 'n' } }) }), save, () => CREATED_AT)
+    expect(save).not.toHaveBeenCalled()
+    expect(expectErrorState().what).toBe('w')
+  })
+
+  it('asks for a part when none is loaded', async () => {
+    const save = vi.fn()
+    await exportPlan(fakeClient(), save, () => CREATED_AT)
+    expect(save).not.toHaveBeenCalled()
+    expectErrorState()
+  })
+})
+
+describe('importPlan', () => {
+  function planFile(plan = samplePlan('double-bottom-cell')) {
+    const settings = { ...plan.settings, creaseAngleDeg: 40, poseSpacingMm: 8, airSpeedMmS: 300, approachMm: 70 }
+    const job = buildJob({ ...plan, settings }, { createdAt: CREATED_AT }, [])
+    return { plan, job, file: { name: 'plan.json', text: async () => JSON.stringify(job) } }
+  }
+
+  it('re-runs detection with the file crease angle before it applies the plan', async () => {
+    const { plan, job, file } = planFile()
+    loadPlanPart(plan)
+    const detectCalls: Array<{ angle: number; manual: number }> = []
+    const client = fakeClient({
+      detect: async (settings) => {
+        detectCalls.push({ angle: settings.creaseAngleDeg, manual: state().manualSeams.length })
+        return detected(plan.seams.map((p) => p.seam))
+      },
+    })
+    await importPlan(file, client)
+    expect(detectCalls).toEqual([{ angle: 40, manual: 0 }])
+    expect(state().detectSettings.creaseAngleDeg).toBe(40)
+    expect(state().manualSeams.length).toBe(plan.seams.length)
+    expect(state().supersededIds.length).toBe(plan.seams.length)
+    expect(job.procedures).toHaveLength(1)
+    expect(state().info).toBe(`Plan restored: ${plan.seams.length} seams, 1 procedure.`)
+  })
+
+  it('keeps the pose spacing, air speed and approach of the file, so a re-export matches', async () => {
+    const { plan, job, file } = planFile()
+    loadPlanPart(plan)
+    await importPlan(file, fakeClient({ detect: async () => detected(plan.seams.map((p) => p.seam)) }))
+    expect(state().jobSettings).toEqual({ poseSpacingMm: 8, airSpeedMmS: 300, approachMm: 70 })
+    expect(JSON.stringify(buildJob(selectPlan(state()), { createdAt: CREATED_AT }, []))).toBe(JSON.stringify(job))
+  })
+
+  it('refuses a plan made for another part and leaves the state as it was', async () => {
+    const { plan, file } = planFile()
+    loadPlanPart(plan)
+    useStore.setState({ part: partInfo({ ...plan.part, sha256: 'b'.repeat(64), sourceUnits: 'mm' }) })
+    const detect = vi.fn(async () => detected([]))
+    await importPlan(file, fakeClient({ detect }))
+    expect(expectErrorState().what).toContain('different part')
+    expect(detect).not.toHaveBeenCalled()
+    expect(state().manualSeams).toEqual([])
+    expect(state().info).toBeNull()
+  })
+
+  it('refuses a file that is not JSON in the banner', async () => {
+    loadPlanPart()
+    await importPlan({ name: 'x.json', text: async () => 'not json' }, fakeClient())
+    expect(expectErrorState().what).toContain('not JSON')
+  })
+
+  it('says so when the file cannot be read', async () => {
+    loadPlanPart()
+    await importPlan({ name: 'x.json', text: async () => { throw new Error('gone') } }, fakeClient())
+    expect(expectErrorState().why).toContain('gone')
+  })
+
+  it('asks for the part first when none is loaded', async () => {
+    const { file } = planFile()
+    await importPlan(file, fakeClient())
+    expect(expectErrorState().next).toMatch(/load|open|choose/i)
+  })
+
+  it('does not apply the plan when detection fails', async () => {
+    const { plan, file } = planFile()
+    loadPlanPart(plan)
+    const detect = async () => ({ status: 'error' as const, error: { what: 'w', why: 'y', next: 'n' } })
+    await importPlan(file, fakeClient({ detect }))
+    expect(state().manualSeams).toEqual([])
+    expect(state().info).toBeNull()
+    expect(expectErrorState().what).toBe('w')
+  })
+})
+
+describe('copySummary', () => {
+  it('writes the one line summary of the current plan to the clipboard', async () => {
+    const plan = loadPlanPart()
+    const job = buildJob(plan, { createdAt: CREATED_AT }, [])
+    const write = vi.fn<(text: string) => Promise<void>>(async () => {})
+    const client = fakeClient({ exportJob: async () => ({ status: 'ok', job, issues: [] }) })
+    await copySummary(client, write)
+    expect(write).toHaveBeenCalledTimes(1)
+    const text = write.mock.calls[0]![0]
+    expect(text.startsWith(`${plan.part.name}: ${job.summary.seamCount} seams, `)).toBe(true)
+    expect(text.endsWith('Pre-flight: 0 errors, 0 warnings.')).toBe(true)
+    expect(state().info).toBe('Summary copied to the clipboard.')
+  })
+
+  it('counts the errors of a blocked plan and still copies', async () => {
+    const plan = loadPlanPart()
+    const summary = buildJob(plan, { createdAt: CREATED_AT }, []).summary
+    const write = vi.fn<(text: string) => Promise<void>>(async () => {})
+    const issues = [err('NO_PROCEDURE', 'a'), { ...err('SHORT_SEAM', 'a'), severity: 'warning' as const }]
+    await copySummary(fakeClient({ exportJob: async () => ({ status: 'blocked', issues, summary }) }), write)
+    expect(write.mock.calls[0]![0]).toContain('Pre-flight: 1 errors, 1 warnings.')
+  })
+
+  it('explains a refused clipboard in the banner', async () => {
+    const plan = loadPlanPart()
+    const job = buildJob(plan, { createdAt: CREATED_AT }, [])
+    const write = async () => {
+      throw new Error('denied')
+    }
+    await copySummary(fakeClient({ exportJob: async () => ({ status: 'ok', job, issues: [] }) }), write)
+    expect(expectErrorState().why).toContain('denied')
+  })
+})

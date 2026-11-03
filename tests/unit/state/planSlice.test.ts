@@ -380,3 +380,18 @@ describe('applyImportedPlan', () => {
     expect(state().nextDrawnId).toBe(8)
   })
 })
+
+describe('job settings', () => {
+  it('starts at the defaults and reaches the plan', () => {
+    expect(state().jobSettings).toEqual({ poseSpacingMm: 5, airSpeedMmS: 250, approachMm: 50 })
+    expect(selectPlan(state()).settings).toMatchObject({ poseSpacingMm: 5, airSpeedMmS: 250, approachMm: 50 })
+  })
+
+  it('gives a new plan object when a setting changes, and is not undo history', () => {
+    const before = selectPlan(state())
+    useStore.setState({ jobSettings: { poseSpacingMm: 8, airSpeedMmS: 250, approachMm: 50 } })
+    expect(selectPlan(state())).not.toBe(before)
+    expect(selectPlan(state()).settings.poseSpacingMm).toBe(8)
+    expect(temporal().pastStates).toHaveLength(0)
+  })
+})

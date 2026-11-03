@@ -27,6 +27,9 @@ interface UiSlice {
   // The last refused manual action, shown over the viewport until dismissed or the next action starts.
   notice: ManualError | null
   setNotice: (notice: ManualError | null) => void
+  // A plain confirmation (a plan restored, a file exported) shown over the viewport until dismissed.
+  info: string | null
+  setInfo: (info: string | null) => void
 }
 
 export type AppState = UiSlice & PartSlice & SeamsSlice & PlanSlice & TorchSlice
@@ -38,6 +41,8 @@ const createUiSlice: StateCreator<AppState, [], [], UiSlice> = (set) => ({
   setTool: (tool) => set({ tool }),
   notice: null,
   setNotice: (notice) => set({ notice }),
+  info: null,
+  setInfo: (info) => set({ info }),
 })
 
 export const HISTORY_LIMIT = 100

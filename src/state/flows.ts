@@ -1,3 +1,5 @@
+import { DEFAULT_JOB_SETTINGS } from '../core/job/plan'
+import { importJob } from '../core/job/importJob'
 import type { KnownUnits } from '../core/mesh/units'
 import { sampleManifestSchema, type SampleEntry, type SampleManifest } from '../core/samples/manifest'
 import { DEFAULT_DETECT_SETTINGS, type DetectSettings } from '../core/seams/detect'
@@ -6,9 +8,11 @@ import type { GeometryClient } from '../worker/client'
 import type { DrawClick, LoadOutcome, Progress, Stage, UserError } from '../worker/geometry.api'
 import { DEFAULT_TORCH } from '../core/torch/frames'
 import { type Gravity } from '../core/torch/positions'
+import { downloadText } from '../ui/shell/download'
+import { jobFilename, summaryText } from '../ui/shell/exportText'
 import { needSeamSelected, parseTrimInput, type NeedsSeam } from '../ui/panels/manualText'
 import { initialTool, reduceTool, type ToolEffect, type ToolEvent, type ToolName } from '../ui/tools/toolMachine'
-import { selectAllSeams } from './selectors'
+import { selectAllSeams, selectPlan } from './selectors'
 import { useStore, type AppState } from './store'
 import type { PositionEntry } from './torchSlice'
 
@@ -113,8 +117,14 @@ async function applyLoad(outcome: LoadOutcome, fileName: string, client: Geometr
     rangeAnchor: null,
     hoverId: null,
     detectSettings: DEFAULT_DETECT_SETTINGS,
+    jobSettings: {
+      poseSpacingMm: DEFAULT_JOB_SETTINGS.poseSpacingMm,
+      airSpeedMmS: DEFAULT_JOB_SETTINGS.airSpeedMmS,
+      approachMm: DEFAULT_JOB_SETTINGS.approachMm,
+    },
     detectBusy: false,
     activeStep: 'seams',
+    info: null,
     tool: initialTool,
     notice: null,
   })
@@ -178,7 +188,9 @@ export async function chooseUnits(units: KnownUnits, client: GeometryClient): Pr
 }
 
 // Never touches statusById: accepted seams that this result lacks stay accepted and return with the settings.
-export async function runDetect(settings: DetectSettings, client: GeometryClient): Promise<void> {
+// Returns true when this call's result was applied.
+export async function runDetect(settings: DetectSettings, client: GeometryClient): Promise<boolean> {
+  let applied = false
   await guarded(async () => {
     const request = ++detectRequest
     useStore.setState({ detectBusy: true })
@@ -196,7 +208,9 @@ export async function runDetect(settings: DetectSettings, client: GeometryClient
       ...prunedSelection(useStore.getState(), ids),
       hoverId: hoverId !== null && ids.has(hoverId) ? hoverId : null,
     })
+    applied = true
   })
+  return applied
 }
 
 // How close a click has to be to an edge to snap to it.
@@ -482,4 +496,161 @@ export function changeGravity(gravity: Gravity): ManualError | null {
   const problem = useStore.getState().setGravity(gravity)
   if (problem) setNotice(problem)
   return problem
+}
+
+
+export const PREFLIGHT_DEBOUNCE_MS = 250
+
+// Checks the plan in the worker once it has been still for the delay. An answer for a plan that has changed since is
+// dropped, so issuesFor only ever names the current plan or an older one (shown as "Checking"). Returns a stop function.
+export function startPreflightSync(client: GeometryClient, delayMs = PREFLIGHT_DEBOUNCE_MS): () => void {
+  let request = 0
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let last = selectPlan(useStore.getState())
+
+  async function check(): Promise<void> {
+    const plan = selectPlan(useStore.getState())
+    const mine = ++request
+    const outcome = await attempt(() => client.preflight(plan))
+    if (mine !== request || plan !== selectPlan(useStore.getState())) return
+    if (outcome.status === 'error') {
+      setNotice(outcome.error)
+      return
+    }
+    useStore.getState().setIssues(plan, outcome.issues)
+  }
+
+  const schedule = () => {
+    clearTimeout(timer)
+    timer = setTimeout(() => void check(), delayMs)
+  }
+  schedule()
+  const unsubscribe = useStore.subscribe((state) => {
+    const plan = selectPlan(state)
+    if (plan === last) return
+    last = plan
+    schedule()
+  })
+  return () => {
+    unsubscribe()
+    clearTimeout(timer)
+    request++
+  }
+}
+
+const isoNow = () => new Date().toISOString().replace(/\.\d{3}Z$/, 'Z')
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+
+function needPart(doing: string): UserError {
+  return {
+    what: `Nothing was ${doing} because no part is loaded.`,
+    why: 'A plan belongs to one STL part, and none is open in this session.',
+    next: 'Choose an STL file or a sample first, then try again.',
+  }
+}
+
+// Builds the job in the worker and downloads it only when pre-flight has no errors.
+export async function exportPlan(client: GeometryClient, save = downloadText, now = isoNow): Promise<void> {
+  const state = useStore.getState()
+  if (state.part === null) {
+    showError(needPart('exported'))
+    return
+  }
+  setNotice(null)
+  const createdAt = now()
+  const outcome = await attempt(() => client.exportJob(selectPlan(state), createdAt))
+  if (outcome.status === 'error') {
+    showError(outcome.error)
+    return
+  }
+  if (outcome.status === 'blocked') {
+    const errors = outcome.issues.filter((issue) => issue.severity === 'error').length
+    setNotice({
+      what: `Export is blocked by ${plural(errors, 'error')}.`,
+      why: 'A job file with errors could send a robot to weld the wrong thing, so the file is only written when pre-flight has none.',
+      next: 'Open Validate and Export, fix the errors in the list, then export again.',
+    })
+    return
+  }
+  const filename = jobFilename(state.part.name, createdAt)
+  save(filename, JSON.stringify(outcome.job, null, 2))
+  useStore.getState().setInfo(`Exported ${filename}: ${plural(outcome.job.summary.seamCount, 'seam')}.`)
+}
+
+// Reads a plan file for the loaded part. Detection runs again at the file's crease angle first, because the plan's
+// seams replace the detected ones with the same ids and those exist only at that angle.
+export async function importPlan(file: Pick<File, 'name' | 'text'>, client: GeometryClient): Promise<void> {
+  await guarded(async () => {
+    const { part } = useStore.getState()
+    if (part === null) {
+      showError(needPart('restored'))
+      return
+    }
+    let text: string
+    try {
+      text = await file.text()
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      showError({
+        what: `${file.name} could not be read.`,
+        why: `The browser refused to give the app the file's contents (${detail}).`,
+        next: 'Check that the file still exists and is not open in another program, then choose it again.',
+      })
+      return
+    }
+    const imported = importJob(text, part.sha256)
+    if (imported.status === 'error') {
+      showError(imported.error)
+      return
+    }
+    const { plan } = imported
+    const settings = { ...useStore.getState().detectSettings, creaseAngleDeg: plan.settings.creaseAngleDeg }
+    // A slider change still waiting would run its angle after the file's.
+    clearTimeout(scheduledDetect)
+    useStore.getState().setDetectSettings(settings)
+    const detected = await runDetect(settings, client)
+    if (!detected) {
+      if (useStore.getState().importState.phase !== 'error') {
+        showError({
+          what: 'The plan was not restored.',
+          why: 'Another detection started while the plan was being prepared, so the seams no longer match the plan file.',
+          next: 'Import the plan again.',
+        })
+      }
+      return
+    }
+    useStore.getState().applyImportedPlan(plan)
+    setNotice(null)
+    useStore.getState().setInfo(`Plan restored: ${plural(plan.seams.length, 'seam')}, ${plural(plan.procedures.length, 'procedure')}.`)
+  })
+}
+
+// The one line summary goes to the clipboard whether or not pre-flight has errors; the line says how many there are.
+export async function copySummary(client: GeometryClient, write: (text: string) => Promise<void> = (text) => navigator.clipboard.writeText(text)): Promise<void> {
+  const state = useStore.getState()
+  if (state.part === null) {
+    showError(needPart('copied'))
+    return
+  }
+  const outcome = await attempt(() => client.exportJob(selectPlan(state), isoNow()))
+  if (outcome.status === 'error') {
+    showError(outcome.error)
+    return
+  }
+  const summary = outcome.status === 'ok' ? outcome.job.summary : outcome.summary
+  const errors = outcome.issues.filter((issue) => issue.severity === 'error').length
+  const warnings = outcome.issues.length - errors
+  try {
+    await write(summaryText(state.part.name, summary, { errors, warnings }))
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    showError({
+      what: 'The summary could not be copied.',
+      why: `The browser refused access to the clipboard (${detail}).`,
+      next: 'Allow clipboard access for this page, or export the job file and read the summary from it.',
+    })
+    return
+  }
+  useStore.getState().setInfo('Summary copied to the clipboard.')
 }

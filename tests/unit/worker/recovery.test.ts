@@ -40,6 +40,8 @@ function harness() {
       snapDraw: (clicks, radius) => real.snapDraw(clicks, radius),
       torchPositions: (seams, gravity) => real.torchPositions(seams, gravity),
       torchPoses: (seam, params) => real.torchPoses(seam, params),
+      preflight: (plan) => real.preflight(plan),
+      exportJob: (plan, createdAt) => real.exportJob(plan, createdAt),
     }
     const { port1, port2 } = new MessageChannel()
     ports.push(port1, port2)

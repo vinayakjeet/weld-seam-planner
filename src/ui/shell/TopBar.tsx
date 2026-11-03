@@ -1,5 +1,5 @@
 import { useStore } from '../../state/store'
-import { Tooltip } from '../kit/Tooltip'
+import { ExportControl } from './ExportControl'
 import { Stepper } from './Stepper'
 import { partChip } from './summary'
 
@@ -24,17 +24,7 @@ export function TopBar() {
         <Stepper />
       </div>
 
-      <Tooltip content="Export unlocks after a part is loaded and its seams pass pre-flight.">
-        <span tabIndex={0} className="rounded-sm outline-none focus-visible:ring-1 focus-visible:ring-brand">
-          <button
-            type="button"
-            disabled
-            className="h-8 cursor-not-allowed rounded-sm bg-brand px-4 font-medium text-white opacity-40"
-          >
-            Export
-          </button>
-        </span>
-      </Tooltip>
+      <ExportControl />
     </header>
   )
 }

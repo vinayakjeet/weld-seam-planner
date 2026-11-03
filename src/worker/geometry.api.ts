@@ -2,6 +2,9 @@ import { transfer } from 'comlink'
 import { BufferAttribute, BufferGeometry } from 'three'
 import { MeshBVH, type SerializedBVH } from 'three-mesh-bvh'
 import type { Vec3 } from '../core/math/vec3'
+import { exportJob, type ExportResult } from '../core/job/build'
+import type { Plan } from '../core/job/plan'
+import { preflight, type Issue } from '../core/job/preflight'
 import { computeBounds } from '../core/mesh/bounds'
 import { computeFaceData } from '../core/mesh/faces'
 import { sha256Hex } from '../core/mesh/hash'
@@ -65,6 +68,11 @@ export type TorchPositionsOutcome = { status: 'ok'; positions: Record<string, Se
 
 export type TorchPosesOutcome = { status: 'ok'; poses: TorchPose[] } | { status: 'error'; error: UserError }
 
+export type PreflightOutcome = { status: 'ok'; issues: Issue[] } | { status: 'error'; error: UserError }
+
+// ExportResult already has an error arm with the same what, why and next fields.
+export type ExportOutcome = ExportResult
+
 export interface GeometryApi {
   loadStl(buffer: ArrayBuffer, name: string, onProgress: Progress): Promise<LoadOutcome>
   setUnits(units: KnownUnits, onProgress: Progress): Promise<LoadOutcome>
@@ -76,6 +84,9 @@ export interface GeometryApi {
   torchPositions(seams: SeamCandidate[], gravity: Gravity): Promise<TorchPositionsOutcome>
   // Torch poses along one seam; the main thread scrubs between them with poseAt.
   torchPoses(seam: SeamCandidate, params: TorchParams): Promise<TorchPosesOutcome>
+  // Both read only the plan they are given, so they need no part in the worker.
+  preflight(plan: Plan): Promise<PreflightOutcome>
+  exportJob(plan: Plan, createdAt: string): Promise<ExportOutcome>
 }
 
 // Where each load stage starts on the overall bar; the index stage runs to 1.
@@ -281,6 +292,18 @@ export function createGeometryApi(): GeometryApi {
       } catch (error) {
         return { status: 'error', error: toUserError(error) }
       }
+    },
+
+    async preflight(plan) {
+      try {
+        return { status: 'ok', issues: preflight(plan) }
+      } catch (error) {
+        return { status: 'error', error: toUserError(error) }
+      }
+    },
+
+    async exportJob(plan, createdAt) {
+      return exportJob(plan, { createdAt })
     },
   }
 }

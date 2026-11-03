@@ -109,5 +109,9 @@ export function createRecoveringClient(spawn: (onDead: () => void) => GeometryCl
     torchPositions: (seams, gravity) => current().torchPositions(seams, gravity),
 
     torchPoses: (seam, params) => current().torchPoses(seam, params),
+
+    preflight: (plan) => current().preflight(plan),
+
+    exportJob: (plan, createdAt) => current().exportJob(plan, createdAt),
   }
 }

@@ -1,6 +1,8 @@
 import { proxy, transfer, wrap, type Endpoint } from 'comlink'
 import type {
   DetectOutcome,
+  ExportOutcome,
+  PreflightOutcome,
   GeometryApi,
   LoadOutcome,
   Progress,
@@ -119,6 +121,8 @@ export function wrapGeometryApi(endpoint: Endpoint, options: ClientOptions = {})
       supervise<TorchPositionsOutcome>(options, 'working out the welding positions', () => remote.torchPositions(seams, gravity)),
     torchPoses: (seam, params) =>
       supervise<TorchPosesOutcome>(options, 'working out the torch poses', () => remote.torchPoses(seam, params)),
+    preflight: (plan) => supervise<PreflightOutcome>(options, 'checking the plan', () => remote.preflight(plan)),
+    exportJob: (plan, createdAt) => supervise<ExportOutcome>(options, 'building the job file', () => remote.exportJob(plan, createdAt)),
   }
 }
 

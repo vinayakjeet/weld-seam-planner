@@ -18,6 +18,8 @@ import { readSample } from '../helpers/samples'
 import { gridBoxTriangles } from '../helpers/shapes'
 import { makeBinaryStl, TRIANGLES } from '../helpers/stl'
 import { createHash } from 'node:crypto'
+import { jobSchema } from '../../../src/core/job/schema'
+import { CREATED_AT, samplePlan } from '../helpers/jobs'
 
 type Stage = 'read' | 'weld' | 'topology' | 'index' | 'contact' | 'detect'
 
@@ -236,6 +238,15 @@ describe('geometry client over a real message channel', () => {
     const detected = await client.detect(DEFAULT_DETECT_SETTINGS, () => {})
     expect(detected.status === 'ok' && shown(detected.seams).length).toBe(2)
   })
+
+  it('carries pre-flight and export across the channel', async () => {
+    const client = connect()
+    const plan = samplePlan('t-joint-merged')
+    const checked = await client.preflight(plan)
+    expect(checked.status).toBe('ok')
+    const exported = await client.exportJob(plan, CREATED_AT)
+    expect(exported.status).toBe('ok')
+  })
 })
 
 describe('geometry api: contact seams', () => {
@@ -426,3 +437,25 @@ describe('geometry api: torch', () => {
   })
 })
 
+
+describe('geometry api: pre-flight and export', () => {
+  it('lists the errors of a plan, with a code on every issue', async () => {
+    const plan = samplePlan('t-joint-merged', (p) => ({ ...p, seams: p.seams.map((s, i) => (i === 0 ? { ...s, procedureId: null } : s)) }))
+    const outcome = await createGeometryApi().preflight(plan)
+    if (outcome.status !== 'ok') throw new Error('expected ok')
+    expect(outcome.issues.some((i) => i.code === 'NO_PROCEDURE' && i.severity === 'error')).toBe(true)
+  })
+
+  it('blocks the export of a plan with an unassigned seam and still reports the summary', async () => {
+    const plan = samplePlan('t-joint-merged', (p) => ({ ...p, seams: p.seams.map((s, i) => (i === 0 ? { ...s, procedureId: null } : s)) }))
+    const outcome = await createGeometryApi().exportJob(plan, CREATED_AT)
+    expect(outcome.status).toBe('blocked')
+    if (outcome.status === 'blocked') expect(outcome.summary.seamCount).toBe(plan.seams.length)
+  })
+
+  it('exports samplePlan t-joint-merged as a job that the schema accepts', async () => {
+    const outcome = await createGeometryApi().exportJob(samplePlan('t-joint-merged'), CREATED_AT)
+    if (outcome.status !== 'ok') throw new Error(`expected ok, got ${outcome.status}`)
+    expect(jobSchema.safeParse(JSON.parse(JSON.stringify(outcome.job))).success).toBe(true)
+  })
+})

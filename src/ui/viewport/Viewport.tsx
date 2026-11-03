@@ -2,6 +2,7 @@ import './zUp'
 import { Canvas } from '@react-three/fiber'
 import { useStore } from '../../state/store'
 import { ErrorBanner } from '../shell/ErrorBanner'
+import { InfoNotice } from '../shell/InfoNotice'
 import { ToolNotice } from '../shell/ToolNotice'
 import { ProgressBar } from '../shell/ProgressBar'
 import { EmptyState } from './EmptyState'
@@ -26,6 +27,7 @@ export function Viewport() {
         <ProgressBar />
         <ErrorBanner />
         <ToolNotice />
+        <InfoNotice />
       </div>
       <UnitsDialog />
     </main>
