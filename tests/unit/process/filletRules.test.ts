@@ -6,6 +6,7 @@ import {
   minLegMm,
   MULTI_PASS_LEG_MM,
   throatMm,
+  trustedThickness,
 } from '../../../src/core/process/filletRules'
 import { WPS_PRESETS } from '../../../src/core/process/wps'
 
@@ -102,5 +103,30 @@ describe('effectiveLegMm', () => {
 
   it('uses the deposited leg unclamped when thickness is unknown', () => {
     expect(effectiveLegMm({ ...base, legMm: null, procedure: spray, thickness: [null, null] })).toEqual({ legMm: 6, source: 'procedure' })
+  })
+})
+
+describe('trustedThickness', () => {
+  it('nulls the larger entry of a corner when it is more than 3 times the other', () => {
+    expect(trustedThickness('corner', [10, 90])).toEqual([10, null])
+    expect(trustedThickness('corner', [200, 10])).toEqual([null, 10])
+    expect(trustedThickness('corner', [10, 30.01])).toEqual([10, null])
+  })
+
+  it('keeps a corner at exactly 3 times, and similar entries', () => {
+    expect(trustedThickness('corner', [10, 30])).toEqual([10, 30])
+    expect(trustedThickness('corner', [8, 12])).toEqual([8, 12])
+  })
+
+  it('leaves other joints and unknown entries alone', () => {
+    for (const joint of ['fillet', 'lap', 'saddle']) expect(trustedThickness(joint, [10, 90])).toEqual([10, 90])
+    expect(trustedThickness('corner', [10, null])).toEqual([10, null])
+    expect(trustedThickness('corner', [null, null])).toEqual([null, null])
+  })
+
+  it('does not change its input', () => {
+    const t: [number, number] = [10, 90]
+    trustedThickness('corner', t)
+    expect(t).toEqual([10, 90])
   })
 })

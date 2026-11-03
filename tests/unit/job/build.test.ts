@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { buildJob } from '../../../src/core/job/build'
+import { buildJob, exportJob } from '../../../src/core/job/build'
+import { toJobIssue } from '../../../src/core/job/preflight'
 import { jobSchema, type WeldJob } from '../../../src/core/job/schema'
 import { DEFAULT_JOB_SETTINGS, torchParamsFor } from '../../../src/core/job/plan'
 import { length, sub, type Vec3 } from '../../../src/core/math/vec3'
@@ -234,5 +235,54 @@ describe('determinism', () => {
     const plan = samplePlan('t-joint-merged')
     expect(JSON.stringify(buildJob(plan, opts))).toBe(JSON.stringify(buildJob(plan, opts)))
     expect(DEFAULT_JOB_SETTINGS.poseSpacingMm).toBe(5)
+  })
+})
+
+describe('exportJob', () => {
+  it('blocks on any error, with the summary and no job', () => {
+    const plan = specExamplePlan()
+    plan.seams[0]!.procedureId = null
+    const r = exportJob(plan, opts)
+    expect(r.status).toBe('blocked')
+    if (r.status !== 'blocked') return
+    expect(r.issues.map((i) => i.code)).toEqual(['NO_PROCEDURE'])
+    expect(r.summary.seamCount).toBe(1)
+    expect(r.summary.weldLengthMm).toBe(800)
+    expect('job' in r).toBe(false)
+  })
+
+  it('blocks a plan with no seams without throwing', () => {
+    const r = exportJob({ ...specExamplePlan(), seams: [] }, opts)
+    expect(r.status).toBe('blocked')
+    if (r.status === 'blocked') expect(r.summary.seamCount).toBe(0)
+  })
+
+  it('exports with warnings only, carrying them into the job', () => {
+    const plan = specExamplePlan([{ id: 's07', from: [0, 0, 0], to: [8, 0, 0] }])
+    const r = exportJob(plan, opts)
+    expect(r.status).toBe('ok')
+    if (r.status !== 'ok') return
+    expect(r.issues.map((i) => i.code)).toEqual(['SHORT_SEAM'])
+    const want = r.issues.map(toJobIssue)
+    expect(r.job.validation.warnings).toEqual(want)
+    expect(r.job.seams[0]!.warnings).toEqual(want)
+    expect(r.job.validation.errors).toEqual([])
+    expect(jobSchema.safeParse(JSON.parse(JSON.stringify(r.job))).success).toBe(true)
+  })
+
+  it('exports a clean plan', () => {
+    const r = exportJob(specExamplePlan(), opts)
+    expect(r.status).toBe('ok')
+    if (r.status === 'ok') expect(r.issues).toEqual([])
+  })
+
+  it('reports a file that fails its own schema as an error naming the first path', () => {
+    const plan = specExamplePlan()
+    plan.settings = { ...plan.settings, poseSpacingMm: -5 }
+    const r = exportJob(plan, opts)
+    expect(r.status).toBe('error')
+    if (r.status !== 'error') return
+    expect(r.error.why).toContain('settings.poseSpacingMm')
+    for (const part of [r.error.what, r.error.why, r.error.next]) expect(part.trim().length).toBeGreaterThan(0)
   })
 })

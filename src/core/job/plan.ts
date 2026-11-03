@@ -1,5 +1,5 @@
 import type { Vec3 } from '../math/vec3'
-import { effectiveLegMm, legLimits, type LegSource, type PlateThickness } from '../process/filletRules'
+import { effectiveLegMm, legLimits, trustedThickness, type LegSource, type PlateThickness } from '../process/filletRules'
 import { heatInputCheck, heatInputKJmm, type Check } from '../process/heatInput'
 import { depositionTravelMmMin, travelSpeedCheck } from '../process/travelSpeed'
 import { resolveProcedure } from '../process/wps'
@@ -85,7 +85,8 @@ const OK: Check = { level: 'ok', reason: '' }
 export function resolveSeam(plan: Plan, planned: PlannedSeam): ResolvedSeam {
   const base = planned.procedureId === null ? undefined : plan.procedures.find((p) => p.id === planned.procedureId)
   const procedure = base ? resolveProcedure(base, planned.overrides) : null
-  const { jointType, thicknessMm: thickness } = planned.seam
+  const { jointType } = planned.seam
+  const thickness = trustedThickness(jointType, planned.seam.thicknessMm)
   const leg = effectiveLegMm({ legMm: planned.legMm, procedure, thickness, jointType })
   const limits = legLimits(jointType, thickness)
   if (!procedure) {

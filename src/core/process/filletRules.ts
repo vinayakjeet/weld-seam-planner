@@ -24,6 +24,18 @@ export function throatMm(legMm: number): number {
   return 0.707 * legMm
 }
 
+const EXTENT_RATIO = 3
+
+// A corner's end face is as long as the plate behind it, so a ray through it measures the plate extent, not its
+// thickness. When one entry of a corner is more than 3 times the other, the larger is taken as unknown.
+export function trustedThickness(jointType: string, thickness: PlateThickness): PlateThickness {
+  const [a, b] = thickness
+  if (jointType !== 'corner' || a === null || b === null) return [a, b]
+  if (b > EXTENT_RATIO * a) return [a, null]
+  if (a > EXTENT_RATIO * b) return [null, b]
+  return [a, b]
+}
+
 function known(thickness: PlateThickness): number[] {
   return thickness.filter((t): t is number => t !== null && Number.isFinite(t) && t > 0)
 }

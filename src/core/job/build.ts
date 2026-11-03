@@ -3,8 +3,9 @@ import { seamEstimates } from '../process/estimates'
 import { throatMm } from '../process/filletRules'
 import { DEFAULT_TORCH, poseAt, torchPoses, type TorchPose } from '../torch/frames'
 import { awsFor, seamPosition, upFromGravity } from '../torch/positions'
-import { resolveSeam, torchParamsFor, type Plan, type PlannedSeam } from './plan'
-import { FRAME_CONVENTION, JOB_UNITS, SCHEMA_URL, type JobIssue, type WeldJob } from './schema'
+import { resolveSeam, torchParamsFor, type Explained, type Plan, type PlannedSeam } from './plan'
+import { preflight, toJobIssue, type Issue } from './preflight'
+import { FRAME_CONVENTION, JOB_UNITS, jobSchema, SCHEMA_URL, type JobIssue, type WeldJob } from './schema'
 
 export const GENERATOR = { name: 'Weld Seam Planner', version: '1.0.0' }
 
@@ -23,7 +24,9 @@ const EPS = 1e-9
 // Arc lengths of the poses: 0, spacing, 2 x spacing, and finally the length itself.
 function poseArcs(lengthMm: number, spacingMm: number): number[] {
   const arcs: number[] = []
-  for (let k = 0; k * spacingMm < lengthMm - EPS; k++) arcs.push(k * spacingMm)
+  // A spacing that is not a positive number cannot step along the seam; the schema check names it later.
+  const step = spacingMm > 0 && Number.isFinite(spacingMm) ? spacingMm : lengthMm
+  for (let k = 0; k * step < lengthMm - EPS; k++) arcs.push(k * step)
   arcs.push(lengthMm)
   return arcs
 }
@@ -229,5 +232,44 @@ export function buildJob(plan: Plan, options: { createdAt: string }, issues: Job
       gasL: r1(sum((b) => b.gasL)),
     },
     validation: { errors: [], warnings: issues },
+  }
+}
+
+export type ExportResult =
+  | { status: 'ok'; job: WeldJob; issues: Issue[] }
+  | { status: 'blocked'; issues: Issue[]; summary: WeldJob['summary'] }
+  | { status: 'error'; error: Explained }
+
+// Builds the job, refuses it while pre-flight has errors, and checks the finished file against its own schema.
+export function exportJob(plan: Plan, options: { createdAt: string }): ExportResult {
+  try {
+    const issues = preflight(plan)
+    const blocked = issues.some((i) => i.severity === 'error')
+    const job = buildJob(plan, options, blocked ? [] : issues.map(toJobIssue))
+    if (blocked) return { status: 'blocked', issues, summary: job.summary }
+
+    // Parsed from the text that would be written, so NaN and Infinity show up as the nulls they become in JSON.
+    const parsed = jobSchema.safeParse(JSON.parse(JSON.stringify(job)))
+    if (!parsed.success) {
+      const first = parsed.error.issues[0]!
+      return {
+        status: 'error',
+        error: {
+          what: 'The plan could not be exported.',
+          why: `The finished file failed its own schema check at ${first.path.join('.') || 'the top level'}: ${first.message}`,
+          next: 'Correct that setting and export again, or report it with the plan if it looks right.',
+        },
+      }
+    }
+    return { status: 'ok', job, issues }
+  } catch (error) {
+    return {
+      status: 'error',
+      error: {
+        what: 'The plan could not be exported.',
+        why: `Building the file failed: ${error instanceof Error ? error.message : 'unknown error'}`,
+        next: 'Check the gravity direction and the seams, then export again.',
+      },
+    }
   }
 }

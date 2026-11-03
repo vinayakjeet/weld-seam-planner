@@ -1,0 +1,338 @@
+import { describe, expect, it } from 'vitest'
+import { buildJob } from '../../../src/core/job/build'
+import { resolveSeam, type Plan } from '../../../src/core/job/plan'
+import { preflight, toJobIssue, type Issue, type IssueCode } from '../../../src/core/job/preflight'
+import { effectiveLegMm, legLimits } from '../../../src/core/process/filletRules'
+import { DEFAULT_DETECT_SETTINGS, detectSeams, type SeamCandidate } from '../../../src/core/seams/detect'
+import { CREATED_AT, SPRAY_ID, samplePlan, specExamplePlan, type StraightSeam } from '../helpers/jobs'
+import { loadSampleModel } from '../helpers/models'
+
+const codes = (issues: Issue[]) => issues.map((i) => i.code)
+const only = (issues: Issue[], code: IssueCode, severity: Issue['severity'], seamId: string | null) => {
+  expect(issues.map((i) => [i.code, i.severity, i.seamId])).toEqual([[code, severity, seamId]])
+}
+
+// The spray procedure without a wire feed (so no travel speed check) and with a wide thickness range, so that
+// only the rule under test can fire.
+function lenient(seams?: StraightSeam[], edit?: (plan: Plan) => void): Plan {
+  const plan = specExamplePlan(seams)
+  const p = plan.procedures.find((x) => x.id === SPRAY_ID)!
+  delete p.electrical.wireFeedMpm
+  p.baseMaterial.thicknessMm = [1, 100]
+  edit?.(plan)
+  return plan
+}
+
+describe('the spec example plan', () => {
+  it('raises nothing', () => {
+    expect(preflight(specExamplePlan())).toEqual([])
+  })
+})
+
+describe('plan level rules', () => {
+  it('NO_SEAMS: no accepted seams', () => {
+    only(preflight({ ...specExamplePlan(), seams: [] }), 'NO_SEAMS', 'error', null)
+  })
+
+  it('DUPLICATE_ID: two seams share an id', () => {
+    const plan = specExamplePlan([
+      { id: 'a', from: [0, 0, 0], to: [100, 0, 0] },
+      { id: 'a', from: [0, 300, 0], to: [100, 300, 0] },
+    ])
+    only(preflight(plan), 'DUPLICATE_ID', 'error', 'a')
+  })
+
+  it('DUPLICATE_ID: two procedures share an id', () => {
+    const plan = specExamplePlan()
+    plan.procedures.push(structuredClone(plan.procedures[0]!))
+    only(preflight(plan), 'DUPLICATE_ID', 'error', null)
+  })
+
+  it('UNITS_UNKNOWN: unknown source units or a bad scale', () => {
+    const unknown = specExamplePlan()
+    unknown.part.sourceUnits = 'unknown'
+    only(preflight(unknown), 'UNITS_UNKNOWN', 'error', null)
+    for (const scaleToMm of [0, -1, Number.NaN, Infinity]) {
+      const plan = specExamplePlan()
+      plan.part.scaleToMm = scaleToMm
+      only(preflight(plan), 'UNITS_UNKNOWN', 'error', null)
+    }
+  })
+})
+
+describe('procedure rules', () => {
+  it('NO_PROCEDURE: a seam without a procedure', () => {
+    const plan = specExamplePlan()
+    plan.seams[0]!.procedureId = null
+    only(preflight(plan), 'NO_PROCEDURE', 'error', 's07')
+  })
+
+  it('UNKNOWN_PROCEDURE: an id that is not in the library', () => {
+    const plan = specExamplePlan()
+    plan.seams[0]!.procedureId = 'WPS-NOPE'
+    only(preflight(plan), 'UNKNOWN_PROCEDURE', 'error', 's07')
+  })
+
+  it('POSITION_NOT_COVERED: the seam position is not in the procedure positions', () => {
+    const plan = lenient(undefined, (p) => void (p.seams[0]!.overrides = { positions: ['PA'] }))
+    only(preflight(plan), 'POSITION_NOT_COVERED', 'warning', 's07')
+  })
+
+  it('THICKNESS_OUTSIDE_WPS: a known thickness is outside the procedure range', () => {
+    const plan = lenient([{ id: 's07', from: [1200, 300, 12], to: [2000, 300, 12], thicknessMm: [150, 150] }])
+    only(preflight(plan), 'THICKNESS_OUTSIDE_WPS', 'warning', 's07')
+  })
+})
+
+describe('overlap', () => {
+  const pair = (b: StraightSeam) => specExamplePlan([{ id: 'a', from: [0, 0, 0], to: [100, 0, 0] }, b])
+
+  it('OVERLAP: a seam and its copy', () => {
+    only(preflight(pair({ id: 'b', from: [0, 0, 0], to: [100, 0, 0] })), 'OVERLAP', 'error', 'b')
+  })
+
+  it('OVERLAP: a seam and its reversed copy', () => {
+    only(preflight(pair({ id: 'b', from: [100, 0, 0], to: [0, 0, 0], normals: [[0, -1, 0], [0, 0, 1]] })), 'OVERLAP', 'error', 'b')
+  })
+
+  it('OVERLAP: a shifted partial overlap of 20 mm', () => {
+    only(preflight(pair({ id: 'b', from: [80, 0.5, 0], to: [200, 0.5, 0] })), 'OVERLAP', 'error', 'b')
+  })
+
+  it('does not fire for two seams sharing one end point at a right angle', () => {
+    expect(preflight(pair({ id: 'b', from: [100, 0, 0], to: [100, 100, 0] }))).toEqual([])
+  })
+
+  it('does not fire for two collinear seams that meet at one end point', () => {
+    expect(preflight(pair({ id: 'b', from: [100, 0, 0], to: [200, 0, 0] }))).toEqual([])
+  })
+
+  it('does not fire for parallel seams 2 mm apart', () => {
+    expect(preflight(pair({ id: 'b', from: [0, 2, 0], to: [100, 2, 0] }))).toEqual([])
+  })
+
+  it('does not fire for seams that cross at a steep angle', () => {
+    expect(preflight(pair({ id: 'b', from: [50, -50, 0], to: [50, 50, 0] }))).toEqual([])
+  })
+})
+
+describe('fillet size rules', () => {
+  it('LEG_UNDER_MIN: a 4 mm leg on a 12 mm part, in the tone of the plan', () => {
+    const plan = lenient(undefined, (p) => void (p.seams[0]!.legMm = 4))
+    const issues = preflight(plan)
+    only(issues, 'LEG_UNDER_MIN', 'error', 's07')
+    expect(issues[0]!.what).toBe('Seam S07 has a 4 mm leg, below the 5 mm minimum.')
+    expect(issues[0]!.why).toContain('AWS D1.1')
+    expect(issues[0]!.next).toContain('Raise the leg to 5 mm or more')
+  })
+
+  it('LEG_UNDER_MIN: a 5 mm leg is fine', () => {
+    expect(preflight(lenient(undefined, (p) => void (p.seams[0]!.legMm = 5)))).toEqual([])
+  })
+
+  it('LEG_OVER_EDGE: a lap leg above the edge limit of the thinner plate', () => {
+    const plan = lenient([{ id: 's07', from: [1200, 300, 12], to: [2000, 300, 12], thicknessMm: [6, 6] }], (p) => {
+      p.seams[0]!.seam = { ...p.seams[0]!.seam, jointType: 'lap' }
+      p.seams[0]!.legMm = 5
+    })
+    only(preflight(plan), 'LEG_OVER_EDGE', 'error', 's07')
+  })
+
+  it('a T fillet has no edge limit', () => {
+    const plan = lenient([{ id: 's07', from: [1200, 300, 12], to: [2000, 300, 12], thicknessMm: [6, 6] }], (p) => void (p.seams[0]!.legMm = 5))
+    expect(preflight(plan)).toEqual([])
+  })
+
+  it('MULTI_PASS: a leg above 8 mm with one pass', () => {
+    const plan = lenient(undefined, (p) => void (p.seams[0]!.legMm = 9))
+    only(preflight(plan), 'MULTI_PASS', 'warning', 's07')
+  })
+
+  it('SHORT_SEAM: under 10 mm', () => {
+    only(preflight(lenient([{ id: 's07', from: [0, 0, 0], to: [8, 0, 0] }])), 'SHORT_SEAM', 'warning', 's07')
+    expect(preflight(lenient([{ id: 's07', from: [0, 0, 0], to: [10, 0, 0] }]))).toEqual([])
+  })
+})
+
+describe('bead rules', () => {
+  // v is the heat input in kJ/mm reached by changing the voltage, current 270 A and travel 9 mm/s unchanged
+  const withHeatInput = (q: number) => lenient(undefined, (p) => void (p.seams[0]!.overrides = { electrical: { voltageV: (q * 1000 * 540) / (0.8 * 270 * 60) } }))
+
+  it.each([
+    [2.49, null],
+    [2.51, 'warning'],
+    [3.49, 'warning'],
+    [3.51, 'error'],
+  ] as const)('HEAT_INPUT_RANGE at %f kJ/mm', (q, severity) => {
+    const issues = preflight(withHeatInput(q))
+    if (severity === null) expect(issues).toEqual([])
+    else only(issues, 'HEAT_INPUT_RANGE', severity, 's07')
+  })
+
+  it('HEAT_INPUT_RANGE: low heat input on a part of 6 mm or more', () => {
+    const plan = lenient(undefined, (p) => void (p.seams[0]!.overrides = { electrical: { currentA: 100 } }))
+    only(preflight(plan), 'HEAT_INPUT_RANGE', 'warning', 's07')
+  })
+
+  // The default leg follows the travel speed, so a set leg of 6 mm gives a fixed suggestion to measure against.
+  const suggested = 9.043978851243342
+  const withTravel = (factor: number) => {
+    const plan = specExamplePlan()
+    plan.seams[0]!.legMm = 6
+    plan.seams[0]!.overrides = { travelSpeedMmS: suggested * factor }
+    return plan
+  }
+
+  it.each([
+    [1.24, null],
+    [1.26, 'warning'],
+    [1.49, 'warning'],
+    [1.51, 'error'],
+  ] as const)('TRAVEL_SPEED_RANGE at %f times the suggestion', (factor, severity) => {
+    const issues = preflight(withTravel(factor))
+    if (severity === null) expect(issues).toEqual([])
+    else only(issues, 'TRAVEL_SPEED_RANGE', severity, 's07')
+  })
+
+  it('TRAVEL_SPEED_RANGE: slower than the suggestion counts the same way', () => {
+    const plan = specExamplePlan()
+    plan.seams[0]!.legMm = 6
+    plan.seams[0]!.overrides = { travelSpeedMmS: suggested * 0.74 }
+    expect(codes(preflight(plan))).toContain('TRAVEL_SPEED_RANGE')
+  })
+
+  it('skips the travel speed check when the procedure has no wire feed', () => {
+    const plan = lenient(undefined, (p) => void (p.seams[0]!.overrides = { travelSpeedMmS: 40 }))
+    expect(codes(preflight(plan))).not.toContain('TRAVEL_SPEED_RANGE')
+  })
+})
+
+describe('access', () => {
+  it('ACCESS_BLOCKED: a blocked class', () => {
+    const plan = specExamplePlan()
+    plan.seams[0]!.access = { clearanceDeg: null, class: 'blocked', portId: null, reachCoverage: null, unreachable: [] }
+    only(preflight(plan), 'ACCESS_BLOCKED', 'error', 's07')
+  })
+
+  it('ACCESS_BLOCKED: a non empty unreachable list', () => {
+    const plan = specExamplePlan()
+    plan.seams[0]!.access = { clearanceDeg: null, class: 'standard', portId: null, reachCoverage: 0.9, unreachable: [[10, 20]] }
+    only(preflight(plan), 'ACCESS_BLOCKED', 'error', 's07')
+  })
+
+  it('is silent until access exists', () => {
+    expect(preflight(specExamplePlan())).toEqual([])
+  })
+})
+
+describe('thickness', () => {
+  it('THICKNESS_UNKNOWN: both plates unknown', () => {
+    const plan = lenient([{ id: 's07', from: [1200, 300, 12], to: [2000, 300, 12], thicknessMm: [null, null] }])
+    only(preflight(plan), 'THICKNESS_UNKNOWN', 'warning', 's07')
+  })
+
+  it('a drawn seam with approximate normals and null thickness: THICKNESS_UNKNOWN, leg 6, finite heat input', () => {
+    const plan = specExamplePlan([{ id: 's07', from: [1200, 300, 12], to: [2000, 300, 12], thicknessMm: [null, null] }])
+    plan.seams[0]!.seam = { ...plan.seams[0]!.seam, approximateNormals: true, source: 'manual' }
+    only(preflight(plan), 'THICKNESS_UNKNOWN', 'warning', 's07')
+    const r = resolveSeam(plan, plan.seams[0]!)
+    expect(r.leg.legMm).toBe(6)
+    expect(Number.isFinite(r.heatInputKJmm)).toBe(true)
+    const job = buildJob(plan, { createdAt: CREATED_AT })
+    expect(JSON.stringify(job)).not.toMatch(/NaN|Infinity/)
+  })
+
+  it('THICKNESS_UNKNOWN: one plate unknown', () => {
+    const plan = lenient([{ id: 's07', from: [1200, 300, 12], to: [2000, 300, 12], thicknessMm: [12, null] }])
+    only(preflight(plan), 'THICKNESS_UNKNOWN', 'warning', 's07')
+  })
+})
+
+describe('corner thickness that measured plate extent', () => {
+  const hidden = detectSeams(loadSampleModel('t-joint-merged'), DEFAULT_DETECT_SETTINGS).filter((s) => s.hidden)
+  const ratio = (s: SeamCandidate) => Math.max(...(s.thicknessMm as number[])) / Math.min(...(s.thicknessMm as number[]))
+  const corner = hidden.find((s) => ratio(s) > 3)!
+
+  it('has a hidden corner of t-joint-merged whose larger entry is a plate extent', () => {
+    expect(corner.jointType).toBe('corner')
+    expect(ratio(corner)).toBeGreaterThan(3)
+  })
+
+  it('treats the larger entry as unknown, so the known plate sets the minimum leg and a warning is raised', () => {
+    const plan = samplePlan('t-joint-merged', (p) => ({
+      ...p,
+      seams: [{ ...p.seams[0]!, seam: corner, procedureId: null, legMm: null }],
+    }))
+    plan.seams[0]!.procedureId = null
+    const known = Math.min(...(corner.thicknessMm as number[]))
+    const r = resolveSeam(plan, plan.seams[0]!)
+    expect(r.thickness.filter((t) => t === null)).toHaveLength(1)
+    expect(r.thickness).toContain(known)
+    expect(r.limits.minMm).toBe(legLimits('fillet', [known, null]).minMm)
+    expect(r.limits.minMm).toBeLessThan(8)
+    expect(r.leg).toEqual(effectiveLegMm({ legMm: null, procedure: null, jointType: 'corner', thickness: r.thickness }))
+    const issues = preflight(plan)
+    expect(codes(issues)).toContain('THICKNESS_UNKNOWN')
+    expect(issues.find((i) => i.code === 'THICKNESS_UNKNOWN')!.severity).toBe('warning')
+    expect(codes(issues)).not.toContain('LEG_UNDER_MIN')
+  })
+
+  it('leaves a fillet with the same thickness pair untouched', () => {
+    const plan = samplePlan('t-joint-merged', (p) => ({
+      ...p,
+      seams: [{ ...p.seams[0]!, seam: { ...corner, jointType: 'fillet' }, legMm: null }],
+    }))
+    expect(resolveSeam(plan, plan.seams[0]!).thickness).toEqual(corner.thicknessMm)
+  })
+})
+
+describe('double-bottom-cell', () => {
+  it('has no errors, and every warning is POSITION_NOT_COVERED', () => {
+    const issues = preflight(samplePlan('double-bottom-cell'))
+    expect(issues.filter((i) => i.severity === 'error')).toEqual([])
+    expect(new Set(codes(issues))).toEqual(new Set(['POSITION_NOT_COVERED']))
+  })
+})
+
+describe('issue text and order', () => {
+  const noisy = lenient(
+    [
+      { id: 'a', from: [0, 0, 0], to: [8, 0, 0], thicknessMm: [null, 150] },
+      { id: 'a', from: [0, 0, 0], to: [8, 0, 0] },
+      { id: 'c', from: [0, 300, 0], to: [100, 300, 0] },
+    ],
+    (p) => {
+      p.part.sourceUnits = 'unknown'
+      p.seams[1]!.procedureId = null
+      p.seams[2]!.legMm = 4
+      p.seams[2]!.overrides = { positions: ['PA'] }
+    },
+  )
+  const issues = preflight(noisy)
+
+  it('gives every issue a what, why and next without long dashes', () => {
+    expect(issues.length).toBeGreaterThan(5)
+    for (const i of issues) {
+      for (const part of [i.what, i.why, i.next]) {
+        expect(part.trim().length, i.code).toBeGreaterThan(0)
+        expect(part, i.code).not.toMatch(new RegExp('[\\u2013\\u2014]'))
+      }
+    }
+  })
+
+  it('lists errors first, plan level before seam level, seams in plan order', () => {
+    const severities = issues.map((i) => i.severity)
+    expect(severities).toEqual([...severities].sort((a, b) => (a === b ? 0 : a === 'error' ? -1 : 1)))
+    const errors = issues.filter((i) => i.severity === 'error')
+    const firstSeamLevel = errors.findIndex((i) => i.code === 'NO_PROCEDURE' || i.code === 'LEG_UNDER_MIN')
+    const lastPlanLevel = Math.max(...errors.map((i, k) => (i.code === 'UNITS_UNKNOWN' || i.code === 'DUPLICATE_ID' ? k : -1)))
+    expect(lastPlanLevel).toBeLessThan(firstSeamLevel)
+    const order = errors.filter((i) => i.seamId !== null).map((i) => i.seamId)
+    expect(order.indexOf('c')).toBeGreaterThanOrEqual(0)
+  })
+
+  it('turns an issue into a job issue with the three parts joined by spaces', () => {
+    const i = issues[0]!
+    expect(toJobIssue(i)).toEqual({ code: i.code, seamId: i.seamId, message: `${i.what} ${i.why} ${i.next}` })
+  })
+})
