@@ -1,3 +1,4 @@
+import type { AccessClass } from '../../core/access/clearance'
 import type { Vec3 } from '../../core/math/vec3'
 import type { SeamCandidate } from '../../core/seams/detect'
 import type { SeamStatus } from '../../state/seamsSlice'
@@ -8,6 +9,7 @@ export interface SeamPalette {
   candidate: Rgb
   accepted: Rgb
   rejected: Rgb
+  access: Record<AccessClass, Rgb>
 }
 
 // positions and colors hold 6 floats per segment (start then end), the layout LineSegmentsGeometry expects.
@@ -55,6 +57,8 @@ export function buildSeamSegments(
   seams: readonly SeamCandidate[],
   statusById: Readonly<Record<string, SeamStatus>>,
   palette: SeamPalette,
+  // Given when the lines are coloured by access: a seam with a class takes the colour of the class, the rest keep their status colour.
+  accessClass?: (seam: SeamCandidate) => AccessClass | null,
 ): SeamSegments {
   let total = 0
   for (const seam of seams) total += segmentCount(seam)
@@ -65,7 +69,8 @@ export function buildSeamSegments(
   seams.forEach((seam, index) => {
     const count = segmentCount(seam)
     writeSeam(seam, positions, segment * 6)
-    const rgb = palette[statusById[seam.id] ?? 'candidate']
+    const cls = accessClass?.(seam) ?? null
+    const rgb = cls === null ? palette[statusById[seam.id] ?? 'candidate'] : palette.access[cls]
     for (let i = 0; i < count; i++) {
       colors.set(rgb, (segment + i) * 6)
       colors.set(rgb, (segment + i) * 6 + 3)

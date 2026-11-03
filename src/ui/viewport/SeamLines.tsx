@@ -2,6 +2,7 @@ import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, type RefObject } from 'react'
 import { Color, Raycaster, Vector2, Vector3, type Mesh } from 'three'
 import { toolEvent } from '../../state/flows'
+import { accessFor } from '../../state/accessSlice'
 import { MERGE_TOLERANCE_MM } from '../../state/seamsSlice'
 import { useStore } from '../../state/store'
 import { useVisibleSeams } from '../../state/useVisibleSeams'
@@ -29,7 +30,12 @@ function rgb(name: string): Rgb {
 }
 
 function readPalette(): SeamPalette {
-  return { candidate: rgb('--seam-candidate'), accepted: rgb('--seam-accepted'), rejected: rgb('--err') }
+  return {
+    candidate: rgb('--seam-candidate'),
+    accepted: rgb('--seam-accepted'),
+    rejected: rgb('--err'),
+    access: { standard: rgb('--access-standard'), slim: rgb('--access-slim'), snake: rgb('--access-snake'), blocked: rgb('--access-blocked') },
+  }
 }
 
 // One merged line set holds every seam. Hover and selection are drawn again, thicker, in small overlay sets because
@@ -37,13 +43,25 @@ function readPalette(): SeamPalette {
 export function SeamLines({ partRef }: { partRef: RefObject<Mesh | null> }) {
   const seams = useVisibleSeams()
   const statusById = useStore((s) => s.statusById)
+  const colourBy = useStore((s) => s.colourBy)
+  const accessById = useStore((s) => s.accessById)
+  const accessPointsById = useStore((s) => s.accessPointsById)
   const hoverId = useStore((s) => s.hoverId)
   const selectedId = useStore((s) => s.selectedId)
   const mergeFrom = useStore((s) => (s.tool.tool === 'merge' ? s.tool.from : null))
   const { gl, camera } = useThree()
   const palette = useMemo(() => readPalette(), [])
 
-  const built = useMemo(() => buildSeamSegments(seams, statusById, palette), [seams, statusById, palette])
+  const built = useMemo(
+    () =>
+      buildSeamSegments(
+        seams,
+        statusById,
+        palette,
+        colourBy === 'access' ? (seam) => accessFor({ accessById, accessPointsById }, seam)?.class ?? null : undefined,
+      ),
+    [seams, statusById, palette, colourBy, accessById, accessPointsById],
+  )
   const base = useMemo(
     () => (built.segmentSeam.length > 0 ? lineSet(built.positions, { width: BASE_WIDTH_PX, colors: built.colors }) : null),
     [built],

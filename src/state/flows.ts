@@ -2,7 +2,7 @@ import { DEFAULT_JOB_SETTINGS } from '../core/job/plan'
 import { importJob } from '../core/job/importJob'
 import type { KnownUnits } from '../core/mesh/units'
 import { sampleManifestSchema, type SampleEntry, type SampleManifest } from '../core/samples/manifest'
-import { DEFAULT_DETECT_SETTINGS, type DetectSettings } from '../core/seams/detect'
+import { DEFAULT_DETECT_SETTINGS, type DetectSettings, type SeamCandidate } from '../core/seams/detect'
 import type { ManualError } from '../core/seams/manual'
 import type { GeometryClient } from '../worker/client'
 import type { DrawClick, LoadOutcome, Progress, Stage, UserError } from '../worker/geometry.api'
@@ -12,6 +12,7 @@ import { downloadText } from '../ui/shell/download'
 import { jobFilename, summaryText } from '../ui/shell/exportText'
 import { needSeamSelected, parseTrimInput, type NeedsSeam } from '../ui/panels/manualText'
 import { initialTool, reduceTool, type ToolEffect, type ToolEvent, type ToolName } from '../ui/tools/toolMachine'
+import { accessFor, type AccessEntry } from './accessSlice'
 import { selectAllSeams, selectPlan } from './selectors'
 import { useStore, type AppState } from './store'
 import type { PositionEntry } from './torchSlice'
@@ -141,6 +142,10 @@ async function applyLoad(outcome: LoadOutcome, fileName: string, client: Geometr
     notice: null,
   })
   useStore.temporal.getState().clear()
+  // Access answers belong to the old part's mesh; an answer still on its way would land on the new part's seams.
+  accessRequest++
+  useStore.getState().clearAccess()
+  useStore.getState().setAccessBusy(false)
   // A slider change still waiting would run the old angle on the new part.
   clearTimeout(scheduledDetect)
   await runDetect(DEFAULT_DETECT_SETTINGS, client)
@@ -512,6 +517,68 @@ export function changeGravity(gravity: Gravity): ManualError | null {
 }
 
 
+export const ACCESS_DEBOUNCE_MS = 250
+
+// Each access request takes a number; only the newest one's answer is applied.
+let accessRequest = 0
+
+// Accepted seams without an answer for their current points.
+function seamsNeedingAccess(): SeamCandidate[] {
+  const state = useStore.getState()
+  if (state.part === null) return []
+  return selectPlan(state)
+    .seams.map((planned) => planned.seam)
+    .filter((seam) => accessFor(state, seam) === null)
+}
+
+// Asks the worker for the torch access of every accepted seam that lacks a current answer and stores what comes back.
+// Returns what went wrong, or null; an answer that a newer request has overtaken is dropped.
+export async function ensureAccess(client: GeometryClient): Promise<UserError | null> {
+  const todo = seamsNeedingAccess()
+  if (todo.length === 0) return null
+  const mine = ++accessRequest
+  useStore.getState().setAccessBusy(true)
+  const outcome = await attempt(() => client.access(todo, () => {}))
+  if (mine !== accessRequest) return null
+  useStore.getState().setAccessBusy(false)
+  if (outcome.status === 'error') return outcome.error
+  const entries: Record<string, AccessEntry> = {}
+  for (const seam of todo) {
+    const result = outcome.results[seam.id]
+    if (result) entries[seam.id] = { ...result, points: seam.points }
+  }
+  useStore.getState().mergeAccess(entries)
+  return null
+}
+
+// Keeps the access answers current as the plan changes: the plan has to be still for the delay, then the accepted seams
+// whose points changed (or that have no answer yet) are sent to the worker. Returns a stop function.
+export function startAccessSync(client: GeometryClient, delayMs = ACCESS_DEBOUNCE_MS): () => void {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let last = selectPlan(useStore.getState())
+  const run = async () => {
+    const problem = await ensureAccess(client)
+    if (problem) setNotice(problem)
+  }
+  const schedule = () => {
+    clearTimeout(timer)
+    timer = setTimeout(() => void run(), delayMs)
+  }
+  schedule()
+  const unsubscribe = useStore.subscribe((state) => {
+    const plan = selectPlan(state)
+    if (plan === last) return
+    last = plan
+    schedule()
+  })
+  return () => {
+    unsubscribe()
+    clearTimeout(timer)
+    accessRequest++
+    useStore.getState().setAccessBusy(false)
+  }
+}
+
 export const PREFLIGHT_DEBOUNCE_MS = 250
 
 // Checks the plan in the worker once it has been still for the delay. An answer for a plan that has changed since is
@@ -571,8 +638,16 @@ export async function exportPlan(client: GeometryClient, save = downloadText, no
     return
   }
   setNotice(null)
+  // The file carries each seam's access class, so the seams that have no answer yet are checked first. A newer
+  // request can overtake the first one, hence the second look.
+  let problem = await ensureAccess(client)
+  if (!problem && seamsNeedingAccess().length > 0) problem = await ensureAccess(client)
+  if (problem) {
+    showError(problem)
+    return
+  }
   const createdAt = now()
-  const outcome = await attempt(() => client.exportJob(selectPlan(state), createdAt))
+  const outcome = await attempt(() => client.exportJob(selectPlan(useStore.getState()), createdAt))
   if (outcome.status === 'error') {
     showError(outcome.error)
     return

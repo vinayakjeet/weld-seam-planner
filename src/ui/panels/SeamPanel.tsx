@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { accessFor } from '../../state/accessSlice'
 import { positionFor } from '../../state/torchSlice'
 import type { SelectMode } from '../../state/seamsSlice'
 import { useStore } from '../../state/store'
 import { useVisibleSeams } from '../../state/useVisibleSeams'
 import { Button } from '../kit/Button'
 import { Tab, TabList, TabPanel, Tabs } from '../kit/Tabs'
+import { AccessChip } from './AccessChip'
 import { DetectionSettings } from './DetectionSettings'
 import { ManualTools } from './ManualTools'
 import { PositionChip } from './PositionChip'
@@ -26,7 +28,7 @@ const COLUMNS = [
   { key: 'status', label: '', title: 'Status' },
 ]
 
-const GRID = 'grid grid-cols-[22px_minmax(0,1fr)_46px_30px_68px_34px_28px_16px] items-center gap-x-1.5 px-3'
+const GRID = 'grid grid-cols-[22px_minmax(0,1fr)_46px_30px_68px_34px_34px_16px] items-center gap-x-1.5 px-3'
 
 const STATUS_DOT = {
   accepted: 'bg-seam-accepted',
@@ -94,9 +96,21 @@ function SeamTable() {
   const toggleAccepted = useStore((s) => s.toggleAccepted)
   const positionsById = useStore((s) => s.positionsById)
   const gravity = useStore((s) => s.gravity)
+  const accessById = useStore((s) => s.accessById)
+  const accessPointsById = useStore((s) => s.accessPointsById)
+  const accessBusy = useStore((s) => s.accessBusy)
   const rows = useMemo(
-    () => seamRows(seams, statusById, typeById, (seam) => positionFor({ positionsById, gravity }, seam), procedureById),
-    [seams, statusById, typeById, positionsById, gravity, procedureById],
+    () =>
+      seamRows(
+        seams,
+        statusById,
+        typeById,
+        (seam) => positionFor({ positionsById, gravity }, seam),
+        procedureById,
+        (seam) => accessFor({ accessById, accessPointsById }, seam),
+        accessBusy,
+      ),
+    [seams, statusById, typeById, positionsById, gravity, procedureById, accessById, accessPointsById, accessBusy],
   )
   const body = useRef<HTMLDivElement>(null)
 
@@ -166,8 +180,8 @@ function SeamTable() {
               <span role="cell" aria-label={row.position ? `Position ${row.pos}` : 'Position not set'}>
                 <PositionChip position={row.position} />
               </span>
-              <span role="cell" aria-label="Acc not set" className="text-ink-2">
-                -
+              <span role="cell">
+                <AccessChip cls={row.accClass} pending={row.accPending} />
               </span>
               <span role="cell">
                 <button

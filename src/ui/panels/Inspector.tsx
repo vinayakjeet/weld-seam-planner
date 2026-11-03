@@ -1,9 +1,9 @@
+import { AccessSection } from './AccessSection'
 import { GeometrySection } from './GeometrySection'
 import { ProcedureSection } from './ProcedureSection'
 import { TorchSection } from './TorchSection'
 
 const SECTIONS = [
-  { title: 'Access', empty: 'Select a seam to see whether the torch can reach it.' },
   { title: 'Notes', empty: 'Select a seam to add notes for the shop floor.' },
 ]
 
@@ -22,6 +22,7 @@ export function Inspector() {
       <GeometrySection />
       <ProcedureSection />
       <TorchSection />
+      <AccessSection />
       {SECTIONS.map((section) => (
         <Placeholder key={section.title} {...section} />
       ))}

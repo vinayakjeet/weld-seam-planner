@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef } from 'react'
 import { Sphere, Vector3, type Mesh } from 'three'
 import { useStore } from '../../state/store'
 import { useShortcuts } from '../shell/useShortcuts'
+import { AccessCone } from './AccessCone'
 import { cssVar } from './cssVar'
 import { DrawTool } from './DrawTool'
 import { GIZMO_MARGIN } from './gizmo'
@@ -66,6 +67,7 @@ export function Scene() {
       <DrawTool partRef={partMesh} />
       <SplitTool />
       <TorchPreview />
+      <AccessCone />
       <GizmoHelper alignment="top-right" margin={[GIZMO_MARGIN, GIZMO_MARGIN]}>
         <GizmoViewcube
           faces={Z_UP_FACES}

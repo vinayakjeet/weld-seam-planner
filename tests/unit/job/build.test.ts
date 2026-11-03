@@ -371,3 +371,26 @@ describe('a plan with a sequence', () => {
     expect(reversed.seams.find((s) => s.id === closed.seam.id)!.direction).toBe('forward')
   })
 })
+
+describe('access in the job', () => {
+  const found = { clearanceDeg: 22, nearClearanceDeg: 31, class: 'slim' as const, portId: null, reachCoverage: null, unreachable: [] as Array<[number, number]> }
+
+  it('writes the access of the plan into seam.access', () => {
+    const plan = specExamplePlan()
+    plan.seams[0]!.access = found
+    const seam = buildJob(plan, opts).seams[0]!
+    expect(seam.access).toEqual(found)
+  })
+
+  it('writes null fields for a seam without access', () => {
+    const seam = buildJob(specExamplePlan(), opts).seams[0]!
+    expect(seam.access).toEqual({ clearanceDeg: null, nearClearanceDeg: null, class: null, portId: null, reachCoverage: null, unreachable: [] })
+  })
+
+  it('passes the schema with a class and a near clearance', () => {
+    const plan = specExamplePlan()
+    plan.seams[0]!.access = found
+    const r = jobSchema.safeParse(JSON.parse(JSON.stringify(buildJob(plan, opts))))
+    expect(r.success).toBe(true)
+  })
+})

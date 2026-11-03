@@ -9,7 +9,7 @@ interface Pose {
 }
 
 interface ExportedJob {
-  seams: Array<{ poses: Pose[] }>
+  seams: Array<{ poses: Pose[]; access: { class: string | null; nearClearanceDeg: number | null } }>
   units: Record<string, string>
   validation: { errors: unknown[] }
 }
@@ -38,6 +38,11 @@ test('exports a validated job from double-bottom-cell', async ({ page }) => {
 
   const job = json as ExportedJob
   expect(job.seams).toHaveLength(SEAMS)
+  // Blocked seams are warnings, not errors, so they still export; every seam carries its class and near clearance.
+  for (const seam of job.seams) {
+    expect(['standard', 'slim', 'snake', 'blocked']).toContain(seam.access.class)
+    expect(seam.access.nearClearanceDeg).not.toBeNull()
+  }
   expect(job.units).toEqual({
     length: 'mm',
     angle: 'deg',

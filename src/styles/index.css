@@ -17,6 +17,10 @@
   --color-seam-candidate: var(--seam-candidate);
   --color-seam-accepted: var(--seam-accepted);
   --color-seam-hover: var(--seam-hover);
+  --color-access-standard: var(--access-standard);
+  --color-access-slim: var(--access-slim);
+  --color-access-snake: var(--access-snake);
+  --color-access-blocked: var(--access-blocked);
   --color-ok: var(--ok);
   --color-warn: var(--warn);
   --color-err: var(--err);

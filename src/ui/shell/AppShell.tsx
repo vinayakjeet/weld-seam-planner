@@ -5,6 +5,7 @@ import { Viewport } from '../viewport/Viewport'
 import { RestoreDialog } from './RestoreDialog'
 import { StatusBar } from './StatusBar'
 import { TopBar } from './TopBar'
+import { useAccessSync } from './useAccessSync'
 import { useAutosave } from './useAutosave'
 import { useDropGuard } from './useDropGuard'
 import { usePreflightSync } from './usePreflightSync'
@@ -16,6 +17,7 @@ export function AppShell() {
   useTorchSync()
   usePreflightSync()
   useTimingSync()
+  useAccessSync()
   useAutosave()
   return (
     <TooltipProvider>

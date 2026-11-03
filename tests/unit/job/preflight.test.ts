@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildJob } from '../../../src/core/job/build'
+import { buildJob, exportJob } from '../../../src/core/job/build'
 import { resolveSeam, type Plan } from '../../../src/core/job/plan'
 import { preflight, toJobIssue, type Issue, type IssueCode } from '../../../src/core/job/preflight'
 import { effectiveLegMm, legLimits } from '../../../src/core/process/filletRules'
@@ -208,16 +208,43 @@ describe('bead rules', () => {
 })
 
 describe('access', () => {
-  it('ACCESS_BLOCKED: a blocked class', () => {
-    const plan = specExamplePlan()
-    plan.seams[0]!.access = { clearanceDeg: null, nearClearanceDeg: null, class: 'blocked', portId: null, reachCoverage: null, unreachable: [] }
-    only(preflight(plan), 'ACCESS_BLOCKED', 'error', 's07')
+  const access = (cls: NonNullable<Plan['seams'][number]['access']>['class'], unreachable: Array<[number, number]> = []) => ({
+    clearanceDeg: 40,
+    nearClearanceDeg: 40,
+    class: cls,
+    portId: null,
+    reachCoverage: null,
+    unreachable,
   })
 
-  it('ACCESS_BLOCKED: a non empty unreachable list', () => {
+  it('ACCESS_BLOCKED: a blocked class is a warning, and the message says the seam can still be welded by hand', () => {
     const plan = specExamplePlan()
-    plan.seams[0]!.access = { clearanceDeg: null, nearClearanceDeg: null, class: 'standard', portId: null, reachCoverage: 0.9, unreachable: [[10, 20]] }
-    only(preflight(plan), 'ACCESS_BLOCKED', 'error', 's07')
+    plan.seams[0]!.access = access('blocked')
+    const issues = preflight(plan)
+    only(issues, 'ACCESS_BLOCKED', 'warning', 's07')
+    expect(`${issues[0]!.what} ${issues[0]!.why} ${issues[0]!.next}`).toMatch(/by hand/)
+  })
+
+  it('ACCESS_BLOCKED: a non empty unreachable list is a warning', () => {
+    const plan = specExamplePlan()
+    plan.seams[0]!.access = access('standard', [[10, 20]])
+    only(preflight(plan), 'ACCESS_BLOCKED', 'warning', 's07')
+  })
+
+  it.each(['standard', 'slim', 'snake'] as const)('raises nothing for a %s seam', (cls) => {
+    const plan = specExamplePlan()
+    plan.seams[0]!.access = access(cls)
+    expect(preflight(plan)).toEqual([])
+  })
+
+  it('does not block the export: exportJob is ok and the warning is written to the file', () => {
+    const plan = specExamplePlan()
+    plan.seams[0]!.access = access('blocked')
+    const result = exportJob(plan, { createdAt: CREATED_AT })
+    expect(result.status).toBe('ok')
+    if (result.status !== 'ok') return
+    expect(result.job.validation.warnings.map((w) => w.code)).toEqual(['ACCESS_BLOCKED'])
+    expect(result.job.validation.errors).toEqual([])
   })
 
   it('is silent until access exists', () => {

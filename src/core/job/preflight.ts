@@ -198,13 +198,13 @@ export function preflight(plan: Plan): Issue[] {
 
     const access = planned.access
     if (access && (access.class === 'blocked' || access.unreachable.length > 0)) {
-      out('ACCESS_BLOCKED', 'error', {
-        what: `The torch cannot reach all of seam ${label}.`,
+      out('ACCESS_BLOCKED', 'warning', {
+        what: `No torch can reach all of seam ${label}.`,
         why:
           access.class === 'blocked'
-            ? 'The access check found no free approach for the torch.'
+            ? 'The access check found the cone in front of the torch blocked by the part, so neither a standard, a slim nor a snake arm fits.'
             : `${access.unreachable.length} stretch${access.unreachable.length === 1 ? '' : 'es'} of it lie outside the reach of the arm.`,
-        next: 'Turn the part, add or widen an access port, or leave the seam out.',
+        next: 'The seam can still be welded by hand. To weld it with a robot, turn the part, add or widen an access port, or leave the seam out.',
       })
     }
 

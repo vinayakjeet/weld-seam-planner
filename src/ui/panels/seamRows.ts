@@ -1,7 +1,10 @@
+import type { AccessClass } from '../../core/access/clearance'
+import type { SeamAccess } from '../../core/job/schema'
 import type { JointType } from '../../core/seams/classify'
 import type { SeamCandidate } from '../../core/seams/detect'
 import { awsFor, type SeamPosition } from '../../core/torch/positions'
 import type { SeamStatus } from '../../state/seamsSlice'
+import { accessChipText } from './accessText'
 
 export interface SeamRow {
   id: string
@@ -20,6 +23,11 @@ export interface SeamRow {
   // The assigned procedure id, or "WPS not set".
   wps: string
   status: SeamStatus | 'candidate'
+  // The Acc column: the class chip text, or a dash while there is no class for the seam.
+  acc: string
+  accClass: AccessClass | null
+  // An accepted seam whose analysis is running or still to be asked for.
+  accPending: boolean
 }
 
 export const JOINT_TYPES: readonly JointType[] = ['fillet', 'lap', 'corner', 'saddle']
@@ -58,11 +66,15 @@ export function seamRows(
   typeById: Record<string, JointType>,
   positionOf: (seam: SeamCandidate) => SeamPosition | undefined = () => undefined,
   procedureById: Record<string, string> = {},
+  accessOf: (seam: SeamCandidate) => SeamAccess | null = () => null,
+  analysing = false,
 ): SeamRow[] {
   return seams.map((seam, i) => {
     const override = typeById[seam.id]
     const jointType = override ?? seam.jointType
     const position = positionOf(seam) ?? null
+    const status = statusById[seam.id] ?? 'candidate'
+    const accClass = accessOf(seam)?.class ?? null
     return {
       id: seam.id,
       n: i + 1,
@@ -75,7 +87,10 @@ export function seamRows(
       pos: position ? position.code : '-',
       position,
       wps: procedureById[seam.id] ?? 'WPS not set',
-      status: statusById[seam.id] ?? 'candidate',
+      status,
+      acc: accClass === null ? '-' : accessChipText(accClass),
+      accClass,
+      accPending: analysing && status === 'accepted' && accClass === null,
     }
   })
 }

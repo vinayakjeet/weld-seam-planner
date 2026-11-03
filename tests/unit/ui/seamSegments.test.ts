@@ -4,7 +4,12 @@ import type { SeamCandidate } from '../../../src/core/seams/detect'
 import { buildSeamSegments, polylineSegmentPositions, seamSegmentPositions, type SeamPalette } from '../../../src/ui/viewport/seamSegments'
 import { seam } from '../helpers/state'
 
-const palette: SeamPalette = { candidate: [0.1, 0.1, 0.1], accepted: [0.2, 0.4, 0.9], rejected: [0.9, 0.2, 0.2] }
+const palette: SeamPalette = {
+  candidate: [0.1, 0.1, 0.1],
+  accepted: [0.2, 0.4, 0.9],
+  rejected: [0.9, 0.2, 0.2],
+  access: { standard: [0, 1, 0], slim: [0, 1, 1], snake: [1, 1, 0], blocked: [1, 0, 0] },
+}
 
 function seamOn(id: string, points: Vec3[], closed = false): SeamCandidate {
   const up: Vec3 = [0, 0, 1]
@@ -79,5 +84,22 @@ describe('polylineSegmentPositions', () => {
   it('has nothing to draw for fewer than two points', () => {
     expect(polylineSegmentPositions([]).length).toBe(0)
     expect(polylineSegmentPositions([[1, 2, 3]]).length).toBe(0)
+  })
+})
+
+describe('buildSeamSegments coloured by access', () => {
+  const seams = [seamOn('a', [A, B]), seamOn('b', [B, C]), seamOn('c', [C, D])]
+
+  it('colours a seam with an access class in the colour of the class, and the rest by status', () => {
+    const classes: Record<string, 'standard' | 'blocked'> = { a: 'standard', b: 'blocked' }
+    const built = buildSeamSegments(seams, { a: 'accepted', b: 'accepted', c: 'accepted' }, palette, (s) => classes[s.id] ?? null)
+    expect(Array.from(built.colors.slice(0, 3))).toEqual([0, 1, 0])
+    expect(Array.from(built.colors.slice(6, 9))).toEqual([1, 0, 0])
+    expect(Array.from(built.colors.slice(12, 15))).toEqual(Array.from(new Float32Array(palette.accepted)))
+  })
+
+  it('colours by status when no access function is given', () => {
+    const built = buildSeamSegments(seams, { a: 'accepted' }, palette)
+    expect(Array.from(built.colors.slice(0, 3))).toEqual(Array.from(new Float32Array(palette.accepted)))
   })
 })

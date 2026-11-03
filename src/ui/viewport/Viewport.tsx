@@ -8,6 +8,7 @@ import { ProgressBar } from '../shell/ProgressBar'
 import { EmptyState } from './EmptyState'
 import { Scene } from './Scene'
 import { UnitsDialog } from './UnitsDialog'
+import { ViewToolbar } from './ViewToolbar'
 
 export function Viewport() {
   const showImport = useStore((s) => s.part === null || s.activeStep === 'import')
@@ -23,6 +24,7 @@ export function Viewport() {
         <Scene />
       </Canvas>
       {showImport && <EmptyState />}
+      {!showImport && <ViewToolbar />}
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col items-center gap-2 p-3">
         <ProgressBar />
         <ErrorBanner />

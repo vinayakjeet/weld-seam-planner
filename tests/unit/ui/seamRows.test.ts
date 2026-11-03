@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SeamPosition } from '../../../src/core/torch/positions'
+import type { SeamAccess } from '../../../src/core/job/schema'
 import { positionLines, seamRows } from '../../../src/ui/panels/seamRows'
 import { seam } from '../helpers/state'
 
@@ -102,5 +103,33 @@ describe('seamRows procedure column', () => {
 
   it('shows "WPS not set" when no map is given', () => {
     expect(seamRows([seam('a')], {}, {})[0]!.wps).toBe('WPS not set')
+  })
+})
+
+describe('seamRows access column', () => {
+  const access = (cls: SeamAccess['class']): SeamAccess => ({ clearanceDeg: 40, nearClearanceDeg: 40, class: cls, portId: null, reachCoverage: null, unreachable: [] })
+  const rowsWith = (byId: Record<string, SeamAccess>, analysing: boolean) =>
+    seamRows([seam('a'), seam('b'), seam('c')], { a: 'accepted', b: 'accepted' }, {}, undefined, {}, (s) => byId[s.id] ?? null, analysing)
+
+  it('puts the class chip value in the column', () => {
+    const rows = rowsWith({ a: access('slim'), b: access('blocked') }, false)
+    expect(rows.map((r) => r.acc)).toEqual(['SLM', 'BLK', '-'])
+    expect(rows.map((r) => r.accClass)).toEqual(['slim', 'blocked', null])
+  })
+
+  it('shows a neutral value for an accepted seam while the analysis runs, and for seams not accepted', () => {
+    const rows = rowsWith({ a: access('standard') }, true)
+    expect(rows.map((r) => r.acc)).toEqual(['STD', '-', '-'])
+    expect(rows.map((r) => r.accPending)).toEqual([false, true, false])
+  })
+
+  it('is neutral and not pending when nothing is running', () => {
+    const rows = rowsWith({}, false)
+    expect(rows.map((r) => [r.acc, r.accClass, r.accPending])).toEqual([['-', null, false], ['-', null, false], ['-', null, false]])
+  })
+
+  it('shows a seam with no class yet (empty analysis) as neutral', () => {
+    const rows = rowsWith({ a: access(null) }, false)
+    expect(rows[0]!.acc).toBe('-')
   })
 })
