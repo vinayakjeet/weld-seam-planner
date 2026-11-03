@@ -44,7 +44,7 @@ function anyPerpendicular(v: Vec3): Vec3 {
 }
 
 // dir turned toward prev until it is no more than maxDeg away from it.
-function limitBend(prev: Vec3, dir: Vec3, maxDeg: number): Vec3 {
+export function limitBend(prev: Vec3, dir: Vec3, maxDeg: number): Vec3 {
   if (angleBetweenDeg(prev, dir) <= maxDeg) return dir
   const axis = cross(prev, dir)
   const turnAxis = length(axis) < 1e-12 ? anyPerpendicular(prev) : axis
