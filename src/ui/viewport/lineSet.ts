@@ -12,14 +12,20 @@ interface LineStyle {
   dashed?: { dashSize: number; gapSize: number }
   // Drawn over the part instead of behind it, for a path that runs through the inside of the model.
   overlay?: boolean
+  // Below 1 the line is drawn see-through.
+  opacity?: number
 }
 
-export function lineSet(positions: Float32Array, { width, colors, color, renderOrder = 0, dashed, overlay = false }: LineStyle): LineSegments2 {
+export function lineSet(positions: Float32Array, { width, colors, color, renderOrder = 0, dashed, overlay = false, opacity = 1 }: LineStyle): LineSegments2 {
   const geometry = new LineSegmentsGeometry()
   geometry.setPositions(positions)
   if (colors) geometry.setColors(colors)
   const material = new LineMaterial({ linewidth: width, vertexColors: colors !== undefined })
   if (color) material.color = new Color(color)
+  if (opacity < 1) {
+    material.transparent = true
+    material.opacity = opacity
+  }
   if (overlay) {
     material.depthTest = false
     material.transparent = true

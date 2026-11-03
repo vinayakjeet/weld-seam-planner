@@ -22,6 +22,14 @@ export function useShortcuts(fit: () => void): void {
       const toolKey = shortcut === 'finish' || shortcut === 'cancel' || shortcut === 'undoPoint'
       if (toolKey && tool.tool === 'select') return
       // The edit keys have nothing to act on until a part is open.
+      // Space plays the timeline of the steps that show one, and is left to the page elsewhere.
+      if (shortcut === 'play') {
+        const { activeStep, toggle } = useStore.getState()
+        if (!part || (activeStep !== 'sequence' && activeStep !== 'export')) return
+        event.preventDefault()
+        toggle()
+        return
+      }
       if (!toolKey && !part && shortcut !== 'fit' && shortcut !== 'undo' && shortcut !== 'redo') return
       event.preventDefault()
       const client = getGeometryClient()

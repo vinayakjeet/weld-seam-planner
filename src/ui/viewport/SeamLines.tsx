@@ -16,6 +16,7 @@ import { chooseSeamHit, type SeamLineHit } from './pickSeam'
 import { buildSeamSegments, seamSegmentPositions, type Rgb, type SeamPalette } from './seamSegments'
 
 const BASE_WIDTH_PX = 3
+const DIM_OPACITY = 0.3
 const HIGHLIGHT_WIDTH_PX = 5
 // How far from a seam, in screen pixels, the cursor still counts as on it.
 const PICK_RADIUS_PX = 6
@@ -50,6 +51,8 @@ export function SeamLines({ partRef }: { partRef: RefObject<Mesh | null> }) {
   const selectedId = useStore((s) => s.selectedId)
   const mergeFrom = useStore((s) => (s.tool.tool === 'merge' ? s.tool.from : null))
   const { gl, camera } = useThree()
+  // Once the playback has started the seams not yet welded are dimmed, so the welded ones stand out.
+  const dim = useStore((s) => (s.activeStep === 'sequence' || s.activeStep === 'export') && s.timeS > 0)
   const palette = useMemo(() => readPalette(), [])
 
   const built = useMemo(
@@ -63,8 +66,8 @@ export function SeamLines({ partRef }: { partRef: RefObject<Mesh | null> }) {
     [seams, statusById, palette, colourBy, accessById, accessPointsById],
   )
   const base = useMemo(
-    () => (built.segmentSeam.length > 0 ? lineSet(built.positions, { width: BASE_WIDTH_PX, colors: built.colors }) : null),
-    [built],
+    () => (built.segmentSeam.length > 0 ? lineSet(built.positions, { width: BASE_WIDTH_PX, colors: built.colors, opacity: dim ? DIM_OPACITY : 1 }) : null),
+    [built, dim],
   )
   const selected = useMemo(() => {
     const seam = selectedId === null ? undefined : seams.find((s) => s.id === selectedId)

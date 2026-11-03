@@ -122,6 +122,8 @@ export function createRecoveringClient(spawn: (onDead: () => void) => GeometryCl
 
     planTiming: (plan) => current().planTiming(plan),
 
+    playbackPath: (plan) => current().playbackPath(plan),
+
     optimiseSequence: (plan, strategy, locked, order) => current().optimiseSequence(plan, strategy, locked, order),
   }
 }

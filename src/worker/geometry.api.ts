@@ -8,6 +8,7 @@ import { exportJob, type ExportResult } from '../core/job/build'
 import type { Plan } from '../core/job/plan'
 import { preflight, type Issue } from '../core/job/preflight'
 import { planTiming, type PlanTiming } from '../core/job/timing'
+import { playbackPathOf, type PlaybackPath } from '../core/sequence/playback'
 import { homePoint } from '../core/job/build'
 import { balancedEdge } from '../core/sequence/balance'
 import { nodesFromPlan } from '../core/sequence/nodes'
@@ -83,6 +84,8 @@ export type SequenceOutcome =
   | { status: 'ok'; order: { seamId: string; reversed: boolean }[]; moves: PlanTiming['moves'] }
   | { status: 'error'; error: UserError }
 
+export type PlaybackOutcome = { status: 'ok'; path: PlaybackPath; timing: PlanTiming } | { status: 'error'; error: UserError }
+
 export type TimingOutcome = { status: 'ok'; timing: PlanTiming } | { status: 'error'; error: UserError }
 
 // ExportResult already has an error arm with the same what, why and next fields.
@@ -110,6 +113,8 @@ export interface GeometryApi {
   exportJob(plan: Plan, createdAt: string): Promise<ExportOutcome>
   // Arc, air and cycle time of the plan in its sequence order; the same figures as the exported summary.
   planTiming(plan: Plan): Promise<TimingOutcome>
+  // The torch path of the plan in its sequence order, with the timing the playback runs on.
+  playbackPath(plan: Plan): Promise<PlaybackOutcome>
   // Orders the seams of the plan by the strategy, starting from the current order. Locked seams keep their slot and
   // direction. Returns the new order and the air moves it gives, home included.
   optimiseSequence(plan: Plan, strategy: SequenceStrategy, locked: string[], current: { seamId: string; reversed: boolean }[]): Promise<SequenceOutcome>
@@ -382,6 +387,14 @@ export function createGeometryApi(): GeometryApi {
         }
         const timing = planTiming({ ...plan, sequence: { strategy, order } })
         return { status: 'ok', order, moves: timing.moves }
+      } catch (error) {
+        return { status: 'error', error: toUserError(error) }
+      }
+    },
+
+    async playbackPath(plan) {
+      try {
+        return { status: 'ok', path: playbackPathOf(plan), timing: planTiming(plan) }
       } catch (error) {
         return { status: 'error', error: toUserError(error) }
       }

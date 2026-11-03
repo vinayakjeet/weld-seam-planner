@@ -4,6 +4,7 @@ import type {
   DetectOutcome,
   ExportOutcome,
   PreflightOutcome,
+  PlaybackOutcome,
   SequenceOutcome,
   TimingOutcome,
   GeometryApi,
@@ -129,6 +130,7 @@ export function wrapGeometryApi(endpoint: Endpoint, options: ClientOptions = {})
     preflight: (plan) => supervise<PreflightOutcome>(options, 'checking the plan', () => remote.preflight(plan)),
     exportJob: (plan, createdAt) => supervise<ExportOutcome>(options, 'building the job file', () => remote.exportJob(plan, createdAt)),
     planTiming: (plan) => supervise<TimingOutcome>(options, 'working out the cycle time', () => remote.planTiming(plan)),
+    playbackPath: (plan) => supervise<PlaybackOutcome>(options, 'working out the torch path', () => remote.playbackPath(plan)),
     optimiseSequence: (plan, strategy, locked, current) =>
       supervise<SequenceOutcome>(options, 'ordering the seams', () => remote.optimiseSequence(plan, strategy, locked, current)),
   }

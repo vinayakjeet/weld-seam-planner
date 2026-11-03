@@ -3,7 +3,16 @@ import { timelineSegments } from '../../core/sequence/timeline'
 import { selectPlan } from '../../state/selectors'
 import { useStore } from '../../state/store'
 import { NO_SEAMS_TEXT } from '../panels/SequencePanel'
+import { PlaybackControls } from './PlaybackControls'
 import { formatCycle } from './summary'
+
+// A line over the bars at the playback time.
+function Playhead({ total }: { total: number }) {
+  const timeS = useStore((s) => s.timeS)
+  if (!(total > 0)) return null
+  const share = Math.min(Math.max(timeS / total, 0), 1)
+  return <div aria-hidden data-testid="playhead" className="pointer-events-none absolute inset-y-0 w-px bg-ink-0" style={{ left: `calc(12px + (100% - 24px) * ${share})` }} />
+}
 
 const seconds = (t: number) => `${t.toFixed(1)} s`
 
@@ -49,11 +58,15 @@ export function Timeline() {
           Air <span className="num text-ink-1">{formatCycle(air)}</span>
         </span>
         {!current && segments.length > 0 && <span className="text-ink-2">Updating</span>}
+        <span className="ml-auto">
+          <PlaybackControls />
+        </span>
       </header>
       {open &&
         (segments.length === 0 ? (
           <p className="px-3 pt-2 text-ink-2">{NO_SEAMS_TEXT}</p>
         ) : (
+          <div className="relative">
           <div role="img" aria-label="Arc time and air time of each seam in sequence order" className={`flex h-[80px] items-end gap-px px-3 pb-2 ${current ? '' : 'opacity-60'}`}>
             {segments.map((segment, i) => {
               const span = segment.t1 - segment.t0
@@ -67,6 +80,8 @@ export function Timeline() {
                 />
               )
             })}
+          </div>
+          <Playhead total={total} />
           </div>
         ))}
     </section>

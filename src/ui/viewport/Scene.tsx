@@ -10,10 +10,12 @@ import { cssVar } from './cssVar'
 import { DrawTool } from './DrawTool'
 import { GIZMO_MARGIN } from './gizmo'
 import { PartMesh } from './PartMesh'
+import { PlaybackTorch } from './PlaybackTorch'
 import { SeamLines } from './SeamLines'
 import { SequenceLabels } from './SequenceLabels'
 import { SplitTool } from './SplitTool'
 import { TorchPreview } from './TorchPreview'
+import { WeldGlow } from './WeldGlow'
 
 // Face order is +X, -X, +Y, -Y, +Z, -Z; the camera looks along +Y from the front.
 const Z_UP_FACES = ['Right', 'Left', 'Back', 'Front', 'Top', 'Bottom']
@@ -71,6 +73,8 @@ export function Scene() {
       <TorchPreview />
       <AccessCone />
       <AirMoves />
+      <WeldGlow />
+      <PlaybackTorch />
       <SequenceLabels />
       <GizmoHelper alignment="top-right" margin={[GIZMO_MARGIN, GIZMO_MARGIN]}>
         <GizmoViewcube

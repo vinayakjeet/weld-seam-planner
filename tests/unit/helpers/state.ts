@@ -92,6 +92,9 @@ export function fakeClient(impl: Partial<GeometryApi> = {}): GeometryApi {
     planTiming: async () => {
       throw new Error('unexpected planTiming')
     },
+    playbackPath: async () => {
+      throw new Error('unexpected playbackPath')
+    },
     optimiseSequence: async () => {
       throw new Error('unexpected optimiseSequence')
     },

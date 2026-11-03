@@ -43,6 +43,7 @@ function harness() {
       access: (seams, onProgress) => real.access(seams, onProgress),
       preflight: (plan) => real.preflight(plan),
       planTiming: (plan) => real.planTiming(plan),
+      playbackPath: (plan) => real.playbackPath(plan),
       optimiseSequence: (plan, strategy, locked, order) => real.optimiseSequence(plan, strategy, locked, order),
       exportJob: (plan, createdAt) => real.exportJob(plan, createdAt),
     }

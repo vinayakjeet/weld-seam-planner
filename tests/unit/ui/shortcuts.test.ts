@@ -124,3 +124,27 @@ describe('shortcutFor: manual seam tools', () => {
   })
 })
 
+describe('shortcutFor play', () => {
+  it('maps Space to play', () => {
+    expect(shortcutFor(key(' '))).toBe('play')
+  })
+
+  it('ignores Space in a text field, a select and a focused button, where it means something else', () => {
+    expect(shortcutFor(key(' ', {}, { tagName: 'INPUT', type: 'text' }))).toBeNull()
+    expect(shortcutFor(key(' ', {}, { tagName: 'TEXTAREA' }))).toBeNull()
+    expect(shortcutFor(key(' ', {}, { tagName: 'SELECT' }))).toBeNull()
+    expect(shortcutFor(key(' ', {}, { tagName: 'BUTTON' }))).toBeNull()
+  })
+
+  it('keeps Space on a focused slider, which takes no typed text', () => {
+    expect(shortcutFor(key(' ', {}, { tagName: 'INPUT', type: 'range' }))).toBe('play')
+  })
+
+  it('leaves Space with a modifier alone', () => {
+    expect(shortcutFor(key(' ', { ctrlKey: true }))).toBeNull()
+    expect(shortcutFor(key(' ', { metaKey: true }))).toBeNull()
+    expect(shortcutFor(key(' ', { altKey: true }))).toBeNull()
+    expect(shortcutFor(key(' ', { shiftKey: true }))).toBeNull()
+  })
+})
+

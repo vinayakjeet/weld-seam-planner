@@ -7,6 +7,7 @@ import type { SavedPlan } from './savedPlan'
 import { createAccessSlice, type AccessSlice } from './accessSlice'
 import { createPartSlice, type PartSlice } from './partSlice'
 import { createPlanSlice, type PlanSlice } from './planSlice'
+import { createPlaybackSlice, type PlaybackSlice } from './playbackSlice'
 import { createSeamsSlice, type SeamsSlice } from './seamsSlice'
 import { createSequenceSlice, type SequenceSlice } from './sequenceSlice'
 import { createTorchSlice, type TorchSlice } from './torchSlice'
@@ -38,7 +39,7 @@ interface UiSlice {
   offer: SavedPlan | null
 }
 
-export type AppState = UiSlice & PartSlice & SeamsSlice & PlanSlice & TorchSlice & AccessSlice & ViewSlice & SequenceSlice
+export type AppState = UiSlice & PartSlice & SeamsSlice & PlanSlice & TorchSlice & AccessSlice & ViewSlice & SequenceSlice & PlaybackSlice
 
 const createUiSlice: StateCreator<AppState, [], [], UiSlice> = (set) => ({
   activeStep: 'import',
@@ -70,6 +71,7 @@ export const useStore = create<AppState>()(
       ...createAccessSlice(...args),
       ...createViewSlice(...args),
       ...createSequenceSlice(...args),
+      ...createPlaybackSlice(...args),
     }),
     {
       partialize: (state) => ({
