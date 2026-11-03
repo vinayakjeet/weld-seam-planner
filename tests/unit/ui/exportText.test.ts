@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { jobFilename, summaryText } from '../../../src/ui/shell/exportText'
+import { jobFilename, rapidFilename, summaryText } from '../../../src/ui/shell/exportText'
 
 describe('jobFilename', () => {
   it('lowercases the part name, drops the .stl extension and takes the date from createdAt', () => {
@@ -13,6 +13,12 @@ describe('jobFilename', () => {
   it('falls back to "part" when the name has no letters or digits', () => {
     expect(jobFilename('---.stl', '2026-11-04T10:15:00Z')).toBe('weldjob-part-2026-11-04.json')
     expect(jobFilename('', '2026-11-04T10:15:00Z')).toBe('weldjob-part-2026-11-04.json')
+  })
+})
+
+describe('rapidFilename', () => {
+  it('uses the job file stem with a .mod extension', () => {
+    expect(rapidFilename('tank-with-manhole.stl', '2026-11-03T10:00:00Z')).toBe('weldjob-tank-with-manhole-2026-11-03.mod')
   })
 })
 

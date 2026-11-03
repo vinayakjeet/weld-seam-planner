@@ -1,5 +1,7 @@
 import { DEFAULT_JOB_SETTINGS } from '../core/job/plan'
 import { importJob } from '../core/job/importJob'
+import { toRapid } from '../core/job/rapid'
+import type { WeldJob } from '../core/job/schema'
 import type { KnownUnits } from '../core/mesh/units'
 import { sampleManifestSchema, type SampleEntry, type SampleManifest } from '../core/samples/manifest'
 import { DEFAULT_DETECT_SETTINGS, type DetectSettings, type SeamCandidate } from '../core/seams/detect'
@@ -9,7 +11,7 @@ import type { DrawClick, LoadOutcome, Progress, Stage, UserError } from '../work
 import { DEFAULT_TORCH } from '../core/torch/frames'
 import { type Gravity } from '../core/torch/positions'
 import { downloadText } from '../ui/shell/download'
-import { jobFilename, summaryText } from '../ui/shell/exportText'
+import { jobFilename, rapidFilename, summaryText } from '../ui/shell/exportText'
 import { needSeamSelected, parseTrimInput, type NeedsSeam } from '../ui/panels/manualText'
 import { initialTool, reduceTool, type ToolEffect, type ToolEvent, type ToolName } from '../ui/tools/toolMachine'
 import { accessFor, type AccessEntry } from './accessSlice'
@@ -637,12 +639,13 @@ function needPart(doing: string): UserError {
   }
 }
 
-// Builds the job in the worker and downloads it only when pre-flight has no errors.
-export async function exportPlan(client: GeometryClient, save = downloadText, now = isoNow): Promise<void> {
+// The part check, access refresh, pre-flight gate and notices both exports share. Returns the job and its time, or null
+// when the user has been told why there is nothing to write.
+async function exportableJob(client: GeometryClient, now: () => string): Promise<{ job: WeldJob; createdAt: string; partName: string } | null> {
   const state = useStore.getState()
   if (state.part === null) {
     showError(needPart('exported'))
-    return
+    return null
   }
   setNotice(null)
   // The file carries each seam's access class, so the seams that have no answer yet are checked first. A newer
@@ -651,13 +654,13 @@ export async function exportPlan(client: GeometryClient, save = downloadText, no
   if (!problem && seamsNeedingAccess().length > 0) problem = await ensureAccess(client)
   if (problem) {
     showError(problem)
-    return
+    return null
   }
   const createdAt = now()
   const outcome = await attempt(() => client.exportJob(selectPlan(useStore.getState()), createdAt))
   if (outcome.status === 'error') {
     showError(outcome.error)
-    return
+    return null
   }
   if (outcome.status === 'blocked') {
     const errors = outcome.issues.filter((issue) => issue.severity === 'error').length
@@ -666,11 +669,27 @@ export async function exportPlan(client: GeometryClient, save = downloadText, no
       why: 'A job file with errors could send a robot to weld the wrong thing, so the file is only written when pre-flight has none.',
       next: 'Open Validate and Export, fix the errors in the list, then export again.',
     })
-    return
+    return null
   }
-  const filename = jobFilename(state.part.name, createdAt)
-  save(filename, JSON.stringify(outcome.job, null, 2))
-  useStore.getState().setInfo(`Exported ${filename}: ${plural(outcome.job.summary.seamCount, 'seam')}.`)
+  return { job: outcome.job, createdAt, partName: state.part.name }
+}
+
+// Builds the job in the worker and downloads it only when pre-flight has no errors.
+export async function exportPlan(client: GeometryClient, save = downloadText, now = isoNow): Promise<void> {
+  const ready = await exportableJob(client, now)
+  if (ready === null) return
+  const filename = jobFilename(ready.partName, ready.createdAt)
+  save(filename, JSON.stringify(ready.job, null, 2))
+  useStore.getState().setInfo(`Exported ${filename}: ${plural(ready.job.summary.seamCount, 'seam')}.`)
+}
+
+// The RAPID module covers the standard and slim seams only; the module itself lists what it left out.
+export async function exportRapid(client: GeometryClient, save = downloadText, now = isoNow): Promise<void> {
+  const ready = await exportableJob(client, now)
+  if (ready === null) return
+  const filename = rapidFilename(ready.partName, ready.createdAt)
+  save(filename, toRapid(ready.job))
+  useStore.getState().setInfo(`Exported ${filename}: a template, verify it on a controller before running.`)
 }
 
 // Reads a plan file for the loaded part. Detection runs again at the file's crease angle first, because the plan's

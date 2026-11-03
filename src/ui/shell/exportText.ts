@@ -2,14 +2,22 @@ import type { WeldJob } from '../../core/job/schema'
 
 const PART_FALLBACK = 'part'
 
-// weldjob-<part>-<yyyy-mm-dd>.json, from the part's file name and the creation time of the job.
-export function jobFilename(partName: string, createdAt: string): string {
+function stem(partName: string, createdAt: string): string {
   const slug = partName
     .replace(/\.stl$/i, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
-  return `weldjob-${slug === '' ? PART_FALLBACK : slug}-${createdAt.slice(0, 10)}.json`
+  return `weldjob-${slug === '' ? PART_FALLBACK : slug}-${createdAt.slice(0, 10)}`
+}
+
+// weldjob-<part>-<yyyy-mm-dd>.json, from the part's file name and the creation time of the job.
+export function jobFilename(partName: string, createdAt: string): string {
+  return `${stem(partName, createdAt)}.json`
+}
+
+export function rapidFilename(partName: string, createdAt: string): string {
+  return `${stem(partName, createdAt)}.mod`
 }
 
 function minutesSeconds(totalS: number): string {

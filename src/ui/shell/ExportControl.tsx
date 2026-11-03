@@ -1,6 +1,6 @@
 import * as Menu from '@radix-ui/react-dropdown-menu'
 import { useRef } from 'react'
-import { copySummary, exportPlan, importPlan } from '../../state/flows'
+import { copySummary, exportPlan, exportRapid, importPlan } from '../../state/flows'
 import { selectPlan } from '../../state/selectors'
 import { useStore } from '../../state/store'
 import { getGeometryClient } from '../../worker/client'
@@ -63,6 +63,9 @@ export function ExportControl() {
           <Menu.Content align="end" sideOffset={4} className="z-50 min-w-44 rounded-sm border border-line bg-surface-2 p-1 text-xs text-ink-0 shadow-lg">
             <Menu.Item disabled={!status.canExport} onSelect={() => void exportPlan(client)} className={ITEM}>
               Export JSON
+            </Menu.Item>
+            <Menu.Item disabled={!status.canExport} onSelect={() => void exportRapid(client)} className={ITEM}>
+              ABB RAPID (.mod)
             </Menu.Item>
             <Menu.Item disabled={!status.hasPart} onSelect={() => input.current?.click()} className={ITEM}>
               Import plan

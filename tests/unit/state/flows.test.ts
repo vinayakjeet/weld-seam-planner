@@ -12,6 +12,7 @@ import {
   copySummary,
   dropFile,
   exportPlan,
+  exportRapid,
   importPlan,
   PREFLIGHT_DEBOUNCE_MS,
   startPreflightSync,
@@ -36,6 +37,7 @@ import { selectAllSeams, selectPlan, selectStats } from '../../../src/state/sele
 import { useStore } from '../../../src/state/store'
 import { createGeometryApi, type DetectOutcome, type GeometryApi, type LoadOutcome, type Progress } from '../../../src/worker/geometry.api'
 import { buildJob } from '../../../src/core/job/build'
+import { toRapid } from '../../../src/core/job/rapid'
 import type { Issue } from '../../../src/core/job/preflight'
 import { CREATED_AT, samplePlan } from '../helpers/jobs'
 import { readManifest, readSample } from '../helpers/samples'
@@ -1297,6 +1299,39 @@ describe('exportPlan', () => {
   it('asks for a part when none is loaded', async () => {
     const save = vi.fn()
     await exportPlan(fakeClient(), save, () => CREATED_AT)
+    expect(save).not.toHaveBeenCalled()
+    expectErrorState()
+  })
+})
+
+describe('exportRapid', () => {
+  it('saves one .mod file with the module text when the export is ok', async () => {
+    const plan = loadPlanPart()
+    const job = buildJob(plan, { createdAt: CREATED_AT }, [])
+    const save = vi.fn()
+    await exportRapid(fakeClient({ exportJob: async () => ({ status: 'ok', job, issues: [] }) }), save, () => CREATED_AT)
+    expect(save).toHaveBeenCalledTimes(1)
+    const [name, text] = save.mock.calls[0]!
+    expect(name).toBe('weldjob-t-joint-merged-2026-11-04.mod')
+    expect(text).toBe(toRapid(job))
+    expect(state().info).toContain('weldjob-t-joint-merged-2026-11-04.mod')
+  })
+
+  it('shows the same blocked notice as the JSON export and saves nothing', async () => {
+    loadPlanPart()
+    const save = vi.fn()
+    const client = fakeClient({
+      exportJob: async () => ({ status: 'blocked', issues: [err('NO_PROCEDURE', 'a'), err('NO_SEAMS')], summary: {} as never }),
+    })
+    await exportRapid(client, save, () => CREATED_AT)
+    expect(save).not.toHaveBeenCalled()
+    expect(state().notice?.what).toContain('2 errors')
+    expectReadable(state().notice!)
+  })
+
+  it('asks for a part when none is loaded', async () => {
+    const save = vi.fn()
+    await exportRapid(fakeClient(), save, () => CREATED_AT)
     expect(save).not.toHaveBeenCalled()
     expectErrorState()
   })
