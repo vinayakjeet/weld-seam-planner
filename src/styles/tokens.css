@@ -1,3 +1,12 @@
+/* One variable file covers every weight the app uses (400 to 600). Latin only: the UI shows digits, units and English text. */
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url('./fonts/jetbrains-mono-latin-wght.woff2') format('woff2');
+}
+
 :root {
   --brand-primary: #3B82F6;    /* selection, active step, primary button */
   --brand-secondary: #93C5FD;  /* rare highlights only */
