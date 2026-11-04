@@ -1,5 +1,6 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { Color } from 'three'
+import { cssVar } from './cssVar'
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js'
 import { LineSegments2 } from 'three/addons/lines/LineSegments2.js'
 import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js'
@@ -57,4 +58,39 @@ export function useDisposed(lines: LineSegments2 | null): void {
     },
     [lines],
   )
+}
+
+interface Halo {
+  color: string
+  // Total width added to the line, split evenly over both sides.
+  extraPx: number
+}
+
+export const HALO_EXTRA_PX = 4
+
+// A wider line in the halo colour drawn just under another one, so the line reads on a light part. It shares the line's
+// geometry and follows its opacity and depth settings; the material is its own.
+export function haloFor(lines: LineSegments2, { color, extraPx }: Halo): LineSegments2 {
+  const material = new LineMaterial({ linewidth: lines.material.linewidth + extraPx })
+  material.color = new Color(color)
+  material.transparent = lines.material.transparent
+  material.opacity = lines.material.opacity
+  material.depthTest = lines.material.depthTest
+  // The line sits half a step nearer the camera than its halo, so the two do not fight over the depth test.
+  if (lines.material.polygonOffset) {
+    material.polygonOffset = true
+    material.polygonOffsetFactor = lines.material.polygonOffsetFactor + 0.5
+    material.polygonOffsetUnits = lines.material.polygonOffsetUnits + 0.5
+  }
+  const halo = new LineSegments2(lines.geometry, material)
+  halo.frustumCulled = false
+  halo.renderOrder = lines.renderOrder - 1
+  return halo
+}
+
+// The halo for a line set, freed when the line set changes. The geometry belongs to the line set, so only the material goes.
+export function useHalo(lines: LineSegments2 | null): LineSegments2 | null {
+  const halo = useMemo(() => (lines ? haloFor(lines, { color: cssVar('--halo'), extraPx: HALO_EXTRA_PX }) : null), [lines])
+  useEffect(() => () => halo?.material.dispose(), [halo])
+  return halo
 }

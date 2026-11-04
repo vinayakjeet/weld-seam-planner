@@ -31,7 +31,7 @@ export function WeldGlow() {
       const trail = trailAlong(seam.points, seam.closed, entry.reversed && !seam.closed, length)
       for (let i = 0; i + 1 < trail.length; i++) parts.push(...trail[i]!, ...trail[i + 1]!)
     }
-    return parts.length === 0 ? null : lineSet(new Float32Array(parts), { width: WIDTH_PX, color: cssVar('--warn'), renderOrder: 3 })
+    return parts.length === 0 ? null : lineSet(new Float32Array(parts), { width: WIDTH_PX, color: cssVar('--brand-accent'), renderOrder: 3 })
   }, [active, data, quantised, order, seams])
   useDisposed(lines)
   return lines ? <primitive object={lines} /> : null

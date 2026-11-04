@@ -12,7 +12,7 @@ import { missedMergeTarget, notATarget } from '../panels/manualText'
 import { mergeTargets } from '../tools/mergeTargets'
 import { cssVar } from './cssVar'
 import { overGizmo } from './gizmo'
-import { lineSet, useDisposed } from './lineSet'
+import { lineSet, useDisposed, useHalo } from './lineSet'
 import { chooseSeamHit, type SeamLineHit } from './pickSeam'
 import { buildSeamSegments, seamSegmentPositions, type Rgb, type SeamPalette } from './seamSegments'
 
@@ -110,6 +110,10 @@ export function SeamLines({ partRef }: { partRef: RefObject<Mesh | null> }) {
   useDisposed(selected)
   useDisposed(hovered)
   useDisposed(targets)
+  const baseHalo = useHalo(base)
+  const targetsHalo = useHalo(targets)
+  const selectedHalo = useHalo(selected)
+  const hoveredHalo = useHalo(hovered)
 
   useEffect(() => {
     if (!base) return
@@ -227,9 +231,13 @@ export function SeamLines({ partRef }: { partRef: RefObject<Mesh | null> }) {
 
   return (
     <>
+      {baseHalo && <primitive object={baseHalo} />}
       {base && <primitive object={base} />}
+      {targetsHalo && <primitive object={targetsHalo} />}
       {targets && <primitive object={targets} />}
+      {selectedHalo && <primitive object={selectedHalo} />}
       {selected && <primitive object={selected} />}
+      {hoveredHalo && <primitive object={hoveredHalo} />}
       {hovered && <primitive object={hovered} />}
     </>
   )
