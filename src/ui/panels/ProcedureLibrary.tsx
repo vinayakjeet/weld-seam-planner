@@ -27,7 +27,6 @@ export function ProcedureLibrary() {
 
   return (
     <section aria-label="Procedure library" className="flex shrink-0 flex-col gap-2 border-b border-line px-3 py-2">
-      <h2 className="text-xs font-semibold text-ink-0">Procedure library</h2>
       <ul className="max-h-52 overflow-y-auto border border-line">
         {procedures.map((p) => (
           <li key={p.id} className="border-b border-line/50 last:border-b-0">

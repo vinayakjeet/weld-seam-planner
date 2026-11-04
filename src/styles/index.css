@@ -4,9 +4,15 @@
 @theme inline {
   --color-brand: var(--brand-primary);
   --color-brand-secondary: var(--brand-secondary);
+  --color-brand-fill: var(--brand-primary-fill);
+  --color-on-primary: var(--on-primary);
+  --color-brand-accent: var(--brand-accent);
+  --color-on-accent: var(--on-accent);
+  --color-halo: var(--halo);
   --color-surface-0: var(--bg-0);
   --color-surface-1: var(--bg-1);
   --color-surface-2: var(--bg-2);
+  --color-surface-3: var(--bg-3);
   --color-line: var(--line);
   --color-ink-0: var(--text-0);
   --color-ink-1: var(--text-1);
@@ -51,6 +57,14 @@
     font-variant-numeric: tabular-nums;
     -webkit-font-smoothing: antialiased;
     overflow: hidden;
+  }
+
+  /* The UA stylesheet sets font on controls with the shorthand, which resets tabular figures. */
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
   }
 
   .num {

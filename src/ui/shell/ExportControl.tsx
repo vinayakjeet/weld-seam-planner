@@ -31,7 +31,7 @@ export function ExportControl() {
       type="button"
       disabled={!status.canExport}
       onClick={() => void exportPlan(client)}
-      className="h-8 rounded-l-sm bg-brand px-4 font-medium text-white outline-none hover:brightness-110 focus-visible:ring-1 focus-visible:ring-ink-0 disabled:cursor-not-allowed disabled:opacity-40"
+      className="h-8 rounded-l-sm bg-brand-accent px-4 font-medium text-on-accent outline-none hover:brightness-110 focus-visible:ring-1 focus-visible:ring-ink-0 disabled:cursor-not-allowed disabled:opacity-40"
     >
       Export
     </button>
@@ -52,7 +52,7 @@ export function ExportControl() {
           <button
             type="button"
             aria-label="More export options"
-            className="grid h-8 w-7 place-items-center rounded-r-sm border-l border-white/30 bg-brand text-white outline-none hover:brightness-110 focus-visible:ring-1 focus-visible:ring-ink-0"
+            className="grid h-8 w-7 place-items-center rounded-r-sm border-l border-on-accent/30 bg-brand-accent text-on-accent outline-none hover:brightness-110 focus-visible:ring-1 focus-visible:ring-ink-0"
           >
             <svg aria-hidden width="10" height="6" viewBox="0 0 10 6" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M1 1l4 4 4-4" />

@@ -26,7 +26,7 @@ export function SequenceLabels() {
           <Html key={id} position={at} center zIndexRange={[5, 0]} style={{ pointerEvents: 'none' }}>
             <span
               className={`num grid min-w-5 place-items-center rounded-full border px-1 text-[10px] font-semibold leading-4 ${
-                id === selectedId ? 'border-brand bg-brand text-white' : 'border-line bg-surface-1/90 text-ink-0'
+                id === selectedId ? 'border-brand bg-brand-fill text-on-primary' : 'border-line bg-surface-1/90 text-ink-0'
               }`}
             >
               {n}

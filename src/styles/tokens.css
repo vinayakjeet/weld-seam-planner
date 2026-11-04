@@ -1,25 +1,68 @@
-/* One variable file covers every weight the app uses (400 to 600). Latin only: the UI shows digits, units and English text. */
+/* Armatrix brand values, from the official pack (03 Colours System, master file). Fonts are Latin subsets: the UI shows
+   digits, units and English text. Onest is one variable file covering every weight the app uses. */
 @font-face {
-  font-family: 'JetBrains Mono';
+  font-family: 'Onest';
   font-style: normal;
-  font-weight: 100 800;
+  font-weight: 100 900;
   font-display: swap;
-  src: url('./fonts/jetbrains-mono-latin-wght.woff2') format('woff2');
+  src: url('./fonts/onest-latin-var.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Redaction';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./fonts/redaction-latin-regular.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Redaction';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./fonts/redaction-latin-bold.woff2') format('woff2');
 }
 
 :root {
-  --brand-primary: #3B82F6;    /* selection, active step, primary button */
-  --brand-secondary: #93C5FD;  /* rare highlights only */
-  --brand-font-display: system-ui, sans-serif;  /* logo area, headings */
-  --brand-font-ui: system-ui, sans-serif;       /* only if legible at 13px */
+  /* Palette: base value, then tints (T) or shades (S) */
+  --dark-forest: #030500;
+  --dark-forest-t1: #090D00;  --dark-forest-t2: #0E1600;  --dark-forest-t3: #141E00;  --dark-forest-t4: #192600;
+  --light-sand: #F6F6EE;
+  --light-sand-s1: #DFDFD7;  --light-sand-s2: #C5C5BD;  --light-sand-s3: #ABABA5;  --light-sand-s4: #93938D;
+  --revolution-green: #2B381F;
+  --revolution-green-t1: #344425;  --revolution-green-t2: #3D4F2C;  --revolution-green-t3: #455B32;  --revolution-green-t4: #628047;
+  --bright-discovery: #E97F01;
+  --bright-discovery-t1: #E98917;  --bright-discovery-t2: #E9942F;  --bright-discovery-t3: #E99E46;  --bright-discovery-t4: #E9B475;
 
-  --bg-0: #0E1116;  --bg-1: #151A21;  --bg-2: #1C232C;   /* app chrome, panels, inputs */
-  --line: #2A333F;  --text-0: #E6EAF0; --text-1: #A7B0BC; --text-2: #6B7685;
-  --viewport-bg: #10141A; --part: #8A939E; --part-edge: #3B4552;
-  --seam-candidate: #6B7685; --seam-accepted: var(--brand-primary); --seam-hover: #FFFFFF;
-  --access-standard: #3FB950; --access-slim: #22B8CF; --access-snake: #D29922; --access-blocked: #E040A0;  /* torch access classes */
-  --reach-ok: var(--brand-primary); --reach-miss: var(--err);  /* snake arm reach: reached and missed stretches */
-  --ok: #3FB950; --warn: #D29922; --err: #F85149; --info: #58A6FF;
+  /* Brand roles. Primary (Revolution Green T4) is for non-text marks: focus ring, selection tint, active step.
+     Anything that carries text on green uses the fill. Brand colour stays under about 10 percent of the screen. */
+  --brand-primary: var(--revolution-green-t4);
+  --brand-primary-fill: var(--revolution-green-t3);
+  --on-primary: var(--light-sand);
+  --brand-secondary: var(--light-sand-s4);  /* rare highlights only; the pack names no second role */
+  --brand-accent: var(--bright-discovery);  /* Export, accepted seams, torch nozzle, arc glow, snake class */
+  --on-accent: var(--dark-forest);
+  --brand-font-display: 'Redaction', Georgia, serif;  /* app title, empty-state headline, panel heading */
+  --brand-font-ui: 'Onest', system-ui, sans-serif;
+
+  /* Surfaces, lines and text */
+  --bg-0: var(--dark-forest-t1);  --bg-1: var(--dark-forest-t2);  --bg-2: var(--dark-forest-t3);  --bg-3: var(--dark-forest-t4);
+  --line: var(--revolution-green);
+  --text-0: var(--light-sand);  --text-1: var(--light-sand-s2);  --text-2: var(--light-sand-s4);
+
+  /* 3D scene */
+  --viewport-bg: var(--bg-0);
+  --part: #8E8F88;
+  --part-edge: var(--revolution-green);
+  --seam-candidate: var(--light-sand-s2);
+  --seam-accepted: var(--brand-accent);
+  --seam-hover: var(--light-sand);
+  --halo: var(--dark-forest);  /* outline under every seam line so it reads on the light part */
+
+  /* Status, torch access classes and snake reach */
+  --ok: #8FAE6E;  --warn: #E5C07B;  --err: #F0605A;  --info: #7FA7C9;
+  --access-standard: var(--ok);  --access-slim: var(--info);  --access-snake: var(--brand-accent);  --access-blocked: var(--err);
+  --reach-ok: var(--ok);  --reach-miss: var(--err);
+
   --scroll-thumb: var(--text-2);  --scroll-track: transparent;
-  --num: 'JetBrains Mono', ui-monospace, monospace;    /* tabular numbers */
+  --num: var(--brand-font-ui);  /* numbers use the UI face with tabular figures */
 }

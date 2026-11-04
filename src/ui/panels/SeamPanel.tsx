@@ -7,6 +7,7 @@ import { selectPlan } from '../../state/selectors'
 import { useStore } from '../../state/store'
 import { useVisibleSeams } from '../../state/useVisibleSeams'
 import { Button } from '../kit/Button'
+import { PanelHeading } from '../kit/PanelHeading'
 import { Tooltip } from '../kit/Tooltip'
 import { Tab, TabList, TabPanel, Tabs } from '../kit/Tabs'
 import { AccessChip } from './AccessChip'
@@ -231,6 +232,7 @@ export function SeamPanel() {
   const exportStep = useStore((s) => s.activeStep === 'export')
   const sequenceStep = useStore((s) => s.activeStep === 'sequence')
   const accessStep = useStore((s) => s.activeStep === 'access')
+  const activeStep = useStore((s) => s.activeStep)
   const empty = useStore((s) => showsNoAccepted(s.activeStep, selectPlan(s).seams.length))
   return (
     <aside aria-label="Seam list" className="flex min-h-0 w-[376px] shrink-0 flex-col border-r border-line bg-surface-1">
@@ -240,6 +242,7 @@ export function SeamPanel() {
           <Tab value="detection">Detection</Tab>
         </TabList>
         <TabPanel value="seams" className="data-[state=active]:flex data-[state=active]:flex-col">
+          <PanelHeading step={activeStep} />
           <div className="flex shrink-0 gap-1.5 border-b border-line px-3 py-2">
             {['Candidates', 'Accepted', 'Warnings'].map((chip) => (
               <span key={chip} className="rounded-full border border-line px-2 py-0.5 text-[11px] text-ink-2">

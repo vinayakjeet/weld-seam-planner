@@ -47,7 +47,7 @@ export function EmptyState() {
           dragging ? 'border-brand bg-brand/10' : 'border-part-edge bg-viewport/80'
         }`}
       >
-        <h1 className="text-xl font-semibold text-ink-0">Drop an STL file or pick a sample</h1>
+        <h1 className="font-display text-2xl font-semibold text-ink-0">Drop an STL file or pick a sample</h1>
         <p className="mt-1.5 text-ink-1">Files are read in your browser and never uploaded.</p>
 
         {acceptedCount > 0 && (

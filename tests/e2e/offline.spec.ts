@@ -25,5 +25,22 @@ test('loading a sample and exporting makes requests to the app origin only, and 
   expect(foreign, 'requests to another origin').toEqual([])
 
   expect(network.some((url) => url.endsWith('.woff2'))).toBe(true)
-  expect(await page.evaluate(() => document.fonts.check('600 12px "JetBrains Mono"'))).toBe(true)
+  expect(await page.evaluate(() => document.fonts.check('600 12px "Onest"'))).toBe(true)
+  expect(await page.evaluate(() => document.fonts.check('16px "Redaction"'))).toBe(true)
+
+  // Tabular figures: a row of ones is as wide as a row of eights.
+  const widths = await page.evaluate(() => {
+    const widthOf = (text: string) => {
+      const span = document.createElement('span')
+      span.className = 'num'
+      span.textContent = text
+      document.body.append(span)
+      const width = span.getBoundingClientRect().width
+      span.remove()
+      return width
+    }
+    return [widthOf('1111'), widthOf('8888')]
+  })
+  expect(widths[0]).toBeGreaterThan(0)
+  expect(widths[0]).toBeCloseTo(widths[1]!, 1)
 })

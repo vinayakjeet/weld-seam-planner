@@ -7,12 +7,10 @@ export function TopBar() {
   const part = useStore((s) => s.part)
   const chip = partChip(part)
   return (
-    <header className="flex h-12 items-center gap-6 border-b border-line bg-surface-1 px-3">
+    <header className="flex h-12 items-center gap-4 border-b border-line bg-surface-1 px-3">
       <div className="flex w-[276px] shrink-0 items-center gap-2">
-        <span aria-hidden className="grid size-6 place-items-center rounded-sm border border-line">
-          <span className="h-0.5 w-3.5 rounded-full bg-brand" />
-        </span>
-        <span className="font-display text-sm font-semibold">Weld Seam Planner</span>
+        <img src={`${import.meta.env.BASE_URL}brand/armatrix-horizontal-light-sand.svg`} alt="Armatrix" className="h-5 w-auto" />
+        <span className="font-display text-lg leading-none">Weld Seam Planner</span>
       </div>
 
       <div className="flex shrink-0 items-center gap-2">

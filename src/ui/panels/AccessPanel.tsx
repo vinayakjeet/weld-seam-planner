@@ -127,7 +127,6 @@ function PortList() {
   )
   return (
     <section aria-label="Ports" className="flex flex-col gap-2 border-b border-line px-3 py-3">
-      <h3 className="text-xs font-semibold text-ink-0">Ports</h3>
       {hasPart ? (
         add
       ) : (

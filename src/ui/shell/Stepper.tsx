@@ -12,18 +12,18 @@ export function Stepper() {
           const active = i === activeIndex
           return (
             <li key={step.id} className="flex items-center gap-1">
-              {i > 0 && <span aria-hidden className="h-px w-4 bg-line" />}
+              {i > 0 && <span aria-hidden className="h-px w-2 bg-line" />}
               <button
                 type="button"
                 aria-current={active ? 'step' : undefined}
                 onClick={() => setActiveStep(step.id)}
-                className={`flex h-8 items-center gap-2 rounded-sm px-2.5 whitespace-nowrap outline-none focus-visible:ring-1 focus-visible:ring-brand ${
+                className={`flex h-8 items-center gap-1.5 rounded-sm px-2 whitespace-nowrap outline-none focus-visible:ring-1 focus-visible:ring-brand ${
                   active ? 'bg-brand/15 text-ink-0' : 'text-ink-1 hover:bg-surface-2 hover:text-ink-0'
                 }`}
               >
                 <span
                   className={`num grid size-5 place-items-center rounded-full text-[11px] ${
-                    active ? 'bg-brand text-white' : 'border border-line text-ink-2'
+                    active ? 'bg-brand-fill text-on-primary' : 'border border-line text-ink-2'
                   }`}
                 >
                   {i + 1}
