@@ -65,3 +65,37 @@ export async function downloadJson(page: Page, action: () => Promise<void>): Pro
   const path = await download.path()
   return { name: download.suggestedFilename(), json: JSON.parse(readFileSync(path, 'utf8')) as unknown }
 }
+
+export async function field(page: Page, name: string, value: string) {
+  const input = page.getByLabel(name, { exact: true })
+  await input.fill(value)
+  await input.press('Enter')
+}
+
+// A full run shows the progress bar for several seconds; a run on one seam can finish before the bar is seen, so it
+// waits for the completion message instead. The defaults are the full run on tank-with-manhole (20 snake seams).
+export async function runReach(page: Page, label = /Run reach on 20 snake seams/, done = /Reach measured for 20 seams/) {
+  const run = page.getByRole('button', { name: label })
+  await expect(run).toBeEnabled({ timeout: 30_000 })
+  await run.click()
+  if (label.source.includes('snake seams')) await expect(page.getByRole('progressbar', { name: 'Reach progress' })).toBeVisible()
+  await expect(page.getByText(done)).toBeVisible({ timeout: 120_000 })
+  await expect(page.getByRole('progressbar', { name: 'Reach progress' })).toHaveCount(0)
+}
+
+// Presses Add port and clicks the canvas until a click lands on the part; any roof or floor hit gives a downward port.
+export async function placePort(page: Page) {
+  await page.getByRole('button', { name: 'Add port' }).click()
+  const box = (await page.locator('canvas').boundingBox())!
+  const spots = [[0.45, 0.42], [0.5, 0.35], [0.4, 0.5], [0.55, 0.5], [0.5, 0.6], [0.35, 0.4], [0.6, 0.4]]
+  for (const [fx, fy] of spots) {
+    await page.mouse.click(box.x + box.width * fx!, box.y + box.height * fy!)
+    if (await page.getByRole('listitem', { name: 'Port P1' }).isVisible()) {
+      // The click that places a port no longer touches the selection; a click on the empty corner clears it, so Run reach
+      // covers every snake seam and not only the rows that were selected before.
+      await page.mouse.click(box.x + 4, box.y + box.height - 4)
+      return
+    }
+  }
+  throw new Error('No click landed on the part, so no port was placed.')
+}

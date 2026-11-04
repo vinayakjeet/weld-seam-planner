@@ -44,3 +44,36 @@ export async function countColour(page: Page, rect: { x: number; y: number; widt
   const png = await page.screenshot({ clip: rect })
   return (await countInPng(page, png, [rgb], tolerance)).matching
 }
+
+// A page position of a pixel in the rectangle that is close to the colour: the middle one of the matches in reading
+// order, so it lies on the body of a line and not at its end. Null when nothing matches.
+export async function findColour(page: Page, rect: { x: number; y: number; width: number; height: number }, rgb: Rgb, tolerance: number): Promise<{ x: number; y: number } | null> {
+  const png = await page.screenshot({ clip: rect })
+  const scratch = await page.context().newPage()
+  try {
+    const found = await scratch.evaluate(
+      async ({ data, rgb, tolerance }) => {
+        const image = new Image()
+        image.src = `data:image/png;base64,${data}`
+        await image.decode()
+        const canvas = document.createElement('canvas')
+        canvas.width = image.width
+        canvas.height = image.height
+        const context = canvas.getContext('2d')!
+        context.drawImage(image, 0, 0)
+        const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data
+        const hits: number[] = []
+        for (let i = 0; i < pixels.length; i += 4) {
+          if (Math.abs(pixels[i]! - rgb[0]) <= tolerance && Math.abs(pixels[i + 1]! - rgb[1]) <= tolerance && Math.abs(pixels[i + 2]! - rgb[2]) <= tolerance) hits.push(i / 4)
+        }
+        if (hits.length === 0) return null
+        const at = hits[Math.floor(hits.length / 2)]!
+        return { x: at % canvas.width, y: Math.floor(at / canvas.width) }
+      },
+      { data: png.toString('base64'), rgb, tolerance },
+    )
+    return found ? { x: rect.x + found.x, y: rect.y + found.y } : null
+  } finally {
+    await scratch.close()
+  }
+}

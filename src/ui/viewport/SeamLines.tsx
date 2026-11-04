@@ -13,6 +13,7 @@ import { mergeTargets } from '../tools/mergeTargets'
 import { cssVar } from './cssVar'
 import { overGizmo } from './gizmo'
 import { lineSet, useDisposed, useHalo } from './lineSet'
+import { pointerClaimed } from './pickGuard'
 import { chooseSeamHit, type SeamLineHit } from './pickSeam'
 import { buildSeamSegments, seamSegmentPositions, type Rgb, type SeamPalette } from './seamSegments'
 
@@ -164,15 +165,10 @@ export function SeamLines({ partRef }: { partRef: RefObject<Mesh | null> }) {
       if (!last) return
       useStore.getState().hover(pickAt(last.x, last.y))
     }
-    // Drawing and splitting use the pointer themselves, so seams under it are not lit or picked.
-    const pointerBusy = () => {
-      const { tool } = useStore.getState()
-      return tool.tool === 'draw' || tool.tool === 'split'
-    }
     const onMove = (event: PointerEvent) => {
       // While a button is down the user is orbiting or panning; hovering would only cost frames.
       if (event.buttons !== 0) return
-      if (pointerBusy()) {
+      if (pointerClaimed(useStore.getState())) {
         useStore.getState().hover(null)
         return
       }
@@ -189,13 +185,17 @@ export function SeamLines({ partRef }: { partRef: RefObject<Mesh | null> }) {
       useStore.getState().hover(null)
     }
     let down: { x: number; y: number } | null = null
+    // Whether another tool owned the pointer when the press began. The click is judged by that, not by the state at click
+    // time: placing a port ends on the same click, so by then the state no longer says a port was being placed.
+    let claimedAtDown = false
     const onDown = (event: PointerEvent) => {
       down = { x: event.clientX, y: event.clientY }
+      claimedAtDown = pointerClaimed(useStore.getState())
     }
     const onClick = (event: MouseEvent) => {
       if (down && Math.hypot(event.clientX - down.x, event.clientY - down.y) > DRAG_PX) return
       const { select, toggleAccepted, tool, setNotice } = useStore.getState()
-      if (pointerBusy()) return
+      if (claimedAtDown || pointerClaimed(useStore.getState())) return
       const id = pickAt(event.clientX, event.clientY)
       if (tool.tool === 'merge') {
         const from = seams.find((s) => s.id === tool.from)

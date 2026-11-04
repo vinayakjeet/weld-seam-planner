@@ -1,3 +1,4 @@
+import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import { CylinderGeometry, InstancedMesh, Object3D, Quaternion, SphereGeometry, Vector3 } from 'three'
 import type { Vec3 } from '../../core/math/vec3'
@@ -34,6 +35,7 @@ export function ArmCapsules() {
   const active = useStore((s) => s.activeStep === 'access')
   const radius = useStore((s) => s.arm.diameterMm / 2)
   const joints = useJoints()
+  const gl = useThree((state) => state.gl)
   const links = useRef<InstancedMesh>(null)
   const balls = useRef<InstancedMesh>(null)
   const color = useMemo(() => cssVar('--access-snake'), [])
@@ -77,7 +79,9 @@ export function ArmCapsules() {
     }
     joint.count = points.length
     joint.instanceMatrix.needsUpdate = true
-  }, [joints, active, radius, dummy])
+    // Written on the viewport for the end to end tests, which cannot read the instanced mesh.
+    gl.domElement.closest('main')?.setAttribute('data-arm-links', String(Math.max(0, points.length - 1)))
+  }, [joints, active, radius, dummy, gl])
 
   return (
     <>

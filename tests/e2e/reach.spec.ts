@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import type { Locator, Page } from '@playwright/test'
 import { jobSchema } from '../../src/core/job/schema'
 import { DEFAULT_ARM } from '../../src/core/snake/arm'
-import { counts, downloadJson, expect, expectedSeams, loadSample, sampleById, seamRows, selectAllRows, statusBar, test } from './helpers'
+import { counts, downloadJson, expect, expectedSeams, field, loadSample, placePort, runReach, sampleById, seamRows, selectAllRows, statusBar, test } from './helpers'
 
 const tank = sampleById('tank-with-manhole')
 const SEAMS = expectedSeams(tank)
@@ -14,35 +14,6 @@ const STATION_MM = '630.7'
 const SNAKE_SEAMS = 20
 
 const rowOf = (page: Page, label: string): Locator => seamRows(page).filter({ has: page.getByRole('cell', { name: label, exact: true }) })
-
-async function field(page: Page, name: string, value: string) {
-  const input = page.getByLabel(name, { exact: true })
-  await input.fill(value)
-  await input.press('Enter')
-}
-
-// A full run shows the progress bar for several seconds; a run on one seam can finish before the bar is seen, so it
-// waits for the completion message instead.
-async function runReach(page: Page, label = new RegExp(`Run reach on ${SNAKE_SEAMS} snake seams`), done = /Reach measured for 20 seams/) {
-  const run = page.getByRole('button', { name: label })
-  await expect(run).toBeEnabled({ timeout: 30_000 })
-  await run.click()
-  if (label.source.includes('snake seams')) await expect(page.getByRole('progressbar', { name: 'Reach progress' })).toBeVisible()
-  await expect(page.getByText(done)).toBeVisible({ timeout: 120_000 })
-  await expect(page.getByRole('progressbar', { name: 'Reach progress' })).toHaveCount(0)
-}
-
-// Presses Add port and clicks the canvas until a click lands on the part; any roof or floor hit gives a downward port.
-async function placePort(page: Page) {
-  await page.getByRole('button', { name: 'Add port' }).click()
-  const box = (await page.locator('canvas').boundingBox())!
-  const spots = [[0.45, 0.42], [0.5, 0.35], [0.4, 0.5], [0.55, 0.5], [0.5, 0.6], [0.35, 0.4], [0.6, 0.4]]
-  for (const [fx, fy] of spots) {
-    await page.mouse.click(box.x + box.width * fx!, box.y + box.height * fy!)
-    if (await page.getByRole('listitem', { name: 'Port P1' }).isVisible()) return
-  }
-  throw new Error('No click landed on the part, so no port was placed.')
-}
 
 test('places a port, measures reach, plays the insertion and exports a job and a RAPID template for tank-with-manhole', async ({ page }) => {
   test.setTimeout(300_000)
