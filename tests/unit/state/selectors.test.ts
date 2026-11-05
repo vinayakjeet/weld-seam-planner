@@ -141,14 +141,14 @@ describe('selectPlan', () => {
     expect(second!.seam.jointType).toBe('fillet')
   })
 
-  it('uses the part, gravity, procedures and the crease angle of the detection settings', () => {
+  it('uses the part, gravity, procedures, the crease angle of the detection settings and the weld tolerance', () => {
     load()
-    useStore.setState({ detectSettings: { creaseAngleDeg: 41 }, gravity: [1, 0, 0] })
+    useStore.setState({ detectSettings: { creaseAngleDeg: 41 }, gravity: [1, 0, 0], weldTolerance: 3e-5 })
     const plan = selectPlan(useStore.getState())
     expect(plan.part).toBe(useStore.getState().part)
     expect(plan.gravity).toEqual([1, 0, 0])
     expect(plan.procedures).toBe(useStore.getState().procedures)
-    expect(plan.settings).toEqual({ poseSpacingMm: 5, airSpeedMmS: 250, approachMm: 50, creaseAngleDeg: 41, cleanEveryS: 0, cleanTimeS: 30 })
+    expect(plan.settings).toEqual({ poseSpacingMm: 5, airSpeedMmS: 250, approachMm: 50, creaseAngleDeg: 41, cleanEveryS: 0, cleanTimeS: 30, weldToleranceRel: 3e-5 })
   })
 
   it('returns the same object for the same state and after a hover or selection change', () => {

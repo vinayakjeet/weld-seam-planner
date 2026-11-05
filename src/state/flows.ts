@@ -816,7 +816,8 @@ export async function importPlan(file: Pick<File, 'name' | 'text'>, client: Geom
     // A slider change still waiting would run its angle after the file's.
     clearTimeout(scheduledDetect)
     useStore.getState().setDetectSettings(settings)
-    const detected = await runDetect(settings, client)
+    const tolerance = plan.settings.weldToleranceRel
+    const detected = tolerance === useStore.getState().weldTolerance ? await runDetect(settings, client) : await runReweld(tolerance, client, settings)
     if (!detected) {
       if (useStore.getState().importState.phase !== 'error') {
         showError({

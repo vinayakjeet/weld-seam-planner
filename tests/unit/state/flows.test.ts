@@ -1528,6 +1528,49 @@ describe('importPlan', () => {
     expect(JSON.stringify(buildJob(selectPlan(state()), { createdAt: CREATED_AT }, []))).toBe(JSON.stringify(job))
   })
 
+  it('welds the part again at the file tolerance before it detects, so the seams match the file', async () => {
+    const plan = samplePlan('double-bottom-cell')
+    const { job, file } = planFile({ ...plan, settings: { ...plan.settings, weldToleranceRel: 2e-4 } })
+    loadPlanPart(plan)
+    const calls: string[] = []
+    const client = fakeClient({
+      reweld: async (tolerance) => {
+        calls.push(`reweld ${tolerance}`)
+        return readyOutcome({ ...plan.part, sourceUnits: 'mm' })
+      },
+      detect: async (settings) => {
+        calls.push(`detect ${settings.creaseAngleDeg}`)
+        return detected(plan.seams.map((p) => p.seam))
+      },
+    })
+    await importPlan(file, client)
+    expect(calls).toEqual(['reweld 0.0002', 'detect 40'])
+    expect(state().weldTolerance).toBe(2e-4)
+    expect(state().manualSeams.length).toBe(plan.seams.length)
+    expect(JSON.stringify(buildJob(selectPlan(state()), { createdAt: CREATED_AT }, []))).toBe(JSON.stringify(job))
+  })
+
+  it('does not weld again when the file tolerance is the current one', async () => {
+    const { plan, file } = planFile()
+    loadPlanPart(plan)
+    const reweld = vi.fn(async () => readyOutcome())
+    await importPlan(file, fakeClient({ reweld, detect: async () => detected(plan.seams.map((p) => p.seam)) }))
+    expect(reweld).not.toHaveBeenCalled()
+    expect(state().info).toContain('Plan restored')
+  })
+
+  it('does not apply the plan when the weld at the file tolerance fails', async () => {
+    const plan = samplePlan('double-bottom-cell')
+    const { file } = planFile({ ...plan, settings: { ...plan.settings, weldToleranceRel: 2e-4 } })
+    loadPlanPart(plan)
+    const detect = vi.fn(async () => detected([]))
+    await importPlan(file, fakeClient({ reweld: async () => ({ status: 'error' as const, error: { what: 'w', why: 'y', next: 'n' } }), detect }))
+    expect(detect).not.toHaveBeenCalled()
+    expect(state().manualSeams).toEqual([])
+    expect(state().weldTolerance).toBe(1e-5)
+    expect(expectErrorState().what).toBe('w')
+  })
+
   it('refuses a plan made for another part and leaves the state as it was', async () => {
     const { plan, file } = planFile()
     loadPlanPart(plan)

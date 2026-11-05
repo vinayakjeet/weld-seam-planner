@@ -302,6 +302,13 @@
           "description": "Duration of one torch cleaning stop in seconds.",
           "type": "number",
           "minimum": 0
+        },
+        "weldToleranceRel": {
+          "default": 0.00001,
+          "description": "Vertex weld tolerance as a fraction of the part bounding box diagonal; the seams were detected on the part welded at it. Absent in files written before it was stored, which used 1e-5.",
+          "type": "number",
+          "minimum": 0.000001,
+          "maximum": 0.001
         }
       },
       "required": [

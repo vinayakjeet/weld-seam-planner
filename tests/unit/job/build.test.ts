@@ -36,7 +36,7 @@ describe('buildJob on the spec example', () => {
     expect(job.frames.partToCell).toEqual({ position: [0, 0, 0], quaternion: [0, 0, 0, 1] })
     expect(job.frames.gravity).toEqual([0, 0, -1])
     expect(job.part.boundingBox.max).toEqual([2400, 1600, 900])
-    expect(job.settings).toEqual({ creaseAngleDeg: 30, poseSpacingMm: 5, airSpeedMmS: 250, approachMm: 50, cleanEveryS: 0, cleanTimeS: 30 })
+    expect(job.settings).toEqual({ creaseAngleDeg: 30, poseSpacingMm: 5, airSpeedMmS: 250, approachMm: 50, cleanEveryS: 0, cleanTimeS: 30, weldToleranceRel: 1e-5 })
   })
 
   it('samples a pose every 5 mm: 161 poses from s 0 to 800', () => {

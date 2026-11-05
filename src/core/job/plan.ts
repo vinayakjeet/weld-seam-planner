@@ -1,5 +1,6 @@
 import type { Vec3 } from '../math/vec3'
 import { effectiveLegMm, legLimits, trustedThickness, type LegSource, type PlateThickness } from '../process/filletRules'
+import { DEFAULT_WELD_TOLERANCE } from '../mesh/weld'
 import { heatInputCheck, heatInputKJmm, type Check } from '../process/heatInput'
 import { depositionTravelMmMin, travelSpeedCheck } from '../process/travelSpeed'
 import { resolveProcedure } from '../process/wps'
@@ -23,6 +24,8 @@ export interface JobSettings {
   // Torch cleaning: one stop of cleanTimeS after every cleanEveryS of arc time. 0 means the torch is not cleaned.
   cleanEveryS: number
   cleanTimeS: number
+  // Vertex weld cell as a fraction of the part's bounding box diagonal; detection ran on the part welded at it.
+  weldToleranceRel: number
 }
 
 export const DEFAULT_JOB_SETTINGS: JobSettings = {
@@ -32,6 +35,7 @@ export const DEFAULT_JOB_SETTINGS: JobSettings = {
   creaseAngleDeg: DEFAULT_DETECT_SETTINGS.creaseAngleDeg,
   cleanEveryS: 0,
   cleanTimeS: 30,
+  weldToleranceRel: DEFAULT_WELD_TOLERANCE,
 }
 
 // What the worker reports about the loaded part, plus its hash. core cannot import the worker's PartInfo.

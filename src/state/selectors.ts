@@ -148,7 +148,7 @@ export function selectPlan(state: AppState): Plan {
   const deps = [
     state.part, state.seams, state.manualSeams, state.supersededIds, state.showCorners, state.statusById, state.typeById,
     state.thicknessById, state.procedures, state.procedureById, state.overridesById, state.legById, state.accessById, state.accessPointsById, state.reachById, state.reachPointsById, state.reachKeyById, state.strategy, state.order, state.ports, state.arm, state.gravity,
-    state.detectSettings.creaseAngleDeg, state.jobSettings,
+    state.detectSettings.creaseAngleDeg, state.jobSettings, state.weldTolerance,
   ]
   if (cachedPlan && cachedPlan.deps.every((d, i) => d === deps[i])) return cachedPlan.plan
   const seams = visibleSeams(selectAllSeams(state), state.showCorners)
@@ -157,7 +157,7 @@ export function selectPlan(state: AppState): Plan {
   const plan: Plan = {
     part: state.part ?? NO_PART,
     gravity: state.gravity,
-    settings: { ...state.jobSettings, creaseAngleDeg: state.detectSettings.creaseAngleDeg },
+    settings: { ...state.jobSettings, creaseAngleDeg: state.detectSettings.creaseAngleDeg, weldToleranceRel: state.weldTolerance },
     procedures: state.procedures,
     seams,
     sequence: null,

@@ -84,6 +84,20 @@ describe('importJob', () => {
     expect(r.plan.settings).toMatchObject({ cleanEveryS: 0, cleanTimeS: 30 })
   })
 
+  it('reads a job written before the weld tolerance was stored at the default tolerance', () => {
+    const job = JSON.parse(JSON.stringify(specJob()))
+    delete job.settings.weldToleranceRel
+    const r = importJob(job, SHA)
+    if (r.status !== 'ok') throw new Error(r.error.what)
+    expect(r.plan.settings.weldToleranceRel).toBe(1e-5)
+  })
+
+  it('refuses a weld tolerance outside the range the app welds at, naming the field', () => {
+    const job = JSON.parse(JSON.stringify(specJob()))
+    job.settings.weldToleranceRel = 0.5
+    expect(refused(importJob(job, SHA)).why).toContain('settings.weldToleranceRel')
+  })
+
   it('accepts the job as a string or as an object', () => {
     expect(importJob(JSON.stringify(specJob()), SHA).status).toBe('ok')
     expect(importJob(specJob(), SHA).status).toBe('ok')
@@ -162,6 +176,14 @@ describe('round trip', () => {
 
   it('is byte identical for pipe-on-plate', () => {
     const { text, again } = roundTrip(samplePlan('pipe-on-plate'))
+    expect(again).toBe(text)
+  })
+
+  it('writes the weld tolerance and keeps it, at the default and at another value', () => {
+    expect(JSON.parse(roundTrip(samplePlan('t-joint-merged')).text).settings.weldToleranceRel).toBe(1e-5)
+    const plan = samplePlan('t-joint-merged', (p) => ({ ...p, settings: { ...p.settings, weldToleranceRel: 2.5e-4 } }))
+    const { text, again } = roundTrip(plan)
+    expect(JSON.parse(text).settings.weldToleranceRel).toBe(2.5e-4)
     expect(again).toBe(text)
   })
 

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { DEFAULT_WELD_TOLERANCE, WELD_TOLERANCE_RANGE } from '../mesh/weld'
 import { PROCESSES } from '../process/heatInput'
 import { SEQUENCE_STRATEGIES } from '../sequence/types'
 
@@ -283,6 +284,15 @@ export const jobSchema = z
         approachMm: nonNegative,
         cleanEveryS: nonNegative.optional().meta({ description: 'Arc time between torch cleaning stops in seconds, 0 for none. Absent in files written before cleaning was modelled.' }),
         cleanTimeS: nonNegative.optional().meta({ description: 'Duration of one torch cleaning stop in seconds.' }),
+        weldToleranceRel: z
+          .number()
+          .min(WELD_TOLERANCE_RANGE.min)
+          .max(WELD_TOLERANCE_RANGE.max)
+          .default(DEFAULT_WELD_TOLERANCE)
+          .meta({
+            description:
+              'Vertex weld tolerance as a fraction of the part bounding box diagonal; the seams were detected on the part welded at it. Absent in files written before it was stored, which used 1e-5.',
+          }),
       })
       .meta({ description: 'Detection and export settings used, so the file is reproducible.' }),
     procedures: z.array(procedureSchema).meta({ description: 'Reusable weld procedures referenced by seams.' }),

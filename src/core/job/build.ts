@@ -287,6 +287,7 @@ export function buildJob(plan: Plan, options: { createdAt: string }, issues: Job
       approachMm: settings.approachMm,
       cleanEveryS: settings.cleanEveryS,
       cleanTimeS: settings.cleanTimeS,
+      weldToleranceRel: settings.weldToleranceRel,
     },
     procedures: plan.procedures.filter((p) => referenced.has(p.id)),
     seams: built.map((b) => b.seam),
