@@ -6,8 +6,9 @@ import type { PlanTiming } from '../core/job/timing'
 import { procedureOverridesSchema, procedureSchema, type Procedure, type ProcedureOverrides } from '../core/job/schema'
 import type { PlateThickness } from '../core/process/filletRules'
 import { WPS_PRESETS } from '../core/process/wps'
+import { clampArm } from '../core/snake/arm'
 import { clearHistory } from './history'
-import { nextNumberAfter } from './portsSlice'
+import { nextNumberAfter, PORT_DIAMETER_MM } from './portsSlice'
 import type { AppState } from './store'
 
 export interface PlanSlice {
@@ -321,8 +322,9 @@ export const createPlanSlice: StateCreator<AppState, [], [], PlanSlice> = (set, 
         thicknessById: {},
         strategy: plan.sequence?.strategy ?? 'table-order',
         order: (plan.sequence?.order ?? []).map((entry) => ({ ...entry, locked: false })),
-        ports: plan.access.ports,
-        arm: plan.access.arm,
+        // A file can be edited by hand; the arm and ports keep to the limits the Access fields allow.
+        ports: plan.access.ports.map((port) => ({ ...port, diameterMm: Math.min(PORT_DIAMETER_MM.max, Math.max(PORT_DIAMETER_MM.min, port.diameterMm)) })),
+        arm: clampArm(plan.access.arm),
         nextPortNumber: Math.max(state.nextPortNumber, nextNumberAfter(plan.access.ports)),
         selectedPortId: null,
         placingPort: false,

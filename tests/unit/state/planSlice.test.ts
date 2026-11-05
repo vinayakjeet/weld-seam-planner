@@ -379,6 +379,20 @@ describe('applyImportedPlan', () => {
     state().applyImportedPlan(imported.plan)
     expect(state().nextDrawnId).toBe(8)
   })
+
+  it('keeps an arm and a port from a hand-edited file inside the limits the Access fields allow', () => {
+    const source = samplePlan('t-joint-merged')
+    const plan = {
+      ...source,
+      access: {
+        ports: [{ id: 'P1', position: [0, 0, 500] as [number, number, number], direction: [0, 0, -1] as [number, number, number], diameterMm: 9000 }],
+        arm: { ...source.access.arm, links: 1, maxBendDeg: 90 },
+      },
+    }
+    state().applyImportedPlan(plan)
+    expect(state().arm).toMatchObject({ links: 2, maxBendDeg: 45 })
+    expect(state().ports[0]!.diameterMm).toBe(2000)
+  })
 })
 
 describe('job settings', () => {
