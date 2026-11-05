@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { importBuffer } from '../../../src/state/flows'
-import { AUTOSAVE_DELAY_MS, beginDemoSession, restoreSaved, startAutosave, startFresh, type PlanStorage } from '../../../src/state/autosave'
+import { AUTOSAVE_DELAY_MS, beginDemoSession, flushAutosave, restoreSaved, startAutosave, startFresh, type PlanStorage } from '../../../src/state/autosave'
 import { pointsFromPolyline } from '../../../src/core/seams/frames'
 import { legacySeamId } from '../../../src/core/seams/seamId'
 import { savedKey, snapshotOf } from '../../../src/state/savedPlan'
@@ -423,5 +423,37 @@ describe('a demo session', () => {
 
   it('does nothing when autosave is not running', () => {
     expect(() => beginDemoSession()).not.toThrow()
+  })
+})
+
+describe('autosave does not lose the last second of edits', () => {
+  it('writes a pending change for the old part before another part loads', async () => {
+    const { storage, data } = memoryStorage()
+    const stop = startAutosave(storage)
+    await importBuffer(new ArrayBuffer(8), 'a.stl', loadClient())
+    state().toggleAccepted('a')
+    await importBuffer(new ArrayBuffer(8), 'b.stl', loadClient({ loadStl: async () => readyOutcome({ name: 'b.stl', sha256: 'b'.repeat(64) }) }))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(data.get(KEY)).toMatchObject({ statusById: { a: 'accepted' } })
+    stop()
+  })
+
+  it('writes a pending change at once when the page is closing', async () => {
+    const { storage, data } = memoryStorage()
+    const stop = startAutosave(storage)
+    loadedPart()
+    state().toggleAccepted('b')
+    await flushAutosave()
+    expect(data.get(KEY)).toMatchObject({ statusById: { b: 'accepted' } })
+    stop()
+  })
+
+  it('writes nothing on a flush when nothing is pending', async () => {
+    const { storage, sets } = memoryStorage()
+    const stop = startAutosave(storage)
+    loadedPart()
+    await flushAutosave()
+    expect(sets).toEqual([])
+    stop()
   })
 })

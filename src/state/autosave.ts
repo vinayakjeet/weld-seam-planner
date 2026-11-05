@@ -50,8 +50,7 @@ function rebase(): void {
   active.sha256 = state.part?.sha256 ?? null
 }
 
-async function save(current: Active): Promise<void> {
-  const state = useStore.getState()
+async function save(current: Active, state: AppState = useStore.getState()): Promise<void> {
   // The offer is a question about the stored entry; writing now would answer it for the user.
   if (current.off || current.demo !== null || state.part === null || state.offer !== null || state.part.sha256 !== current.sha256) return
   try {
@@ -73,9 +72,11 @@ export function startAutosave(storage: PlanStorage, delayMs = AUTOSAVE_DELAY_MS)
   const current: Active = { storage, timer: undefined, last: read(state), sha256: state.part?.sha256 ?? null, off: false, demo: null }
   active = current
   const unregister = registerAfterLoad(offerRestore)
-  const unsubscribe = useStore.subscribe((next) => {
+  const unsubscribe = useStore.subscribe((next, previous) => {
     const sha256 = next.part?.sha256 ?? null
     if (sha256 !== current.sha256) {
+      // A change still waiting belongs to the part being replaced, and only the previous state still holds it.
+      if (current.timer !== undefined) void save(current, previous)
       if (current.demo) {
         if (current.demo.sha === null && sha256 !== null) current.demo.sha = sha256
         else if (sha256 !== current.demo.sha) current.demo = null
@@ -88,7 +89,10 @@ export function startAutosave(storage: PlanStorage, delayMs = AUTOSAVE_DELAY_MS)
     current.last = fields
     if (next.part === null || next.offer !== null) return
     clearTimeout(current.timer)
-    current.timer = setTimeout(() => void save(current), delayMs)
+    current.timer = setTimeout(() => {
+      current.timer = undefined
+      void save(current)
+    }, delayMs)
   })
   return () => {
     unsubscribe()
@@ -96,6 +100,14 @@ export function startAutosave(storage: PlanStorage, delayMs = AUTOSAVE_DELAY_MS)
     clearTimeout(current.timer)
     if (active === current) active = null
   }
+}
+
+// Writes a change that is still waiting for the delay, now: the page is closing or being hidden.
+export async function flushAutosave(): Promise<void> {
+  if (!active || active.timer === undefined) return
+  clearTimeout(active.timer)
+  active.timer = undefined
+  await save(active)
 }
 
 // Called before a demo link loads its sample: the restore question is skipped for that load, and the plan the demo builds

@@ -5,7 +5,7 @@ const assembly = sampleById('t-joint-assembly')
 const SEAMS = expectedSeams(assembly)
 
 // idb-keyval keeps entries in the "keyval-store" database. The save is debounced, so the tests wait for the entry to appear.
-async function waitForSavedPlan(page: Page) {
+async function waitForSavedPlan(page: Page, timeout = 10_000) {
   await expect
     .poll(
       () =>
@@ -33,7 +33,7 @@ async function waitForSavedPlan(page: Page) {
               }
             }),
         ),
-      { timeout: 10_000 },
+      { timeout },
     )
     .toBeGreaterThan(0)
 }
@@ -67,4 +67,17 @@ test('Start fresh leaves the part untouched and keeps the saved plan for the nex
   await page.reload()
   await page.getByRole('button', { name: assembly.name, exact: true }).click()
   await expect(page.getByRole('dialog', { name: 'Restore your saved plan?' })).toBeVisible()
+})
+
+test('a change still waiting for the autosave delay is written as soon as the page hides', async ({ page }) => {
+  await page.goto('/')
+  await loadSample(page, assembly)
+  await page.getByRole('button', { name: 'Accept all above 0.70' }).click()
+  await expect(statusBar(page)).toContainText(counts(SEAMS, 0))
+  await page.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide')))
+  // Well inside the one second delay, so only the write on pagehide can have stored it.
+  await waitForSavedPlan(page, 500)
+  await page.reload()
+  await page.getByRole('button', { name: assembly.name, exact: true }).click()
+  await expect(page.getByRole('dialog', { name: 'Restore your saved plan?' })).toContainText(`${SEAMS} accepted seams`)
 })
