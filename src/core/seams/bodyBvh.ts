@@ -39,6 +39,33 @@ export function wholeBvhFor(model: MeshModel): BodyBvh | null {
   return model.bodies.count > 1 ? null : buildWholeBvh(model)
 }
 
+export interface SharedWhole {
+  // The model with its positions and indices moved into shared memory (same values).
+  model: MeshModel
+  whole: BodyBvh
+}
+
+// The whole-mesh BVH built over copies of the model's arrays that live in SharedArrayBuffers, so the page can use the
+// same positions, indices and tree for picking while the worker uses them for rays. Indirect, so the index keeps the
+// triangle order of the model and a hit's face index is a triangle of the model.
+export function buildSharedWholeBvh(model: MeshModel, onProgress?: (fraction: number) => void): SharedWhole {
+  const positions = new Float32Array(new SharedArrayBuffer(model.mesh.positions.byteLength))
+  positions.set(model.mesh.positions)
+  const indices = new Uint32Array(new SharedArrayBuffer(model.mesh.indices.byteLength))
+  indices.set(model.mesh.indices)
+  const geometry = new BufferGeometry()
+  geometry.setAttribute('position', new BufferAttribute(positions, 3))
+  geometry.setIndex(new BufferAttribute(indices, 1))
+  const bvh = new MeshBVH(geometry, { indirect: true, useSharedArrayBuffer: true, onProgress })
+  const triangles = Uint32Array.from({ length: model.mesh.triangleCount }, (_, t) => t)
+  return { model: { ...model, mesh: { ...model.mesh, positions, indices } }, whole: bodyBvhOf(bvh, triangles) }
+}
+
+function bodyBvhOf(bvh: MeshBVH, triangles: Uint32Array): BodyBvh {
+  const box = bvh.getBoundingBox(new Box3())
+  return { bvh, triangles, min: [box.min.x, box.min.y, box.min.z], max: [box.max.x, box.max.y, box.max.z] }
+}
+
 function indexTriangles(model: MeshModel, triangles: Uint32Array): BodyBvh {
   const { positions, indices } = model.mesh
   const index = new Uint32Array(triangles.length * 3)
@@ -47,9 +74,7 @@ function indexTriangles(model: MeshModel, triangles: Uint32Array): BodyBvh {
   geometry.setAttribute('position', new BufferAttribute(positions, 3))
   geometry.setIndex(new BufferAttribute(index, 1))
   // Indirect keeps the index in triangle order, which the triangles map relies on.
-  const bvh = new MeshBVH(geometry, { indirect: true })
-  const box = bvh.getBoundingBox(new Box3())
-  return { bvh, triangles, min: [box.min.x, box.min.y, box.min.z], max: [box.max.x, box.max.y, box.max.z] }
+  return bodyBvhOf(new MeshBVH(geometry, { indirect: true }), triangles)
 }
 
 // Not along any axis or any likely face, so the ray does not run along a plate or through an edge.

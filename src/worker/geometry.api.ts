@@ -23,7 +23,7 @@ import { featureEdgePositions } from '../core/mesh/featureEdges'
 import { buildMeshModel, type MeshModel } from '../core/mesh/model'
 import { parseStl, StlError } from '../core/mesh/parseStl'
 import { guessUnits, scaleToMm, type KnownUnits, type Units } from '../core/mesh/units'
-import { buildBodyBvhs, buildWholeBvh, type BodyBvh } from '../core/seams/bodyBvh'
+import { buildBodyBvhs, buildSharedWholeBvh, buildWholeBvh, type BodyBvh } from '../core/seams/bodyBvh'
 import { detectSeams, type DetectSettings, type SeamCandidate } from '../core/seams/detect'
 import { buildSnapContext, snapPoint, snapPolyline, type DrawClick, type SnapContext } from '../core/seams/draw'
 import { isManualError } from '../core/seams/manual'
@@ -235,6 +235,18 @@ function buildDisplay(model: MeshModel, report: Progress): DisplayData {
   }
 }
 
+// The page and the worker share memory only when the page is cross-origin isolated, which the host's COOP and COEP
+// headers give (scripts/isolationHeaders.ts).
+function canShareMemory(): boolean {
+  return globalThis.crossOriginIsolated === true && typeof SharedArrayBuffer === 'function'
+}
+
+// A part drawn in its own coordinates is drawn from the worker's own arrays and tree. A part drawn relative to a
+// display origin has other coordinates than the worker queries in, so it keeps the copy.
+function sharesDisplay(model: MeshModel): boolean {
+  return displayOrigin(model.bounds).every((c) => c === 0)
+}
+
 function describePart(model: MeshModel, name: string, sha256: string, units: KnownUnits): PartInfo {
   return {
     name,
@@ -252,7 +264,12 @@ function describePart(model: MeshModel, name: string, sha256: string, units: Kno
   }
 }
 
-export function createGeometryApi(): GeometryApi {
+export interface GeometryApiOptions {
+  // Build the display BVH in shared memory and use it in the worker too. Defaults to whether this worker is cross-origin isolated.
+  shareBuffers?: boolean
+}
+
+export function createGeometryApi({ shareBuffers = canShareMemory() }: GeometryApiOptions = {}): GeometryApi {
   let pending: { soup: Float32Array; name: string; sha256: string } | null = null
   let current: MeshModel | null = null
   // Built on the first detect of a multi body part and kept until another part replaces it.
@@ -265,17 +282,34 @@ export function createGeometryApi(): GeometryApi {
   let snapContext: SnapContext | null = null
 
   function build(soup: Float32Array, name: string, sha256: string, units: KnownUnits, report: Progress): LoadOutcome {
-    const model = buildMeshModel(soup, scaleToMm(units), (stage) => report(stage, STAGE_START[stage]))
+    const built = buildMeshModel(soup, scaleToMm(units), (stage) => report(stage, STAGE_START[stage]))
     report('index', STAGE_START.index)
-    const display = buildDisplay(model, report)
+    const shared = shareBuffers && sharesDisplay(built)
+    let model = built
+    let whole: BodyBvh | null = null
+    let display: DisplayData
+    if (shared) {
+      const part = buildSharedWholeBvh(built, (p) => report('index', STAGE_START.index + (1 - STAGE_START.index) * p))
+      model = part.model
+      whole = part.whole
+      display = {
+        positions: model.mesh.positions,
+        indices: model.mesh.indices,
+        bvh: MeshBVH.serialize(whole.bvh, { cloneBuffers: false }),
+        edges: featureEdgePositions(model, computeFaceData(model.mesh), EDGE_THRESHOLD_DEG, displayOrigin(model.bounds)),
+      }
+    } else {
+      display = buildDisplay(model, report)
+    }
     report('index', 1)
     // Only a fully built part replaces the current one, so a failed load leaves the old part usable.
     current = model
     bodyBvhs = null
-    partBvh = null
+    partBvh = whole
     snapContext = null
     const outcome: LoadOutcome = { status: 'ready', part: describePart(model, name, sha256, units), display }
-    const buffers = [display.positions.buffer, display.indices.buffer, display.edges.buffer, ...display.bvh.roots]
+    // Shared memory is not transferred: both threads keep it.
+    const buffers = shared ? [display.edges.buffer] : [display.positions.buffer, display.indices.buffer, display.edges.buffer, ...display.bvh.roots]
     return transfer(outcome, buffers as Transferable[])
   }
 
