@@ -7,6 +7,7 @@ import { buildWholeBvh } from './bodyBvh'
 import type { SeamCandidate } from './detect'
 import { pointsFromPolyline } from './frames'
 import type { ManualError } from './manual'
+import { buildEdgeIndex, nearestEdge, type EdgeIndex } from './edgeIndex'
 
 export interface DrawClick {
   p: Vec3
@@ -22,6 +23,8 @@ export interface SnapContext {
   featureEdges: Uint32Array
   // Feature edges meeting at each vertex.
   edgesAt: Map<number, number[]>
+  // The feature edges on a grid, so a click looks only at the edges near it.
+  index: EdgeIndex
   // Whole-mesh BVH for projecting onto the surface; built on first use.
   surface: () => MeshBVH
 }
@@ -54,7 +57,15 @@ export function buildSnapContext(model: MeshModel, faces: FaceData, surface?: ()
     }
   }
   let bvh: MeshBVH | null = null
-  return { model, faces, featureEdges: Uint32Array.from(feature), edgesAt, surface: surface ?? (() => (bvh ??= buildWholeBvh(model).bvh)) }
+  const featureEdges = Uint32Array.from(feature)
+  return {
+    model,
+    faces,
+    featureEdges,
+    edgesAt,
+    index: buildEdgeIndex(model, featureEdges),
+    surface: surface ?? (() => (bvh ??= buildWholeBvh(model).bvh)),
+  }
 }
 
 const vertex = (ctx: SnapContext, v: number): Vec3 => {
@@ -70,20 +81,7 @@ interface Snap {
 }
 
 function nearestFeature(ctx: SnapContext, p: Vec3, radius: number): Snap | null {
-  let best: Snap | null = null
-  let bestDistance = radius
-  for (const e of ctx.featureEdges) {
-    const a = vertex(ctx, ctx.model.edges.edgeA[e]!)
-    const ab = sub(vertex(ctx, ctx.model.edges.edgeB[e]!), a)
-    const u = Math.min(1, Math.max(0, dot(sub(p, a), ab) / dot(ab, ab)))
-    const point = add(a, scale(ab, u))
-    const distance = length(sub(p, point))
-    if (distance <= bestDistance) {
-      bestDistance = distance
-      best = { point, edge: e }
-    }
-  }
-  return best
+  return nearestEdge(ctx.index, p, radius)
 }
 
 // Where a click at p lands: the nearest point on a feature edge within the radius, or null. The first click of a drawn seam
