@@ -53,14 +53,18 @@ export function extrude(profile: Profile, cap: CapTriangles, depth: number, plac
   return tris
 }
 
-// A 100 x 60 x 10 plate lapped by another over 40 mm, as one body (profile in x and z, extruded along y).
-export const steppedLap = () =>
-  extrude(
-    [[0, 0], [100, 0], [100, 10], [160, 10], [160, 20], [60, 20], [60, 10], [0, 10]],
+// A 100 x 60 x 10 plate lapped by another 100 mm long over 40 mm, as one body (profile in x and z, extruded along y).
+// The plate thicknesses, the plate length and the overlap can be changed; the depth stays 60.
+export const steppedLap = ({ lower = 10, upper = 10, length = 100, overlap = 40 } = {}) => {
+  const start = length - overlap
+  const end = start + length
+  return extrude(
+    [[0, 0], [length, 0], [length, lower], [end, lower], [end, lower + upper], [start, lower + upper], [start, lower], [0, lower]],
     [[0, 1, 6], [0, 6, 7], [1, 2, 6], [5, 6, 2], [5, 2, 3], [5, 3, 4]],
     60,
     (x, z, y) => [x, y, z],
   )
+}
 
 // Two 10 mm plates 100 mm long joined end on end into an L as one body, 60 mm deep (profile in x and z, extruded
 // along y). The heel at x 0, z 0 is the outside corner of the joint; the inside corner at x 10, z 10 is its fillet.

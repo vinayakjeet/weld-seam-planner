@@ -12,21 +12,30 @@ const loop = (radius: number, height: (theta: number) => number, count = 72) =>
     return { p: [radius * Math.cos(theta), radius * Math.sin(theta), height(theta)] as [number, number, number] }
   })
 
-const base = { source: 'crease' as const, closed: false, points: [], stripWidthMm: 80, touchedThicknessMm: 10, convex: false }
+const base = { source: 'crease' as const, closed: false, points: [], stripWidthMm: 80, touchedThicknessMm: 10, stripLengthMm: 10, convex: false }
 
 describe('classifyJoint', () => {
-  it('calls a strip about one plate thickness wide a lap and a wide face a fillet', () => {
-    expect(classifyJoint({ ...base, stripWidthMm: 10 })).toBe('lap')
-    expect(classifyJoint({ ...base, stripWidthMm: 80 })).toBe('fillet')
+  it('calls the end face of a plate lying on another a lap and the side of a standing web a fillet', () => {
+    // A 10 mm plate lapped 100 mm on a 10 mm plate: the strip is 10 wide and its plate runs 100 behind it.
+    expect(classifyJoint({ ...base, stripWidthMm: 10, stripLengthMm: 100 })).toBe('lap')
+    // The side of an 80 mm web has only the 10 mm web behind it.
+    expect(classifyJoint({ ...base, stripWidthMm: 80, stripLengthMm: 10 })).toBe('fillet')
   })
 
-  it('puts the lap boundary at 1.5 plate thicknesses', () => {
-    expect(classifyJoint({ ...base, stripWidthMm: 15 })).toBe('lap')
-    expect(classifyJoint({ ...base, stripWidthMm: 15.1 })).toBe('fillet')
+  it('calls plates of very different thickness a lap whichever one lies on top', () => {
+    expect(classifyJoint({ ...base, stripWidthMm: 20, touchedThicknessMm: 6, stripLengthMm: 100 })).toBe('lap')
+    expect(classifyJoint({ ...base, stripWidthMm: 3, touchedThicknessMm: 40, stripLengthMm: 100 })).toBe('lap')
+  })
+
+  it('needs the strip to be the narrow end of its plate', () => {
+    // A web 30 thick and 80 tall on a 6 mm flange runs only 30 behind its 80 mm side.
+    expect(classifyJoint({ ...base, stripWidthMm: 80, touchedThicknessMm: 6, stripLengthMm: 30 })).toBe('fillet')
+    expect(classifyJoint({ ...base, stripWidthMm: 30, touchedThicknessMm: 6, stripLengthMm: 29.9 })).toBe('fillet')
+    expect(classifyJoint({ ...base, stripWidthMm: 30, touchedThicknessMm: 6, stripLengthMm: 30 })).toBe('lap')
   })
 
   it('applies the lap rule to contact seams too', () => {
-    expect(classifyJoint({ ...base, source: 'contact', stripWidthMm: 10 })).toBe('lap')
+    expect(classifyJoint({ ...base, source: 'contact', stripWidthMm: 10, stripLengthMm: 100 })).toBe('lap')
   })
 
   // AWS D1.1 asks a lap for an overlap of five times the thinner part and at least 25 mm, so the plate behind the strip
@@ -41,11 +50,14 @@ describe('classifyJoint', () => {
     expect(classifyJoint({ ...base, stripWidthMm: 12, touchedThicknessMm: 8, stripLengthMm: 39.9 })).toBe('fillet')
   })
 
-  it('never calls a seam a lap when the thickness behind it is unknown', () => {
+  it('never calls a seam a lap when a plate behind it is unknown', () => {
     for (const touchedThicknessMm of [Infinity, NaN, 0]) {
-      expect(classifyJoint({ ...base, stripWidthMm: 5, touchedThicknessMm }), String(touchedThicknessMm)).toBe('fillet')
+      expect(classifyJoint({ ...base, stripWidthMm: 5, stripLengthMm: 100, touchedThicknessMm }), String(touchedThicknessMm)).toBe('fillet')
     }
-    expect(classifyJoint({ ...base, stripWidthMm: Infinity })).toBe('fillet')
+    for (const stripLengthMm of [Infinity, NaN, 0]) {
+      expect(classifyJoint({ ...base, stripWidthMm: 5, stripLengthMm }), String(stripLengthMm)).toBe('fillet')
+    }
+    expect(classifyJoint({ ...base, stripWidthMm: Infinity, stripLengthMm: 100 })).toBe('fillet')
   })
 
   it('calls every convex edge a corner, whatever its width', () => {

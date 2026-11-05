@@ -319,6 +319,16 @@ describe('joint classification', () => {
     for (const seam of seams) expect(seam.lengthMm).toBeCloseTo(60, 1)
   })
 
+  it('calls a 20 mm plate lapped on a 6 mm plate a lap, as two bodies and as one', () => {
+    const lower = cubeTriangles([0, 0, 0], [300, 60, 6])
+    const upper = cubeTriangles([200, 0, 6], [300, 60, 20])
+    const apart = shown(detectSeams(buildMeshModel(soupOf([...lower, ...upper]), 1), DEFAULT_DETECT_SETTINGS))
+    expect(apart.map((s) => [s.source, s.jointType])).toEqual([['contact', 'lap'], ['contact', 'lap']])
+    const merged = shown(detectSeams(buildMeshModel(soupOf(steppedLap({ lower: 6, upper: 20, length: 300, overlap: 100 })), 1), DEFAULT_DETECT_SETTINGS))
+    expect(merged.map((s) => [s.source, s.jointType])).toEqual([['crease', 'lap'], ['crease', 'lap']])
+    for (const seam of [...apart, ...merged]) expect([...seam.thicknessMm].sort((a, b) => a! - b!)).toEqual([6, 20])
+  })
+
   it('calls the ends of a lap modelled as one body laps as well', () => {
     const model = buildMeshModel(soupOf(steppedLap()), 1)
     expect(model.bodies.count).toBe(1)

@@ -9,7 +9,7 @@ import type { RayProbe } from './thickness'
 
 export type JointType = 'fillet' | 'lap' | 'corner' | 'saddle'
 
-// A strip is a lap when it is at most this many plate thicknesses wide.
+// A face is the end face of the plate behind another when it is at most this many plate thicknesses wide.
 const LAP_RATIO = 1.5
 // A loop is a saddle when it leaves its best-fit plane by more than this share of its mean radius.
 const SADDLE_FRACTION = 0.03
@@ -21,13 +21,11 @@ export interface JointInput {
   source: SeamSource
   closed: boolean
   points: Array<Pick<SeamPoint, 'p'>>
-  // Width of the free face's flat patch measured away from the seam, and the thickness of the plate behind the
-  // touched surface. Infinity (or NaN) means unknown, which can never make a lap.
+  // Width of the free face's flat patch measured away from the seam, the thickness of the plate behind the touched
+  // surface, and the depth of the plate behind the free face. Infinity (or NaN) means unknown, which can never make a lap.
   stripWidthMm: number
   touchedThicknessMm: number
-  // Depth of the plate behind the strip, from the strip face into the material. Absent or Infinity means unknown,
-  // which does not stop a lap.
-  stripLengthMm?: number
+  stripLengthMm: number
   convex: boolean
 }
 
@@ -35,10 +33,13 @@ export interface JointInput {
 const LAP_OVERLAP_RATIO = 5
 const MIN_LAP_OVERLAP_MM = 25
 
-// A strip about one plate thickness wide, on the end of a plate long enough to make the minimum lap overlap. A strip
-// on a shorter block is the overhang of a narrow flange, and the joint is a T.
-export function isLap(stripWidthMm: number, touchedThicknessMm: number, stripLengthMm = Infinity): boolean {
-  if (!(Number.isFinite(touchedThicknessMm) && touchedThicknessMm > 0 && stripWidthMm <= LAP_RATIO * touchedThicknessMm)) return false
+// The free face of a lap is the end face of the lapping plate, so its width is that plate's thickness, and the plate
+// runs back from it at least as far as it is wide and as far as the minimum lap overlap. The thickness of the touched
+// plate only enters the overlap, so plates of very different thickness still lap. The side of a web has only the web
+// thickness behind it, and the overhang of a narrow flange only the flange, so both stay T fillets.
+export function isLap(stripWidthMm: number, touchedThicknessMm: number, stripLengthMm: number): boolean {
+  if (!(Number.isFinite(touchedThicknessMm) && touchedThicknessMm > 0)) return false
+  if (!(Number.isFinite(stripWidthMm) && Number.isFinite(stripLengthMm) && stripLengthMm >= stripWidthMm)) return false
   return stripLengthMm >= Math.max(MIN_LAP_OVERLAP_MM, LAP_OVERLAP_RATIO * Math.min(stripWidthMm, touchedThicknessMm))
 }
 
