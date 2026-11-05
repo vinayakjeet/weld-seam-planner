@@ -772,13 +772,13 @@ describe('manual tool flows', () => {
       state().select('a')
       await chooseTool('split', none)
       await toolEvent({ type: 'click', target: { kind: 'seam', id: 'a', s: 80 } }, none)
-      expect(ids()).toEqual(['b', 'c', 'a/a', 'a/b'])
+      expect(ids()).toEqual(['a/a', 'a/b', 'b', 'c'])
       expect(state().selectedId).toBe('a/a')
       expect(state().tool).toEqual({ tool: 'select' })
       undoEdit()
       expect(ids()).toEqual(['a', 'b', 'c'])
       redoEdit()
-      expect(ids()).toEqual(['b', 'c', 'a/a', 'a/b'])
+      expect(ids()).toEqual(['a/a', 'a/b', 'b', 'c'])
     })
 
     it('shows the refusal for a split too near an end and stays armed for another click', async () => {
@@ -796,7 +796,7 @@ describe('manual tool flows', () => {
       state().select('a')
       await chooseTool('merge', none)
       await toolEvent({ type: 'click', target: { kind: 'seam', id: 'b', s: 0 } }, none)
-      expect(ids()).toEqual(['c', 'a+b'])
+      expect(ids()).toEqual(['a+b', 'c'])
       expect(state().tool).toEqual({ tool: 'select' })
       undoEdit()
       expect(ids()).toEqual(['a', 'b', 'c'])
@@ -845,7 +845,7 @@ describe('manual tool flows', () => {
       expect(ids()).toEqual(['b', 'c'])
       expect(state().selectedId).toBeNull()
       undoEdit()
-      expect(ids()).toEqual(['b', 'c', 'a~r'])
+      expect(ids()).toEqual(['a~r', 'b', 'c'])
     })
 
     it('trim cuts the typed amounts from each end; empty means zero', () => {
@@ -890,7 +890,7 @@ describe('manual tool flows', () => {
       undoEdit()
       expect(state().selectedId).toBeNull()
       redoEdit()
-      expect(ids()).toEqual(['b', 'c', 'a/a', 'a/b'])
+      expect(ids()).toEqual(['a/a', 'a/b', 'b', 'c'])
     })
 
     it('undo keeps a selection that still exists', () => {
@@ -961,6 +961,7 @@ describe('torch flows', () => {
       useStore.setState({ seams: [flat()] })
       await refreshPositions(torchClient())
       const before = state().positionsById
+      state().setGravity([-1, 0, 0])
       const error = { what: 'Welding positions failed.', why: 'The worker stopped.', next: 'Reload the page.' }
       await refreshPositions(torchClient({ torchPositions: async () => ({ status: 'error', error }) }))
       expect(state().notice).toEqual(error)
@@ -977,6 +978,40 @@ describe('torch flows', () => {
         }),
       )
       expect(state().notice?.what).toBeTruthy()
+    })
+
+    it('asks only for the seams whose answer is missing or out of date and keeps the others', async () => {
+      const asked: string[][] = []
+      const client = torchClient({
+        torchPositions: async (seams, gravity) => {
+          asked.push(seams.map((s) => s.id))
+          return real.torchPositions(seams, gravity)
+        },
+      })
+      useStore.setState({ seams: [flat(), upright()] })
+      await refreshPositions(client)
+      const flatEntry = state().positionsById.flat
+      state().splitAt('upright', 40)
+      await refreshPositions(client)
+      expect(asked).toEqual([['flat', 'upright'], ['upright/a', 'upright/b']])
+      expect(Object.keys(state().positionsById)).toEqual(['flat', 'upright/a', 'upright/b'])
+      expect(state().positionsById.flat).toBe(flatEntry)
+    })
+
+    it('asks for every seam again when the gravity changes, and for none when nothing changed', async () => {
+      const asked: string[][] = []
+      const client = torchClient({
+        torchPositions: async (seams, gravity) => {
+          asked.push(seams.map((s) => s.id))
+          return real.torchPositions(seams, gravity)
+        },
+      })
+      useStore.setState({ seams: [flat(), upright()] })
+      await refreshPositions(client)
+      await refreshPositions(client)
+      state().setGravity([-1, 0, 0])
+      await refreshPositions(client)
+      expect(asked).toEqual([['flat', 'upright'], ['flat', 'upright']])
     })
 
     it('ignores an older answer that arrives after a newer one', async () => {
@@ -1116,6 +1151,20 @@ describe('torch flows', () => {
 
       state().select(null)
       await vi.waitFor(() => expect(state().posesForSelected).toBeNull())
+    })
+
+    it('use the angles of the seam procedure, and are worked out again when its angle changes', async () => {
+      const seams = [flat()]
+      useStore.setState({ seams })
+      stop = startTorchSync(torchClient())
+      state().select('flat')
+      await vi.waitFor(() => expect(posesFor(state(), seams[0]!)).not.toBeNull())
+      const plain = posesFor(state(), seams[0]!)![1]!.q
+      state().assignProcedure(['flat'], 'WPS-GMAW-SPRAY-FW6')
+      await vi.waitFor(() => expect(posesFor(state(), seams[0]!)![1]!.q).not.toEqual(plain))
+      const first = posesFor(state(), seams[0]!)![1]!.q
+      state().setOverride(['flat'], { torch: { travelAngleDeg: 40 } })
+      await vi.waitFor(() => expect(posesFor(state(), seams[0]!)![1]!.q).not.toEqual(first))
     })
 
     it('ignore an older answer for a seam that is no longer selected', async () => {

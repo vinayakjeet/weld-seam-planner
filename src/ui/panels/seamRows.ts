@@ -33,6 +33,27 @@ export interface SeamRow {
   accTitle: string
   // An accepted seam whose analysis is running or still to be asked for.
   accPending: boolean
+  // Worth a look before accepting: a low confidence, an unknown inside or a blocked access.
+  warning: boolean
+}
+
+export const LOW_CONFIDENCE = 0.5
+
+export type RowFilter = 'candidates' | 'accepted' | 'warnings'
+
+export const ROW_FILTERS: ReadonlyArray<{ id: RowFilter; label: string }> = [
+  { id: 'candidates', label: 'Candidates' },
+  { id: 'accepted', label: 'Accepted' },
+  { id: 'warnings', label: 'Warnings' },
+]
+
+const matches = (row: SeamRow, filter: RowFilter) =>
+  filter === 'warnings' ? row.warning : filter === 'accepted' ? row.status === 'accepted' : row.status === 'candidate'
+
+// With no chip on every row shows; otherwise a row shows when it matches any chip that is on.
+export function filterRows(rows: SeamRow[], active: ReadonlySet<RowFilter>): SeamRow[] {
+  if (active.size === 0) return rows
+  return rows.filter((row) => [...active].some((filter) => matches(row, filter)))
 }
 
 export const JOINT_TYPES: readonly JointType[] = ['fillet', 'lap', 'corner', 'saddle']
@@ -98,6 +119,7 @@ export function seamRows(
       accClass,
       accTitle: accessTitle(accClass, reachOf(seam)),
       accPending: analysing && status === 'accepted' && accClass === null,
+      warning: seam.confidence < LOW_CONFIDENCE || (override === undefined && seam.concavity === 'unknown') || accClass === 'blocked',
     }
   })
 }

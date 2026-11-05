@@ -19,6 +19,27 @@ export function rapidName(text: string): string {
   return name.length <= MAX_NAME ? name : `${name.slice(0, HASH_KEEP)}_${hash4(text)}`
 }
 
+// One identifier per procedure id and prefix: ids that sanitise to the same text (for example "WPS 1" and "WPS_1")
+// would otherwise share seam and weld data, so the later one gets a number.
+function nameBook() {
+  const assigned = new Map<string, string>()
+  const taken = new Set<string>()
+  return (prefix: string, id: string): string => {
+    const key = `${prefix}\u0000${id}`
+    const known = assigned.get(key)
+    if (known !== undefined) return known
+    const plain = rapidName(`${prefix}_${id}`)
+    let name = plain
+    for (let n = 2; taken.has(name); n++) {
+      const suffix = `_${n}`
+      name = `${plain.slice(0, MAX_NAME - suffix.length)}${suffix}`
+    }
+    taken.add(name)
+    assigned.set(key, name)
+    return name
+  }
+}
+
 // Spec order is [x, y, z, w]; RAPID wants [q1, q2, q3, q4] = [w, x, y, z].
 export function quaternionToRapid(q: Quat): Quat {
   const [x, y, z, w] = q
@@ -63,8 +84,9 @@ export function toRapid(job: WeldJob): string {
   }
 
   const weaves = (seam: Seam) => job.procedures.find((p) => p.id === seam.procedureId)?.weave.pattern !== 'none'
+  const nameOf = nameBook()
   const names = (prefix: string, pick: (s: Seam) => boolean) => [
-    ...new Set(included.filter(pick).map((s) => rapidName(`${prefix}_${s.procedureId}`))),
+    ...new Set(included.filter(pick).map((s) => nameOf(prefix, s.procedureId))),
   ]
   const defs = [
     ['seamdata', names('sm', () => true)],
@@ -98,10 +120,10 @@ export function toRapid(job: WeldJob): string {
   if (included.length === 0) out.push('        ! No seam is exported: none is standard or slim with two or more poses.')
   included.forEach((seam, i) => {
     const n = i + 1
-    const sm = rapidName(`sm_${seam.procedureId}`)
-    const wd = rapidName(`wd_${seam.procedureId}`)
+    const sm = nameOf('sm', seam.procedureId)
+    const wd = nameOf('wd', seam.procedureId)
     // The weave belongs on every arc instruction: an instruction without it welds straight.
-    const arc = weaves(seam) ? `${sm}, ${wd}\\Weave:=${rapidName(`wv_${seam.procedureId}`)}` : `${sm}, ${wd}`
+    const arc = weaves(seam) ? `${sm}, ${wd}\\Weave:=${nameOf('wv', seam.procedureId)}` : `${sm}, ${wd}`
     const last = seam.poses.length - 1
     out.push(`        ! S${two(n)} = ${comment(seam.label)} (${comment(seam.id)}), ${comment(seam.procedureId)}, ${fixed(seam.lengthMm, 1)} mm`)
     out.push(`        MoveJ RelTool(${target(n, 0)},0,0,${fixed(-seam.approach.distanceMm, 1)}), v1000, z50, tWeldGun\\WObj:=wPart;`)

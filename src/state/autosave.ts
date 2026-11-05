@@ -155,7 +155,7 @@ function apply(saved: SavedPlan): Partial<AppState> {
     order: saved.order,
     ports: saved.ports,
     arm: clampArm(saved.arm),
-    nextPortNumber: nextNumberAfter(saved.ports),
+    nextPortNumber: Math.max(saved.nextPortNumber ?? 1, nextNumberAfter(saved.ports)),
     selectedPortId: null,
     placingPort: false,
     gravity: saved.gravity,

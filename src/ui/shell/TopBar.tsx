@@ -6,6 +6,7 @@ import { partChip } from './summary'
 export function TopBar() {
   const part = useStore((s) => s.part)
   const chip = partChip(part)
+  const setActiveStep = useStore((s) => s.setActiveStep)
   return (
     <header className="flex h-12 items-center gap-4 border-b border-line bg-surface-1 px-3">
       <div className="flex shrink-0 items-center gap-3">
@@ -14,7 +15,20 @@ export function TopBar() {
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
-        <span className={part ? 'text-ink-0' : 'text-ink-2'}>{chip.name}</span>
+        {part ? (
+          // The Import step holds the file chooser and the samples, and warns before accepted seams are discarded.
+          <button
+            type="button"
+            aria-label={`Open another part, current part ${chip.name}`}
+            title="Open another part"
+            onClick={() => setActiveStep('import')}
+            className="rounded-sm text-ink-0 underline decoration-line underline-offset-4 outline-none hover:decoration-ink-1 focus-visible:ring-1 focus-visible:ring-brand"
+          >
+            {chip.name}
+          </button>
+        ) : (
+          <span className="text-ink-2">{chip.name}</span>
+        )}
         <span className="num rounded-sm border border-line px-1.5 text-[11px] text-ink-2">{chip.units}</span>
       </div>
 

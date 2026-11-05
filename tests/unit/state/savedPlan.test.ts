@@ -105,6 +105,14 @@ describe('snapshotOf and parseSaved', () => {
     expect(parseSaved(noNormals).status).toBe('error')
   })
 
+  it('keeps the table row a manual seam took over through a save and a read', () => {
+    const state = editedState()
+    useStore.setState({ manualSeams: state.manualSeams.map((m) => ({ ...m, slot: 'a' })) })
+    const parsed = parseSaved(JSON.parse(JSON.stringify(snapshotOf(useStore.getState(), NOW))))
+    expect(parsed.status).toBe('ok')
+    if (parsed.status === 'ok') expect(parsed.saved.manualSeams[0]!.slot).toBe('a')
+  })
+
   it('refuses a status that is neither accepted nor rejected', () => {
     const snapshot = JSON.parse(JSON.stringify(snapshotOf(editedState(), NOW)))
     snapshot.statusById.b = 'maybe'

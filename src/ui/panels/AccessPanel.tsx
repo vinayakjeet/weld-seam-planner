@@ -1,4 +1,4 @@
-import { ARM_BOUNDS, type ArmParams, type Port } from '../../core/snake/arm'
+import { ARM_BOUNDS, type Port } from '../../core/snake/arm'
 import { reachKey } from '../../core/snake/reach'
 import type { Explained } from '../../core/job/plan'
 import { cancelReach, reachTargets, runReach } from '../../state/reachFlow'
@@ -9,19 +9,12 @@ import { getGeometryClient } from '../../worker/client'
 import { Button } from '../kit/Button'
 import { NumberField } from '../kit/NumberField'
 import { Tooltip } from '../kit/Tooltip'
+import { ARM_FIELDS } from './armFields'
 import { InsertionControls } from './InsertionControls'
 import { portRows } from './portRows'
 import { reachSummary } from './reachText'
 
 export const NEED_PART_FOR_PORT = 'Load a part first. A port is a hole in the part, so there is nothing to place it on yet.'
-
-const ARM_FIELDS: Array<{ key: keyof ArmParams; label: string; unit: string }> = [
-  { key: 'links', label: 'Links', unit: '' },
-  { key: 'linkLengthMm', label: 'Link length', unit: 'mm' },
-  { key: 'diameterMm', label: 'Diameter', unit: 'mm' },
-  { key: 'maxBendDeg', label: 'Bend limit', unit: 'deg' },
-  { key: 'torchLengthMm', label: 'Torch length', unit: 'mm' },
-]
 
 // The number in the text box, or what was wrong with it.
 export function parseNumber(text: string, label: string): number | Explained {

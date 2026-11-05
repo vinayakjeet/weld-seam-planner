@@ -21,7 +21,26 @@ export interface Stats {
 export function selectAllSeams(state: Pick<AppState, 'seams' | 'manualSeams' | 'supersededIds'>): SeamCandidate[] {
   if (state.manualSeams.length === 0 && state.supersededIds.length === 0) return state.seams
   const superseded = new Set(state.supersededIds)
-  return [...state.seams.filter((seam) => !superseded.has(seam.id)), ...state.manualSeams]
+  const bySlot = new Map<string, SeamCandidate[]>()
+  const loose: SeamCandidate[] = []
+  for (const manual of state.manualSeams) {
+    if (manual.slot !== undefined && superseded.has(manual.slot)) {
+      const row = bySlot.get(manual.slot)
+      if (row === undefined) bySlot.set(manual.slot, [manual])
+      else row.push(manual)
+    } else {
+      loose.push(manual)
+    }
+  }
+  const all: SeamCandidate[] = []
+  for (const seam of state.seams) {
+    if (!superseded.has(seam.id)) all.push(seam)
+    else if (bySlot.has(seam.id)) all.push(...bySlot.get(seam.id)!)
+  }
+  // A slot whose detected seam is gone (another crease angle) has no row to take, so it ends up with the loose ones.
+  const placed = new Set(all)
+  for (const rows of bySlot.values()) for (const manual of rows) if (!placed.has(manual)) loose.push(manual)
+  return [...all, ...loose]
 }
 
 // Corner candidates are detected but stay out of the list, the counts and accept all until the user shows them.

@@ -59,6 +59,44 @@ describe('rapidName', () => {
   })
 })
 
+describe('toRapid names for procedures whose ids sanitise alike', () => {
+  function clashingJob(): WeldJob {
+    const job = structuredClone(threeSeamJob(['standard', 'standard', 'snake']))
+    const base = job.procedures[0]!
+    job.procedures = [
+      { ...structuredClone(base), id: 'WPS 1' },
+      { ...structuredClone(base), id: 'WPS_1' },
+    ]
+    job.seams[0]!.procedureId = 'WPS 1'
+    job.seams[1]!.procedureId = 'WPS_1'
+    return job
+  }
+
+  it('gives each procedure its own seam and weld data name', () => {
+    const text = toRapid(clashingJob())
+    const arcStarts = lines(text).filter((l) => l.startsWith('ArcLStart'))
+    const sm = arcStarts.map((l) => /, (sm_\w+),/.exec(l)![1])
+    expect(new Set(sm).size).toBe(2)
+    const defined = /seamdata ([^;]+);/.exec(text)![1]!.split(', ')
+    expect(new Set(defined).size).toBe(2)
+    expect(defined).toEqual(sm)
+  })
+
+  it('keeps the plain name for the first and numbers the next, within 32 characters', () => {
+    const text = toRapid(clashingJob())
+    expect(text).toContain('sm_WPS_1')
+    expect(text).toContain('sm_WPS_1_2')
+    const long = clashingJob()
+    long.procedures[0]!.id = `${'W'.repeat(40)}A`
+    long.procedures[1]!.id = `${'W'.repeat(40)}B`
+    long.seams[0]!.procedureId = long.procedures[0]!.id
+    long.seams[1]!.procedureId = long.procedures[1]!.id
+    const names = [...toRapid(long).matchAll(/, (sm_\w+),/g)].map((m) => m[1]!)
+    expect(new Set(names).size).toBe(2)
+    for (const name of names) expect(name.length).toBeLessThanOrEqual(32)
+  })
+})
+
 describe('toRapid', () => {
   it('writes the header, tool, work object and a template warning', () => {
     const text = toRapid(threeSeamJob())

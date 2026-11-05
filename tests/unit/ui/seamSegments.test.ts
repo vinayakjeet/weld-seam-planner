@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Vec3 } from '../../../src/core/math/vec3'
 import type { SeamCandidate } from '../../../src/core/seams/detect'
-import { buildSeamSegments, polylineSegmentPositions, reachSpans, seamSegmentPositions, type SeamPalette } from '../../../src/ui/viewport/seamSegments'
+import { buildSeamSegments, polylineSegmentPositions, positionsOfSeams, reachSpans, seamSegmentPositions, type SeamPalette } from '../../../src/ui/viewport/seamSegments'
 import { seam } from '../helpers/state'
 
 const palette: SeamPalette = {
@@ -169,5 +169,20 @@ describe('buildSeamSegments with reach', () => {
   it('leaves a seam without a reach in its status colour', () => {
     const built = buildSeamSegments([timed], { a: 'accepted' }, palette, undefined, () => null)
     expect(Array.from(built.colors.slice(0, 3))).toEqual(f32(palette.accepted))
+  })
+})
+
+describe('positionsOfSeams', () => {
+  it('joins the segments of the chosen seams in list order, so a multi selection is lit as one set', () => {
+    const a = seamOn('a', [A, [10, 0, 0]])
+    const b = seamOn('b', [[0, 5, 0], [10, 5, 0], [20, 5, 0]])
+    const c = seamOn('c', [[0, 9, 0], [10, 9, 0]])
+    const joined = positionsOfSeams([a, b, c], new Set(['c', 'a']))
+    expect(Array.from(joined!)).toEqual([...seamSegmentPositions(a), ...seamSegmentPositions(c)])
+  })
+
+  it('is null when no listed seam is chosen', () => {
+    expect(positionsOfSeams([seamOn('a', [A, [10, 0, 0]])], new Set(['ghost']))).toBeNull()
+    expect(positionsOfSeams([], new Set(['a']))).toBeNull()
   })
 })

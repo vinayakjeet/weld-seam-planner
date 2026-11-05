@@ -1,4 +1,4 @@
-import { DEFAULT_JOB_SETTINGS } from '../core/job/plan'
+import { DEFAULT_JOB_SETTINGS, resolveSeam, torchParamsFor } from '../core/job/plan'
 import { importJob } from '../core/job/importJob'
 import type { WeldJob } from '../core/job/schema'
 import type { KnownUnits } from '../core/mesh/units'
@@ -7,16 +7,16 @@ import { DEFAULT_DETECT_SETTINGS, type DetectSettings, type SeamCandidate } from
 import type { ManualError } from '../core/seams/manual'
 import type { GeometryClient } from '../worker/client'
 import type { DrawClick, LoadOutcome, Progress, Stage, UserError } from '../worker/geometry.api'
-import { DEFAULT_TORCH } from '../core/torch/frames'
+import { DEFAULT_TORCH, type TorchParams } from '../core/torch/frames'
 import { type Gravity } from '../core/torch/positions'
 import { downloadText } from '../ui/shell/download'
 import { jobFilename, rapidFilename, summaryText } from '../ui/shell/exportText'
 import { needSeamSelected, parseTrimInput, type NeedsSeam } from '../ui/panels/manualText'
 import { initialTool, reduceTool, type ToolEffect, type ToolEvent, type ToolName } from '../ui/tools/toolMachine'
 import { accessFor, type AccessEntry } from './accessSlice'
-import { selectAllSeams, selectPlan } from './selectors'
+import { plannedSeam, selectAllSeams, selectPlan } from './selectors'
 import { useStore, type AppState } from './store'
-import type { PositionEntry } from './torchSlice'
+import { positionFor, type PositionEntry } from './torchSlice'
 
 export type FetchFn = (url: string) => Promise<Response>
 
@@ -454,22 +454,45 @@ export async function refreshPositions(client: GeometryClient): Promise<void> {
     if (Object.keys(useStore.getState().positionsById).length > 0) useStore.getState().setPositions({})
     return
   }
-  const outcome = await attempt(() => client.torchPositions(seams, gravity))
+  // An answer is tied to the seam object and the gravity it was worked out for, so only changed seams are sent.
+  const todo = seams.filter((seam) => positionFor(useStore.getState(), seam) === undefined)
+  const keep = (known: Record<string, PositionEntry>, fresh: Record<string, PositionEntry>) => {
+    const entries: Record<string, PositionEntry> = {}
+    for (const seam of seams) {
+      const entry = fresh[seam.id] ?? (todo.includes(seam) ? undefined : known[seam.id])
+      if (entry) entries[seam.id] = entry
+    }
+    return entries
+  }
+  if (todo.length === 0) {
+    const known = useStore.getState().positionsById
+    if (Object.keys(known).some((id) => !seams.some((seam) => seam.id === id))) useStore.getState().setPositions(keep(known, {}))
+    return
+  }
+  const outcome = await attempt(() => client.torchPositions(todo, gravity))
   if (request !== positionsRequest) return
   if (outcome.status === 'error') {
     setNotice(outcome.error)
     return
   }
-  const entries: Record<string, PositionEntry> = {}
-  for (const seam of seams) {
+  const fresh: Record<string, PositionEntry> = {}
+  for (const seam of todo) {
     const position = outcome.positions[seam.id]
-    if (position) entries[seam.id] = { seam, gravity, position }
+    if (position) fresh[seam.id] = { seam, gravity, position }
   }
-  useStore.getState().setPositions(entries)
+  useStore.getState().setPositions(keep(useStore.getState().positionsById, fresh))
 }
 
 function selectedSeam(state: AppState) {
   return state.selectedId === null ? undefined : selectAllSeams(state).find((seam) => seam.id === state.selectedId)
+}
+
+// The torch angles the job will use for a seam, so the preview shows the same pose: the procedure with its overrides,
+// or the plain default where no procedure is set.
+export function previewTorchParams(state: AppState, seam: SeamCandidate): TorchParams {
+  const plan = selectPlan(state)
+  const resolved = resolveSeam(plan, plannedSeam(state, seam))
+  return resolved.procedure ? torchParamsFor(resolved.procedure, plan.settings) : { ...DEFAULT_TORCH, approachMm: state.jobSettings.approachMm }
 }
 
 export async function refreshPoses(client: GeometryClient): Promise<void> {
@@ -480,7 +503,7 @@ export async function refreshPoses(client: GeometryClient): Promise<void> {
     if (state.posesForSelected !== null) state.setPoses(null)
     return
   }
-  const outcome = await attempt(() => client.torchPoses(seam, DEFAULT_TORCH))
+  const outcome = await attempt(() => client.torchPoses(seam, previewTorchParams(state, seam)))
   if (request !== posesRequest) return
   if (outcome.status === 'error') {
     setNotice(outcome.error)
@@ -498,6 +521,11 @@ export function startTorchSync(client: GeometryClient): () => void {
     supersededIds: state.supersededIds,
     gravity: state.gravity,
     selected: selectedSeam(state),
+    // Compared as text: the angles are a new object on every read.
+    torchKey: (() => {
+      const seam = selectedSeam(state)
+      return seam === undefined ? '' : JSON.stringify(previewTorchParams(state, seam))
+    })(),
   })
   let last = read(useStore.getState())
   void refreshPositions(client)
@@ -512,6 +540,8 @@ export function startTorchSync(client: GeometryClient): () => void {
     }
     if (next.selected !== before.selected) {
       state.setScrub(0)
+      void refreshPoses(client)
+    } else if (next.torchKey !== before.torchKey) {
       void refreshPoses(client)
     }
   })

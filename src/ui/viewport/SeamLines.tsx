@@ -15,7 +15,7 @@ import { overGizmo } from './gizmo'
 import { lineSet, useDisposed, useHalo } from './lineSet'
 import { pointerClaimed } from './pickGuard'
 import { chooseSeamHit, type SeamLineHit } from './pickSeam'
-import { buildSeamSegments, seamSegmentPositions, type Rgb, type SeamPalette } from './seamSegments'
+import { buildSeamSegments, positionsOfSeams, seamSegmentPositions, type Rgb, type SeamPalette } from './seamSegments'
 
 // The coloured core. The halo adds 1.5 px on each side, so the seam colour is what the eye reads.
 const BASE_WIDTH_PX = 4
@@ -58,7 +58,7 @@ export function SeamLines({ partRef }: { partRef: RefObject<Mesh | null> }) {
   const ports = useStore((s) => s.ports)
   const arm = useStore((s) => s.arm)
   const hoverId = useStore((s) => s.hoverId)
-  const selectedId = useStore((s) => s.selectedId)
+  const selectedIds = useStore((s) => s.selectedIds)
   const mergeFrom = useStore((s) => (s.tool.tool === 'merge' ? s.tool.from : null))
   const { gl, camera } = useThree()
   // Once the playback has started the seams not yet welded are dimmed, so the welded ones stand out.
@@ -85,9 +85,9 @@ export function SeamLines({ partRef }: { partRef: RefObject<Mesh | null> }) {
     [built, dim, xray],
   )
   const selected = useMemo(() => {
-    const seam = selectedId === null ? undefined : seams.find((s) => s.id === selectedId)
-    return seam ? lineSet(seamSegmentPositions(seam), { width: HIGHLIGHT_WIDTH_PX, color: cssVar('--brand-primary'), renderOrder: 1 + lift, overlay: xray }) : null
-  }, [seams, selectedId, xray, lift])
+    const positions = positionsOfSeams(seams, new Set(selectedIds))
+    return positions ? lineSet(positions, { width: HIGHLIGHT_WIDTH_PX, color: cssVar('--brand-primary'), renderOrder: 1 + lift, overlay: xray }) : null
+  }, [seams, selectedIds, xray, lift])
   const hovered = useMemo(() => {
     const seam = hoverId === null ? undefined : seams.find((s) => s.id === hoverId)
     return seam ? lineSet(seamSegmentPositions(seam), { width: HIGHLIGHT_WIDTH_PX, color: cssVar('--seam-hover'), renderOrder: 2 + lift, overlay: xray }) : null
@@ -97,14 +97,8 @@ export function SeamLines({ partRef }: { partRef: RefObject<Mesh | null> }) {
   const targets = useMemo(() => {
     const from = mergeFrom === null ? undefined : seams.find((s) => s.id === mergeFrom)
     const ids = new Set(from ? mergeTargets(from, seams, MERGE_TOLERANCE_MM) : [])
-    const found = seams.filter((s) => ids.has(s.id)).map(seamSegmentPositions)
-    if (found.length === 0) return null
-    const all = new Float32Array(found.reduce((n, part) => n + part.length, 0))
-    let at = 0
-    for (const part of found) {
-      all.set(part, at)
-      at += part.length
-    }
+    const all = positionsOfSeams(seams, ids)
+    if (all === null) return null
     return lineSet(all, { width: HIGHLIGHT_WIDTH_PX, color: cssVar('--warn'), renderOrder: 1 + lift, overlay: xray })
   }, [seams, mergeFrom, xray, lift])
 

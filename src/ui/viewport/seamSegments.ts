@@ -50,6 +50,19 @@ export function polylineSegmentPositions(points: readonly Vec3[]): Float32Array 
   return out
 }
 
+// The segments of every listed seam whose id is in the set, as one array; null when none is.
+export function positionsOfSeams(seams: readonly SeamCandidate[], ids: ReadonlySet<string>): Float32Array | null {
+  const parts = seams.filter((seam) => ids.has(seam.id)).map(seamSegmentPositions)
+  if (parts.length === 0) return null
+  const all = new Float32Array(parts.reduce((n, part) => n + part.length, 0))
+  let at = 0
+  for (const part of parts) {
+    all.set(part, at)
+    at += part.length
+  }
+  return all
+}
+
 export function seamSegmentPositions(seam: SeamCandidate): Float32Array {
   const out = new Float32Array(segmentCount(seam) * 6)
   writeSeam(seam, out, 0)

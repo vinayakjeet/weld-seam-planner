@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { WPS_PRESETS, resolveProcedure } from '../../../src/core/process/wps'
-import { OVERRIDE_FIELDS, isOverridden, parseOverrideInput, patchFor, sharedValue, valueOf } from '../../../src/ui/panels/overrideFields'
+import { OVERRIDE_FIELDS, disabledReason, isOverridden, parseOverrideInput, patchFor, sharedValue, valueOf } from '../../../src/ui/panels/overrideFields'
 
 const spray = WPS_PRESETS.find((p) => p.id === 'WPS-GMAW-SPRAY-FW6')!
 const field = (key: string) => OVERRIDE_FIELDS.find((f) => f.key === key)!
@@ -77,5 +77,24 @@ describe('parseOverrideInput', () => {
 
   it('refuses infinity', () => {
     expect(parseOverrideInput(field('current'), 'Infinity').kind).toBe('error')
+  })
+})
+
+describe('disabledReason', () => {
+  const noGas = { ...spray, gas: undefined }
+
+  it('disables gas flow on a procedure with no gas mix and says why', () => {
+    const reason = disabledReason(field('gasFlow'), [noGas])
+    expect(reason).toMatch(/no shielding gas/i)
+    expect(reason).toMatch(/choose a procedure/i)
+  })
+
+  it('also disables it when any one of several procedures has no gas', () => {
+    expect(disabledReason(field('gasFlow'), [spray, noGas])).not.toBeNull()
+  })
+
+  it('leaves gas flow and every other field enabled when every procedure has a gas mix', () => {
+    expect(disabledReason(field('gasFlow'), [spray])).toBeNull()
+    for (const f of OVERRIDE_FIELDS) expect(disabledReason(f, [noGas, spray]) === null).toBe(f.key !== 'gasFlow')
   })
 })

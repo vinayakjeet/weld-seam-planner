@@ -37,6 +37,14 @@ export function isOverridden(overrides: ProcedureOverrides, field: OverrideField
   return at(overrides, field.path) !== undefined
 }
 
+// A field that cannot apply to a procedure: a flow override on a procedure with no gas would create a gas entry with no mix.
+export function disabledReason(field: OverrideField, procedures: readonly Procedure[]): string | null {
+  if (field.key === 'gasFlow' && procedures.some((p) => p.gas === undefined || p.gas.mix === '')) {
+    return 'This procedure has no shielding gas, so there is no flow to set. Choose a procedure that uses a gas mix to change it.'
+  }
+  return null
+}
+
 export const parseOverrideInput = (field: OverrideField, text: string): ParsedOverride => parseNumberInput(field, text)
 
 export const MIXED = 'mixed'

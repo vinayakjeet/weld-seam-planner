@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { SeamPosition } from '../../../src/core/torch/positions'
 import type { SeamAccess } from '../../../src/core/job/schema'
-import { acceptAllState, positionLines, seamRows } from '../../../src/ui/panels/seamRows'
+import { acceptAllState, filterRows, positionLines, seamRows, type RowFilter } from '../../../src/ui/panels/seamRows'
 import { reachOf } from '../helpers/reach'
 import { seam } from '../helpers/state'
 
@@ -176,5 +176,46 @@ describe('seamRows reach', () => {
     const standard = { ...access, class: 'standard' as const }
     expect(seamRows([seam('a')], {}, {}, undefined, {}, () => standard)[0]!.accTitle).toBe('Standard')
     expect(seamRows([seam('a')], {}, {})[0]!.accTitle).toBe('')
+  })
+})
+
+describe('filterRows', () => {
+  const access = (cls: 'standard' | 'blocked') => ({ class: cls }) as unknown as SeamAccess
+  const rows = seamRows(
+    [seam('a', 0.9), seam('b', 0.4), seam('c', 0.9, 200, { concavity: 'unknown' }), seam('d', 0.9), seam('e', 0.9)],
+    { a: 'accepted', d: 'accepted', e: 'rejected' },
+    {},
+    () => undefined,
+    {},
+    (s) => (s.id === 'd' ? access('blocked') : null),
+  )
+  const keep = (...active: RowFilter[]) => filterRows(rows, new Set(active)).map((r) => r.id)
+
+  it('flags low confidence, an unknown inside and a blocked access as warnings', () => {
+    expect(rows.map((r) => r.warning)).toEqual([false, true, true, true, false])
+  })
+
+  it('shows every row while no chip is on', () => {
+    expect(keep()).toEqual(['a', 'b', 'c', 'd', 'e'])
+  })
+
+  it('Candidates keeps the seams that are neither accepted nor rejected', () => {
+    expect(keep('candidates')).toEqual(['b', 'c'])
+  })
+
+  it('Accepted keeps the accepted seams', () => {
+    expect(keep('accepted')).toEqual(['a', 'd'])
+  })
+
+  it('Warnings keeps the flagged seams whatever their status', () => {
+    expect(keep('warnings')).toEqual(['b', 'c', 'd'])
+  })
+
+  it('shows rows that match any chip that is on', () => {
+    expect(keep('accepted', 'warnings')).toEqual(['a', 'b', 'c', 'd'])
+  })
+
+  it('keeps the numbers the table had before filtering', () => {
+    expect(filterRows(rows, new Set<RowFilter>(['accepted'])).map((r) => r.n)).toEqual([1, 4])
   })
 })

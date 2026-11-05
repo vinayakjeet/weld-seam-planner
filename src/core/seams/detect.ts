@@ -46,6 +46,8 @@ export interface SeamCandidate {
   thicknessMm: PlateThickness
   // Drawn across open surface: n1 and n2 are the surface normal there, not the two plates of a joint.
   approximateNormals?: boolean
+  // Manual seams only: the id of the detected seam whose row in the table this seam takes over after an edit.
+  slot?: string
 }
 
 const TURN_BREAK_DEG = 40

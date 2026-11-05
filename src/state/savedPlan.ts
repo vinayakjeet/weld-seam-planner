@@ -28,6 +28,7 @@ const seamSchema = z.object({
   points: z.array(pointSchema),
   thicknessMm: z.tuple([thickness, thickness]),
   approximateNormals: z.boolean().optional(),
+  slot: z.string().optional(),
 })
 
 const portSchema = z.object({ id: z.string().min(1), position: vec3Schema, direction: vec3Schema, diameterMm: z.number().positive() })
@@ -52,6 +53,8 @@ export const savedPlanSchema = z.object({
   manualSeams: z.array(seamSchema),
   supersededIds: z.array(z.string()),
   nextDrawnId: z.number().int().min(1),
+  // Absent in plans saved before ports were counted; the highest port id then decides.
+  nextPortNumber: z.number().int().min(1).optional(),
   procedures: z.array(procedureSchema),
   procedureById: z.record(z.string(), z.string()),
   overridesById: z.record(z.string(), procedureOverridesSchema),
@@ -85,6 +88,7 @@ export function snapshotOf(state: AppState, savedAt: string): SavedPlan {
     manualSeams: state.manualSeams,
     supersededIds: state.supersededIds,
     nextDrawnId: state.nextDrawnId,
+    nextPortNumber: state.nextPortNumber,
     procedures: state.procedures,
     procedureById: state.procedureById,
     overridesById: state.overridesById,

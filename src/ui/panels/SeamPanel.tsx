@@ -19,7 +19,7 @@ import { PartWarnings } from './PartWarnings'
 import { PreflightPanel } from './PreflightPanel'
 import { ProcedureLibrary } from './ProcedureLibrary'
 import { NoAcceptedSeams, showsNoAccepted } from './NoAcceptedSeams'
-import { acceptAllState, seamRows } from './seamRows'
+import { acceptAllState, filterRows, ROW_FILTERS, seamRows, type RowFilter } from './seamRows'
 import { SequencePanel } from './SequencePanel'
 import { noSeamsMessage } from './seamText'
 import { TypeMenu } from './TypeMenu'
@@ -91,7 +91,7 @@ function AcceptAll() {
   )
 }
 
-function SeamTable() {
+function SeamTable({ filters }: { filters: ReadonlySet<RowFilter> }) {
   const seams = useVisibleSeams()
   const statusById = useStore((s) => s.statusById)
   const typeById = useStore((s) => s.typeById)
@@ -116,7 +116,7 @@ function SeamTable() {
   const reachKeyById = useStore((s) => s.reachKeyById)
   const ports = useStore((s) => s.ports)
   const arm = useStore((s) => s.arm)
-  const rows = useMemo(
+  const allRows = useMemo(
     () =>
       seamRows(
         seams,
@@ -130,6 +130,7 @@ function SeamTable() {
       ),
     [seams, statusById, typeById, positionsById, gravity, procedureById, accessById, accessPointsById, accessBusy, reachById, reachPointsById, reachKeyById, ports, arm],
   )
+  const rows = useMemo(() => filterRows(allRows, filters), [allRows, filters])
   const body = useRef<HTMLDivElement>(null)
 
   // A seam picked in the viewport may be a row that is scrolled out of sight.
@@ -149,7 +150,11 @@ function SeamTable() {
       </div>
       {rows.length === 0 ? (
         <div className="grid flex-1 place-items-center px-6 text-center text-ink-2">
-          <EmptyMessage partLoaded={partLoaded} busy={busy} />
+          {allRows.length > 0 ? (
+            <p>No seam matches the chips that are on. Switch a chip off to see more of the {allRows.length} seams.</p>
+          ) : (
+            <EmptyMessage partLoaded={partLoaded} busy={busy} />
+          )}
         </div>
       ) : (
         <div ref={body} className="min-h-0 flex-1 overflow-y-auto">
@@ -227,7 +232,14 @@ function SeamTable() {
   )
 }
 
+function toggled(filters: ReadonlySet<RowFilter>, id: RowFilter): ReadonlySet<RowFilter> {
+  const next = new Set(filters)
+  if (!next.delete(id)) next.add(id)
+  return next
+}
+
 export function SeamPanel() {
+  const [filters, setFilters] = useState<ReadonlySet<RowFilter>>(new Set())
   const procedureStep = useStore((s) => s.activeStep === 'procedures')
   const exportStep = useStore((s) => s.activeStep === 'export')
   const sequenceStep = useStore((s) => s.activeStep === 'sequence')
@@ -244,10 +256,16 @@ export function SeamPanel() {
         <TabPanel value="seams" className="data-[state=active]:flex data-[state=active]:flex-col">
           <PanelHeading step={activeStep} />
           <div className="flex shrink-0 gap-1.5 border-b border-line px-3 py-2">
-            {['Candidates', 'Accepted', 'Warnings'].map((chip) => (
-              <span key={chip} className="rounded-full border border-line px-2 py-0.5 text-[11px] text-ink-2">
-                {chip}
-              </span>
+            {ROW_FILTERS.map((chip) => (
+              <button
+                key={chip.id}
+                type="button"
+                aria-pressed={filters.has(chip.id)}
+                onClick={() => setFilters(toggled(filters, chip.id))}
+                className="rounded-full border border-line px-2 py-0.5 text-[11px] text-ink-2 outline-none hover:text-ink-0 focus-visible:ring-1 focus-visible:ring-brand aria-pressed:border-brand aria-pressed:text-ink-0"
+              >
+                {chip.label}
+              </button>
             ))}
           </div>
           <PartWarnings />
@@ -268,7 +286,7 @@ export function SeamPanel() {
                   <AcceptAll />
                 </>
               )}
-              <SeamTable />
+              <SeamTable filters={filters} />
             </>
           )}
         </TabPanel>

@@ -8,7 +8,8 @@ import { positionFor } from '../../state/torchSlice'
 import { useSelectedSeams } from '../../state/useVisibleSeams'
 import { NumberField } from '../kit/NumberField'
 import { defaultLegText, heatInputReadout, legHints, travelReadout, type Level, type Readout } from './calcText'
-import { OVERRIDE_FIELDS, isOverridden, parseNumberInput, parseOverrideInput, patchFor, sharedValue, valueOf } from './overrideFields'
+import { missingProcedureIds } from './procedureChoice'
+import { OVERRIDE_FIELDS, disabledReason, isOverridden, parseNumberInput, parseOverrideInput, patchFor, sharedValue, valueOf } from './overrideFields'
 
 const LEVEL_TEXT: Record<Level, string> = { ok: 'text-ink-0', amber: 'text-warn', red: 'text-err' }
 const LEVEL_BAR: Record<Level, string> = { ok: 'border-line', amber: 'border-warn', red: 'border-err' }
@@ -92,6 +93,7 @@ export function ProcedureSection() {
   const ids = seams.map((s) => s.id)
   const assigned = ids.map((id) => procedureById[id] ?? '')
   const mixedProcedure = new Set(assigned).size > 1
+  const missing = missingProcedureIds(assigned, plan.procedures)
   const primary = seams.find((s) => s.id === primaryId) ?? seams[0]!
   const iso = positionFor({ positionsById, gravity }, primary)?.code.replace(/\+$/, '') ?? null
   const ordered = proceduresForPosition(plan.procedures, iso)
@@ -123,6 +125,12 @@ export function ProcedureSection() {
               Mixed
             </option>
           )}
+          {!mixedProcedure &&
+            missing.map((id) => (
+              <option key={id} value={id} disabled>
+                {id} (not in the library)
+              </option>
+            ))}
           <option value="">Not set</option>
           {ordered.map((p) => (
             <option key={p.id} value={p.id}>
@@ -138,13 +146,16 @@ export function ProcedureSection() {
           {OVERRIDE_FIELDS.map((field) => {
             const shared = sharedValue(resolved.map((r) => valueOf(r.procedure!, field)))
             const mixed = shared === 'mixed'
+            const blocked = disabledReason(field, resolved.map((r) => r.procedure!))
             return (
               <NumberField
                 key={field.key}
                 label={field.label}
                 unit={field.unit}
                 value={mixed || shared === null ? '' : String(Number(shared.toFixed(3)))}
-                placeholder={mixed ? 'Mixed' : shared === null ? 'None' : ''}
+                placeholder={blocked !== null ? 'No gas' : mixed ? 'Mixed' : shared === null ? 'None' : ''}
+                disabled={blocked !== null}
+                hint={blocked === null ? undefined : <p className="text-[11px] text-ink-2">{blocked}</p>}
                 changed={planned.some((p) => isOverridden(p.overrides, field))}
                 onReset={() => setOverride(ids, patchFor(field, undefined))}
                 onCommit={(text) => {

@@ -34,6 +34,9 @@ const savedSnapshot = (savedAt = '2026-11-04T10:15:00.000Z') => {
     procedureById: { a: 'WPS-GMAW-SPRAY-FW6' },
     legById: { a: 6 },
     nextDrawnId: 4,
+    // P1 and P2 were placed and P2 deleted before the save, so the next port is P3 and not P2.
+    ports: [{ id: 'P1', position: [0, 0, 0], direction: [0, 0, 1], diameterMm: 40 }],
+    nextPortNumber: 3,
     gravity: [0, 1, 0],
     detectSettings: { creaseAngleDeg: 25 },
     jobSettings: { poseSpacingMm: 9, airSpeedMmS: 200, approachMm: 60 },
@@ -255,6 +258,7 @@ describe('restoreSaved and startFresh', () => {
       procedureById: { a: 'WPS-GMAW-SPRAY-FW6' },
       legById: { a: 6 },
       nextDrawnId: 4,
+      nextPortNumber: 3,
       gravity: [0, 1, 0],
       detectSettings: { creaseAngleDeg: 25 },
       jobSettings: { poseSpacingMm: 9, airSpeedMmS: 200, approachMm: 60 },

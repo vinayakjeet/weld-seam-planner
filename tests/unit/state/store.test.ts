@@ -203,7 +203,7 @@ describe('manual seam operations', () => {
 
   it('splits a detected seam: the parent is superseded, the children are manual, all in one undo step', () => {
     expect(state().splitAt('a', 80)).toBeNull()
-    expect(ids()).toEqual(['b', 'c', 'a/a', 'a/b'])
+    expect(ids()).toEqual(['a/a', 'a/b', 'b', 'c'])
     expect(state().supersededIds).toEqual(['a'])
     expect(state().manualSeams.map((s) => s.lengthMm)).toEqual([80, 120])
     expect(temporal().pastStates).toHaveLength(1)
@@ -212,7 +212,40 @@ describe('manual seam operations', () => {
     expect(state().manualSeams).toEqual([])
     expect(state().supersededIds).toEqual([])
     temporal().redo()
-    expect(ids()).toEqual(['b', 'c', 'a/a', 'a/b'])
+    expect(ids()).toEqual(['a/a', 'a/b', 'b', 'c'])
+  })
+
+  it('keeps an edited seam where it was: children of a detected seam take its row, later edits keep the row', () => {
+    state().splitAt('b', 50)
+    expect(ids()).toEqual(['a', 'b/a', 'b/b', 'c'])
+    state().splitAt('b/a', 20)
+    expect(ids()).toEqual(['a', 'b/a/a', 'b/a/b', 'b/b', 'c'])
+    state().mergeSeamIds('b/a/b', 'b/b')
+    expect(ids()).toEqual(['a', 'b/a/a', 'b/a/b+b/b', 'c'])
+    state().reverse('c')
+    expect(ids()).toEqual(['a', 'b/a/a', 'b/a/b+b/b', 'c~r'])
+    state().trim('a', 5, 3)
+    expect(ids()).toEqual(['a/t', 'b/a/a', 'b/a/b+b/b', 'c~r'])
+  })
+
+  it('merges two detected seams into the row of the first one', () => {
+    state().mergeSeamIds('b', 'a')
+    expect(ids()).toEqual(['b+a', 'c'])
+  })
+
+  it('keeps a drawn seam at the end and puts the children of a drawn seam where it was', () => {
+    const first = state().addDrawn(lineSeam('x', 0, 100))
+    const second = state().addDrawn(lineSeam('y', 0, 60))
+    state().splitAt(first, 40)
+    expect(ids()).toEqual(['a', 'b', 'c', `${first}/a`, `${first}/b`, second])
+  })
+
+  it('restores the row of an edited seam on undo and redo', () => {
+    state().splitAt('b', 50)
+    temporal().undo()
+    expect(ids()).toEqual(['a', 'b', 'c'])
+    temporal().redo()
+    expect(ids()).toEqual(['a', 'b/a', 'b/b', 'c'])
   })
 
   it('makes every operation exactly one undo step and restores the three maps exactly on undo and redo', () => {
@@ -253,7 +286,7 @@ describe('manual seam operations', () => {
     state().toggleAccepted('b')
     state().mergeSeamIds('a', 'b')
     expect(state().statusById).toEqual({ 'a+b': 'accepted' })
-    expect(ids()).toEqual(['c', 'a+b'])
+    expect(ids()).toEqual(['a+b', 'c'])
     expect(state().supersededIds).toEqual(['a', 'b'])
 
     useStore.setState({ statusById: { ...state().statusById, c: 'rejected' } })
@@ -281,10 +314,10 @@ describe('manual seam operations', () => {
 
   it('trims a manual seam in place of the one it came from', () => {
     state().trim('a', 5, 3)
-    expect(ids()).toEqual(['b', 'c', 'a/t'])
+    expect(ids()).toEqual(['a/t', 'b', 'c'])
     expect(selectAllSeams(state()).find((s) => s.id === 'a/t')!.lengthMm).toBeCloseTo(192, 9)
     state().trim('a/t', 1, 1)
-    expect(ids()).toEqual(['b', 'c', 'a/t/t'])
+    expect(ids()).toEqual(['a/t/t', 'b', 'c'])
     expect(state().manualSeams).toHaveLength(1)
   })
 

@@ -69,6 +69,15 @@ function locate(state: AppState, id: string): SeamCandidate | undefined {
   return state.manualSeams.find((s) => s.id === id) ?? selectAllSeams(state).find((s) => s.id === id)
 }
 
+// The children go where the first manual parent was; with only detected parents they go last (their slot orders them).
+function insertAtParent(manual: SeamCandidate[], parentIds: Set<string>, made: SeamCandidate[]): SeamCandidate[] {
+  const at = manual.findIndex((m) => parentIds.has(m.id))
+  const kept = manual.filter((m) => !parentIds.has(m.id))
+  if (at === -1) return [...kept, ...made]
+  const before = manual.slice(0, at).filter((m) => !parentIds.has(m.id)).length
+  return [...kept.slice(0, before), ...made, ...kept.slice(before)]
+}
+
 // Swaps parents for children in one state change: detected parents become superseded, manual parents disappear, the
 // children take over the status (accepted if any parent was, otherwise rejected if any was) and the joint type in force.
 function replaceSeams(state: AppState, parents: SeamCandidate[], children: SeamCandidate[]): Partial<AppState> {
@@ -82,8 +91,8 @@ function replaceSeams(state: AppState, parents: SeamCandidate[], children: SeamC
     : parents.some((p) => statusById[p.id] === 'rejected')
       ? 'rejected'
       : undefined
-  const jointType = typeById[parents[0]!.id] ?? parents[0]!.jointType
   const first = parents[0]!.id
+  const jointType = typeById[first] ?? parents[0]!.jointType
   const procedureById = { ...state.procedureById }
   const overridesById = { ...state.overridesById }
   const legById = { ...state.legById }
@@ -102,7 +111,14 @@ function replaceSeams(state: AppState, parents: SeamCandidate[], children: SeamC
     delete legById[id]
     delete thicknessById[id]
   }
-  const made = children.map((child) => ({ ...child, jointType }))
+  // The children take the row of the first parent: a manual parent passes its own slot on, a detected one is the slot.
+  const slot = manualIds.has(first) ? parents[0]!.slot : first
+  const made = children.map((child) => {
+    const placed: SeamCandidate = { ...child, jointType }
+    if (slot === undefined) delete placed.slot
+    else placed.slot = slot
+    return placed
+  })
   if (inherited) for (const child of made) statusById[child.id] = inherited
   for (const child of made) {
     if (inheritedPlan.procedure !== undefined) procedureById[child.id] = inheritedPlan.procedure
@@ -114,7 +130,7 @@ function replaceSeams(state: AppState, parents: SeamCandidate[], children: SeamC
   const remaining = state.selectedIds.filter((id) => !parentIds.has(id))
   const touched = remaining.length !== state.selectedIds.length
   return {
-    manualSeams: [...state.manualSeams.filter((m) => !parentIds.has(m.id)), ...made],
+    manualSeams: insertAtParent(state.manualSeams, parentIds, made),
     supersededIds: newlySuperseded.length > 0 ? [...state.supersededIds, ...newlySuperseded] : state.supersededIds,
     statusById,
     typeById,
