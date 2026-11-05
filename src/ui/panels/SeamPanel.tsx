@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { accessFor } from '../../state/accessSlice'
 import { reachFor } from '../../state/reachSlice'
 import { positionFor } from '../../state/torchSlice'
@@ -19,6 +19,7 @@ import { PartWarnings } from './PartWarnings'
 import { PreflightPanel } from './PreflightPanel'
 import { ProcedureLibrary } from './ProcedureLibrary'
 import { NoAcceptedSeams, showsNoAccepted } from './NoAcceptedSeams'
+import { revealScrollTop, ROW_HEIGHT, rowWindow } from './rowWindow'
 import { acceptAllState, filterRows, ROW_FILTERS, seamRows, type RowFilter } from './seamRows'
 import { SequencePanel } from './SequencePanel'
 import { noSeamsMessage } from './seamText'
@@ -132,15 +133,40 @@ function SeamTable({ filters }: { filters: ReadonlySet<RowFilter> }) {
   )
   const rows = useMemo(() => filterRows(allRows, filters), [allRows, filters])
   const body = useRef<HTMLDivElement>(null)
+  const [scrollTop, setScrollTop] = useState(0)
+  const [viewportHeight, setViewportHeight] = useState(0)
+  const slice = rowWindow({ count: rows.length, scrollTop, viewportHeight, rowHeight: ROW_HEIGHT })
+  const empty = rows.length === 0
 
-  // A seam picked in the viewport may be a row that is scrolled out of sight.
+  // The box is measured so that a long list draws only the rows that fit it.
+  useLayoutEffect(() => {
+    const el = body.current
+    if (!el) return
+    setViewportHeight(el.clientHeight)
+    const observer = new ResizeObserver(() => setViewportHeight(el.clientHeight))
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [empty])
+
+  // A seam picked in the viewport may be a row that is scrolled out of sight. A windowed list may not have drawn it, so
+  // its place is worked out from the row height instead of asking the page.
   useEffect(() => {
-    if (selectedId === null) return
-    body.current?.querySelector(`[data-seam-id="${CSS.escape(selectedId)}"]`)?.scrollIntoView({ block: 'nearest' })
+    const el = body.current
+    if (selectedId === null || !el) return
+    if (!slice.windowed) {
+      el.querySelector(`[data-seam-id="${CSS.escape(selectedId)}"]`)?.scrollIntoView({ block: 'nearest' })
+      return
+    }
+    const index = rows.findIndex((row) => row.id === selectedId)
+    if (index === -1) return
+    const to = revealScrollTop({ index, scrollTop: el.scrollTop, viewportHeight: el.clientHeight, rowHeight: ROW_HEIGHT })
+    if (to !== null) el.scrollTop = to
+    // Only a change of the selected seam moves the table; scrolling and filtering must not pull it back.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId])
 
   return (
-    <div role="table" aria-label="Seams" className="flex min-h-0 flex-1 flex-col">
+    <div role="table" aria-label="Seams" aria-rowcount={slice.windowed ? rows.length + 1 : undefined} className="flex min-h-0 flex-1 flex-col">
       <div role="row" className={`${GRID} h-7 shrink-0 border-b border-line text-[11px] text-ink-2`}>
         {COLUMNS.map((c) => (
           <span key={c.key} role="columnheader" title={c.title} className="truncate">
@@ -157,11 +183,13 @@ function SeamTable({ filters }: { filters: ReadonlySet<RowFilter> }) {
           )}
         </div>
       ) : (
-        <div ref={body} className="min-h-0 flex-1 overflow-y-auto">
-          {rows.map((row) => (
+        <div ref={body} onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)} className="min-h-0 flex-1 overflow-y-auto">
+          {slice.windowed && <div aria-hidden style={{ height: slice.before }} />}
+          {rows.slice(slice.start, slice.end).map((row, i) => (
             <div
               key={row.id}
               role="row"
+              aria-rowindex={slice.windowed ? slice.start + i + 2 : undefined}
               tabIndex={0}
               aria-selected={selectedIds.includes(row.id)}
               data-seam-id={row.id}
@@ -226,6 +254,7 @@ function SeamTable({ filters }: { filters: ReadonlySet<RowFilter> }) {
               </span>
             </div>
           ))}
+          {slice.windowed && <div aria-hidden style={{ height: slice.after }} />}
         </div>
       )}
     </div>
