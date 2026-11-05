@@ -4,7 +4,7 @@ import { buildMeshModel, type MeshModel } from '../../../src/core/mesh/model'
 import { buildBodyBvhs } from '../../../src/core/seams/bodyBvh'
 import { contactTolerance, findContactEdges } from '../../../src/core/seams/contact'
 import { Vector3 } from 'three'
-import { loadSampleModel } from '../helpers/models'
+import { loadSampleModel, transformSoup } from '../helpers/models'
 import { cubeTriangles, soupOf } from '../helpers/shapes'
 
 const CREASE_DEG = 30
@@ -105,6 +105,18 @@ describe('findContactEdges', () => {
 
   it('finds nothing for two separated bodies', () => {
     expect(contactOf(plate, cubeTriangles([-100, -5, 40], [200, 10, 80])).found).toHaveLength(0)
+  })
+
+  // Edge to edge the blocks share only a line: no face lies on the other body. Taken on the normals alone, both bodies
+  // read the line, and on a turned part both described the same of its two corners.
+  it('finds no edge where two blocks touch only along a line, however the part is turned', () => {
+    const lower = cubeTriangles([0, 0, 0], [50, 60, 10])
+    const upper = cubeTriangles([50.01, 0, 10.03], [50, 60, 10])
+    expect(contactOf(lower, upper).found).toHaveLength(0)
+    const turned = transformSoup(soupOf([...lower, ...upper]), { rotate: { axis: [3, -1, 2], angleDeg: 37 } })
+    const model = buildMeshModel(turned, 1)
+    expect(model.bodies.count).toBe(2)
+    expect(findContactEdges(model, computeFaceData(model.mesh), buildBodyBvhs(model), CREASE_DEG).edgeIds).toHaveLength(0)
   })
 })
 

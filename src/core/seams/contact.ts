@@ -96,14 +96,21 @@ export function findContactEdges(model: MeshModel, faces: FaceData, bvhs: BodyBv
       const aligned = alignment(nA) <= alignment(nB) ? fa : fb
       if (Math.min(alignment(nA), alignment(nB)) > cosFlat) continue
 
-      // Step from the edge across the touched surface, away from the contact face: if B ends there, this is a
-      // flush or overhanging edge (a groove or corner weld), not a fillet.
       const dir = [(p1[0]! - p0[0]!), (p1[1]! - p0[1]!), (p1[2]! - p0[2]!)]
       const dirLength = Math.hypot(dir[0]!, dir[1]!, dir[2]!)
       const along = dir.map((x) => x / dirLength)
       const into = [0, 1, 2].map((c) => centroids[aligned * 3 + c]! - mid[c]!)
       const alongPart = into[0]! * along[0]! + into[1]! * along[1]! + into[2]! * along[2]!
       const away = [0, 1, 2].map((c) => -(into[c]! - alongPart * along[c]!))
+
+      // The contact face has to lie on B, not only face it: a little way into the face, short of the far side of its
+      // triangle, B must still be within tolerance. Blocks that touch edge to edge share only the line.
+      const depth = Math.hypot(away[0]!, away[1]!, away[2]!)
+      const inward = Math.min(OVERHANG_REACH * tolerance, 1.5 * depth) / depth
+      if (!near(mid.map((x, c) => x - away[c]! * inward))) continue
+
+      // Step from the edge across the touched surface, away from the contact face: if B ends there, this is a
+      // flush or overhanging edge (a groove or corner weld), not a fillet.
       const offPlane = away[0]! * touched[0]! + away[1]! * touched[1]! + away[2]! * touched[2]!
       const step = [0, 1, 2].map((c) => away[c]! - offPlane * touched[c]!)
       const stepLength = Math.hypot(step[0]!, step[1]!, step[2]!)

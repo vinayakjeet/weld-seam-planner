@@ -1,5 +1,5 @@
 import type { MeshBVH } from 'three-mesh-bvh'
-import { dot, normalize, sub, type Vec3 } from '../math/vec3'
+import { dot, length, normalize, sub, type Vec3 } from '../math/vec3'
 import { computeFaceData, type FaceData } from '../mesh/faces'
 import { LARGE_PART_TRIANGLES } from '../mesh/health'
 import type { MeshModel } from '../mesh/model'
@@ -107,7 +107,8 @@ export function detectSeams(model: MeshModel, settings: DetectSettings, context:
   found.push(...nonManifoldSeams(model, faces, settings, minLength, bvhOf, thicknessOf))
 
   if (contact) {
-    found.push(...contactSeams(model, faces, contact, minLength, strips, thicknessOf), ...intersectionSeams(model, bvhs, minLength, thicknessOf))
+    const touching = contactSeams(model, faces, contact, minLength, strips, thicknessOf)
+    found.push(...dropDuplicateSeams(touching, contactTolerance(model.bounds.diagonal)), ...intersectionSeams(model, bvhs, minLength, thicknessOf))
   }
 
   for (const seam of found) seam.id = seamId(seam)
@@ -161,6 +162,50 @@ function cornerSeams(
     keep: ({ points }) => meetsSecondPlate(points[points.length >> 1]!, probe, depthMm),
     jointOf: (_, seam) => ({ jointType: classifyJoint({ source: 'crease', ...seam, ...NO_STRIP, convex: true }), strip: NO_STRIP }),
   })
+}
+
+const SAME_SIDE_COS = Math.SQRT1_2
+
+// Each body reads its own edges, so one line can come back from both bodies. Two seams are one when every point of
+// the shorter lies within the tolerance of the longer and their bisectors lean the same way (within 45 degrees); the
+// longer is kept, the first on a tie, and the order is kept. Seams along one line facing opposite ways are two welds.
+export function dropDuplicateSeams<T extends Pick<SeamCandidate, 'lengthMm' | 'closed' | 'points'>>(seams: T[], toleranceMm: number): T[] {
+  const bisector = (seam: T): Vec3 => {
+    const sum: Vec3 = [0, 0, 0]
+    for (const { n1, n2 } of seam.points) for (let c = 0; c < 3; c++) sum[c]! += n1[c]! + n2[c]!
+    return normalize(sum)
+  }
+  const onLine = (p: Vec3, seam: T) => {
+    const { points } = seam
+    const count = seam.closed ? points.length : points.length - 1
+    for (let i = 0; i < count; i++) if (segmentDistance(p, points[i]!.p, points[(i + 1) % points.length]!.p) <= toleranceMm) return true
+    return points.length === 1 && length(sub(p, points[0]!.p)) <= toleranceMm
+  }
+  const box = (seam: T) => {
+    const lo: Vec3 = [Infinity, Infinity, Infinity]
+    const hi: Vec3 = [-Infinity, -Infinity, -Infinity]
+    for (const { p } of seam.points) for (let c = 0; c < 3; c++) [lo[c], hi[c]] = [Math.min(lo[c]!, p[c]!), Math.max(hi[c]!, p[c]!)]
+    return { lo, hi }
+  }
+  const sides = seams.map(bisector)
+  const boxes = seams.map(box)
+  const inside = (i: number, k: number) => [0, 1, 2].every((c) => boxes[i]!.lo[c]! >= boxes[k]!.lo[c]! - toleranceMm && boxes[i]!.hi[c]! <= boxes[k]!.hi[c]! + toleranceMm)
+  const order = seams.map((_, i) => i).sort((a, b) => seams[b]!.lengthMm - seams[a]!.lengthMm || a - b)
+  const kept: number[] = []
+  for (const i of order) {
+    const twin = kept.some(
+      (k) => dot(sides[i]!, sides[k]!) > SAME_SIDE_COS && inside(i, k) && seams[i]!.points.every(({ p }) => onLine(p, seams[k]!)),
+    )
+    if (!twin) kept.push(i)
+  }
+  return kept.sort((a, b) => a - b).map((i) => seams[i]!)
+}
+
+function segmentDistance(p: Vec3, a: Vec3, b: Vec3): number {
+  const ab = sub(b, a)
+  const span = dot(ab, ab)
+  const f = span === 0 ? 0 : Math.max(0, Math.min(1, dot(sub(p, a), ab) / span))
+  return length(sub(p, [a[0] + ab[0] * f, a[1] + ab[1] * f, a[2] + ab[2] * f]))
 }
 
 // The plate normals of a contact seam are the free face of the touching body and the surface it touches, so the

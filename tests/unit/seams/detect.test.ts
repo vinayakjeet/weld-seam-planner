@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { buildMeshModel } from '../../../src/core/mesh/model'
 import { parseStl } from '../../../src/core/mesh/parseStl'
 import { buildBodyBvhs } from '../../../src/core/seams/bodyBvh'
-import { DEFAULT_DETECT_SETTINGS, detectSeams, type SeamCandidate } from '../../../src/core/seams/detect'
+import { DEFAULT_DETECT_SETTINGS, detectSeams, dropDuplicateSeams, type SeamCandidate } from '../../../src/core/seams/detect'
 import { loadSampleModel, loadSoup, transformSoup } from '../helpers/models'
 import { readManifest, readSample } from '../helpers/samples'
 import { cubeTriangles, mergedL, narrowFlangeT, soupOf, steppedLap } from '../helpers/shapes'
@@ -65,6 +65,17 @@ describe('contact seams', () => {
     const crease = seams.filter((s) => s.source === 'crease')
     expect(crease).toHaveLength(6)
     for (const seam of crease) expect(Math.abs(seam.lengthMm - 150)).toBeLessThan(0.5)
+  })
+
+  it('keeps one of two contact seams on the same line and side, and both of a line seen from opposite sides', () => {
+    const [a, b] = detect('t-joint-assembly')
+    const twin = { ...a!, id: `${a!.id}-twin`, lengthMm: a!.lengthMm - 0.01 }
+    expect(dropDuplicateSeams([a!, twin, b!], 0.4).map((s) => s.id)).toEqual([a!.id, b!.id])
+    expect(dropDuplicateSeams([twin, a!, b!], 0.4).map((s) => s.id)).toEqual([a!.id, b!.id])
+    const facingAway = { ...twin, points: twin.points.map((p) => ({ ...p, n1: p.n1.map((v) => -v) as typeof p.n1, n2: p.n2.map((v) => -v) as typeof p.n2 })) }
+    expect(dropDuplicateSeams([a!, facingAway], 0.4)).toHaveLength(2)
+    const beside = { ...twin, points: twin.points.map((p) => ({ ...p, p: [p.p[0], p.p[1], p.p[2] + 1] as typeof p.p })) }
+    expect(dropDuplicateSeams([a!, beside], 0.4)).toHaveLength(2)
   })
 
   it('uses the supplied body BVHs instead of building its own', () => {
