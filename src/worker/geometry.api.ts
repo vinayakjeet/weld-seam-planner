@@ -69,7 +69,8 @@ export interface PartInfo {
 
 export interface DisplayData {
   positions: Float32Array
-  // Already in the order the BVH expects: building a BVH reorders the triangles.
+  // In the order the BVH expects. The copied BVH reorders the triangles; the shared one is indirect, so the indices
+  // stay in model order there.
   indices: Uint32Array
   bvh: SerializedBVH
   // The outline and creases to draw, 6 floats per segment, relative to the display origin like positions.

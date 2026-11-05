@@ -60,9 +60,9 @@ export const HISTORY_LIMIT = 100
 
 // Undo covers accepting and rejecting seams, choosing their joint type, editing seams (drawing, splitting, merging,
 // trimming, reversing, deleting), the plan (the procedure library, assignments, overrides, legs, thickness edits) and
-// the sequence (its strategy, order and locks), the ports and the arm,
-// nothing else. Hover, selection, settings and the loaded part are not history.
-// Comparing the thirteen values by reference keeps those changes from adding steps.
+// the sequence (its strategy, order and locks), the ports, the arm and the job settings (pose spacing, air speed,
+// approach, torch cleaning), nothing else. Hover, selection, detection settings and the loaded part are not history.
+// Comparing the fourteen values by reference keeps those changes from adding steps.
 export const useStore = create<AppState>()(
   temporal(
     (...args) => ({
