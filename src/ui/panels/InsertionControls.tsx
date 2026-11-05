@@ -1,4 +1,3 @@
-import { useEffect } from 'react'
 import { insertSelected } from '../../state/reachFlow'
 import { reachFor } from '../../state/reachSlice'
 import { useStore } from '../../state/store'
@@ -6,26 +5,8 @@ import { useVisibleSeams } from '../../state/useVisibleSeams'
 import { getGeometryClient } from '../../worker/client'
 import { Button } from '../kit/Button'
 
-export const FRAMES_PER_S = 30
-
-// Steps the insertion frame by frame while it plays, and stops at the last frame.
-function useInsertionClock(): void {
-  const playing = useStore((s) => s.insertionState?.playing === true)
-  useEffect(() => {
-    if (!playing) return
-    const timer = setInterval(() => {
-      const { insertionState, setInsertionFrame, setInsertionPlaying } = useStore.getState()
-      if (!insertionState) return
-      if (insertionState.frame >= insertionState.frames.length - 1) setInsertionPlaying(false)
-      else setInsertionFrame(insertionState.frame + 1)
-    }, 1000 / FRAMES_PER_S)
-    return () => clearInterval(timer)
-  }, [playing])
-}
-
 // Insert, Play and Pause and a frame slider for the arm entering the selected seam through its port.
 export function InsertionControls() {
-  useInsertionClock()
   const selectedId = useStore((s) => s.selectedId)
   const insertion = useStore((s) => s.insertionState)
   const setFrame = useStore((s) => s.setInsertionFrame)

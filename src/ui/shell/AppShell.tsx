@@ -8,6 +8,7 @@ import { StatusBar } from './StatusBar'
 import { Timeline } from './Timeline'
 import { TopBar } from './TopBar'
 import { useAccessSync } from './useAccessSync'
+import { useInsertionClock } from './useInsertionClock'
 import { useAutosave } from './useAutosave'
 import { useDeepLink } from './useDeepLink'
 import { useDropGuard } from './useDropGuard'
@@ -32,6 +33,7 @@ export function AppShell() {
   usePreflightSync()
   useTimingSync()
   useAccessSync()
+  useInsertionClock()
   usePlaybackSync()
   useAutosave()
   useDeepLink()
