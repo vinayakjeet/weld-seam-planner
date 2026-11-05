@@ -3,7 +3,7 @@ import { useThree } from '@react-three/fiber'
 import { useCallback, useMemo, useEffect, useRef } from 'react'
 import { Sphere, Vector3, type Mesh } from 'three'
 import { useStore } from '../../state/store'
-import { useShortcuts } from '../shell/useShortcuts'
+import { registerCamera } from '../shell/cameraActions'
 import { AccessCone } from './AccessCone'
 import { AirMoves } from './AirMoves'
 import { ArmCapsules } from './ArmCapsules'
@@ -71,7 +71,7 @@ export function Scene() {
   useEffect(() => {
     if (part) fit()
   }, [part, fit])
-  useShortcuts(fit, showView)
+  useEffect(() => registerCamera({ fit, showView }), [fit, showView])
 
   // The loop only runs on demand, so anything that changes the picture outside React has to ask for a frame.
   useEffect(() => useStore.subscribe(() => invalidate()), [invalidate])

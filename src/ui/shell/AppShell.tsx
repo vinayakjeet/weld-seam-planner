@@ -12,6 +12,7 @@ import { useInsertionClock } from './useInsertionClock'
 import { useAutosave } from './useAutosave'
 import { useDeepLink } from './useDeepLink'
 import { useDropGuard } from './useDropGuard'
+import { useShortcuts } from './useShortcuts'
 import { usePlaybackSync } from './usePlaybackSync'
 import { usePreflightSync } from './usePreflightSync'
 import { useTimingSync } from './useTimingSync'
@@ -37,6 +38,7 @@ export function AppShell() {
   usePlaybackSync()
   useAutosave()
   useDeepLink()
+  useShortcuts()
   return (
     <TooltipProvider>
       <div className="flex h-full flex-col">

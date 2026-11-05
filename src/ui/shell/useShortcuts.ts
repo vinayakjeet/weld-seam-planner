@@ -2,9 +2,10 @@ import { useEffect } from 'react'
 import { acceptSelected, chooseTool, exportPlan, redoEdit, rejectSelected, removeSelected, reverseSelected, toolEvent, undoEdit } from '../../state/flows'
 import { STEPS, useStore } from '../../state/store'
 import { getGeometryClient } from '../../worker/client'
+import { cameraActions } from './cameraActions'
 import { shortcutFor, shortcutGate, stepForShortcut, viewForShortcut, type StepShortcut, type ViewShortcut } from './shortcuts'
 
-export function useShortcuts(fit: () => void, showView: (index: number) => void): void {
+export function useShortcuts(): void {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       // A dialog that closed on this key has already handled it, before the store says the dialog is shut.
@@ -47,14 +48,16 @@ export function useShortcuts(fit: () => void, showView: (index: number) => void)
       // Export is let through without a part: it tells the user why there is nothing to write.
       if (shortcut.startsWith('view')) {
         if (!part) return
+        const camera = cameraActions()
+        if (!camera) return
         event.preventDefault()
-        showView(viewForShortcut(shortcut as ViewShortcut))
+        camera.showView(viewForShortcut(shortcut as ViewShortcut))
         return
       }
       if (!toolKey && !part && shortcut !== 'fit' && shortcut !== 'undo' && shortcut !== 'redo' && shortcut !== 'export') return
       event.preventDefault()
       const client = getGeometryClient()
-      if (shortcut === 'fit') fit()
+      if (shortcut === 'fit') cameraActions()?.fit()
       else if (shortcut === 'undo') undoEdit()
       else if (shortcut === 'redo') redoEdit()
       else if (shortcut === 'draw' || shortcut === 'split') void chooseTool(shortcut, client)
@@ -68,5 +71,5 @@ export function useShortcuts(fit: () => void, showView: (index: number) => void)
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [fit, showView])
+  }, [])
 }

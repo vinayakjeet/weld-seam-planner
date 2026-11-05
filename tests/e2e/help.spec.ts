@@ -31,6 +31,35 @@ test('the shortcut sheet lists the keys, blocks the step keys while open and clo
   await expect(sheet).toHaveCount(0)
 })
 
+// The keys belong to the page, not to the 3D view, which loads as its own chunk and mounts later.
+test('? opens the sheet as soon as the start screen shows, before the 3D view has mounted', async ({ page }) => {
+  for (let visit = 0; visit < 4; visit++) {
+    await page.goto('/')
+    await expect(page.getByText('Six steps: Import, Seams, Procedures, Access, Sequence, Export.')).toBeVisible()
+    await page.keyboard.press('?')
+    await expect(page.getByRole('dialog', { name: 'Keyboard shortcuts' }), `visit ${visit + 1}`).toBeVisible({ timeout: 1000 })
+  }
+})
+
+test('the camera keys turn the view once the 3D view is there', async ({ page }) => {
+  await page.goto('/')
+  await loadSample(page, sampleById('t-joint-merged'))
+  const canvas = page.locator('canvas').first()
+  const shot = async () => {
+    await page.waitForTimeout(400)
+    return canvas.screenshot()
+  }
+  const start = await shot()
+  await page.keyboard.press('Shift+5')
+  const top = await shot()
+  expect(top.equals(start), 'Shift+5 shows the top view').toBe(false)
+  await page.mouse.move(700, 450)
+  await page.mouse.wheel(0, -600)
+  const zoomed = await shot()
+  await page.keyboard.press('f')
+  expect((await shot()).equals(zoomed), 'F fits the part again').toBe(false)
+})
+
 test('Escape that closes the sheet leaves an armed tool armed', async ({ page }) => {
   await page.goto('/')
   await loadSample(page, sampleById('t-joint-merged'))
