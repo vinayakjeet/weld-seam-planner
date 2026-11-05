@@ -221,9 +221,13 @@ export function preflight(plan: Plan): Issue[] {
 
     if (access?.class === 'snake' && access.reachCoverage !== null && access.reachCoverage < 1) {
       const stretches = access.unreachable.length
+      // Named along the weld direction, as the exported file lists them.
+      const welded = backwards.has(seam.id) && !seam.closed
+        ? access.unreachable.map(([a, b]): [number, number] => [seam.lengthMm - b, seam.lengthMm - a]).sort((x, y) => x[0] - y[0])
+        : access.unreachable
       out('SNAKE_UNREACHABLE', 'warning', {
         what: `The snake arm reaches ${Math.round(access.reachCoverage * 100)} % of seam ${label}.`,
-        why: `${stretches} stretch${stretches === 1 ? '' : 'es'} of it (${intervalsText(access.unreachable)}) ${stretches === 1 ? 'is' : 'are'} out of reach from ${access.portId === null ? 'every port' : `port ${access.portId}`} with the current arm.`,
+        why: `${stretches} stretch${stretches === 1 ? '' : 'es'} of it (${intervalsText(welded)}) ${stretches === 1 ? 'is' : 'are'} out of reach from ${access.portId === null ? 'every port' : `port ${access.portId}`} with the current arm.`,
         next: 'Move or add a port, lengthen the arm or raise its bend limit in Access, then run reach again. The rest can be welded by hand.',
       })
     }

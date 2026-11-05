@@ -10,6 +10,13 @@ const refuse = (what: string, why: string, next: string): Outcome => ({ status: 
 const MAX_LISTED_PATHS = 3
 const LEG_MATCH_MM = 0.005
 
+// A seam welded against its points is written in travel order: plate thickness behind the swapped normals and the
+// unreachable stretches measured from the other end. The plan holds them along the stored points.
+const storedPair = <T>([a, b]: [T, T], backwards: boolean): [T, T] => (backwards ? [b, a] : [a, b])
+const storedIntervals = (intervals: Array<[number, number]>, lengthMm: number, backwards: boolean): Array<[number, number]> =>
+  backwards ? intervals.map(([a, b]): [number, number] => [roundMm(lengthMm - b), roundMm(lengthMm - a)]).sort((x, y) => x[0] - y[0]) : intervals
+const roundMm = (x: number) => Math.round(x * 1000) / 1000 + 0
+
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
 
 export function importJob(input: string | unknown, expectedSha256: string): Outcome {
@@ -94,8 +101,9 @@ export function importJob(input: string | unknown, expectedSha256: string): Outc
     gravity: job.frames.gravity,
     settings: { ...job.settings, cleanEveryS: job.settings.cleanEveryS ?? DEFAULT_JOB_SETTINGS.cleanEveryS, cleanTimeS: job.settings.cleanTimeS ?? DEFAULT_JOB_SETTINGS.cleanTimeS },
     procedures: job.procedures,
-    seams: job.seams.map(
-      (seam): PlannedSeam => ({
+    seams: job.seams.map((seam): PlannedSeam => {
+      const backwards = seam.direction === 'reverse' && !seam.closed
+      return {
         seam: {
           id: seam.id,
           label: seam.label,
@@ -108,14 +116,14 @@ export function importJob(input: string | unknown, expectedSha256: string): Outc
           lengthMm: seam.lengthMm,
           openingAngleDeg: seam.geometry.openingAngleDeg,
           points: seam.points!,
-          thicknessMm: seam.geometry.plateThicknessMm ?? [null, null],
+          thicknessMm: storedPair(seam.geometry.plateThicknessMm ?? [null, null], backwards),
         },
         procedureId: seam.procedureId,
         overrides: seam.overrides,
         legMm: seam.legMm,
-        access: seam.access,
-      }),
-    ),
+        access: { ...seam.access, unreachable: storedIntervals(seam.access.unreachable, seam.lengthMm, backwards) },
+      }
+    }),
     access: {
       ports: job.access.ports.map((port) => ({ id: port.id, position: port.position, direction: port.direction, diameterMm: port.diameterMm })),
       arm: job.access.arm

@@ -179,6 +179,20 @@ describe('round trip', () => {
     expect(again).toBe(text)
   })
 
+  it('is byte identical for a reversed seam with unequal plates and a stretch out of reach, and restores them in stored order', () => {
+    const plan = specExamplePlan([{ id: 's1', from: [0, 0, 0], to: [100, 0, 0], thicknessMm: [6, 12] }])
+    plan.seams[0]!.access = { clearanceDeg: 12, nearClearanceDeg: 20, class: 'snake', portId: 'P1', reachCoverage: 0.8, unreachable: [[0, 20]] }
+    plan.sequence = { strategy: 'manual', order: [{ seamId: 's1', reversed: true }] }
+    const { text, again } = roundTrip(plan)
+    expect(JSON.parse(text).seams[0].geometry.plateThicknessMm).toEqual([12, 6])
+    expect(JSON.parse(text).seams[0].access.unreachable).toEqual([[80, 100]])
+    expect(again).toBe(text)
+    const back = importJob(text, plan.part.sha256)
+    if (back.status !== 'ok') throw new Error(back.error.what)
+    expect(back.plan.seams[0]!.seam.thicknessMm).toEqual([6, 12])
+    expect(back.plan.seams[0]!.access!.unreachable).toEqual([[0, 20]])
+  })
+
   it('writes the weld tolerance and keeps it, at the default and at another value', () => {
     expect(JSON.parse(roundTrip(samplePlan('t-joint-merged')).text).settings.weldToleranceRel).toBe(1e-5)
     const plan = samplePlan('t-joint-merged', (p) => ({ ...p, settings: { ...p.settings, weldToleranceRel: 2.5e-4 } }))

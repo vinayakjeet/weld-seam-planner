@@ -294,6 +294,13 @@ describe('snake reach', () => {
     expect(issues[0]!.next).toContain('The rest can be welded by hand.')
   })
 
+  it('SNAKE_UNREACHABLE: names the stretches along the weld direction, as the file writes them, for a reversed seam', () => {
+    const plan = planWith([snake(0.6, [[10, 30], [60, 70]])])
+    plan.sequence = { strategy: 'manual', order: [{ seamId: 's0', reversed: true }] }
+    expect(preflight(plan)[0]!.why).toBe('2 stretches of it (30 to 40 mm, 70 to 90 mm) are out of reach from port P1 with the current arm.')
+    expect(buildJob(plan, { createdAt: CREATED_AT }).seams[0]!.access.unreachable).toEqual([[30, 40], [70, 90]])
+  })
+
   it('SNAKE_UNREACHABLE: one stretch agrees in number, and a seam with no port says every port', () => {
     const issues = preflight(planWith([snake(0, [[0, 100]], null)]))
     expect(issues[0]!.why).toBe('1 stretch of it (0 to 100 mm) is out of reach from every port with the current arm.')
