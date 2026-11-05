@@ -154,8 +154,9 @@ describe('optimise progress', () => {
 
   it('does not change the answer', () => {
     const nodes = grid(40, 11)
-    const plain = optimise(nodes, edge)
-    const reported = optimise(nodes, edge, { onProgress: () => undefined })
+    // A clock that never moves, so that neither run is cut short by the time box.
+    const plain = optimise(nodes, edge, { now: () => 0 })
+    const reported = optimise(nodes, edge, { now: () => 0, onProgress: () => undefined })
     expect(ids(reported)).toEqual(ids(plain))
   })
 
