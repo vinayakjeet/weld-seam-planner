@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsx scripts/build-schema.ts --check && tsc -b && vite build && tsx scripts/check-bundle.ts",
+    "build": "tsx scripts/build-schema.ts --check && tsx scripts/build-job-fields.ts --check && tsc -b && vite build && tsx scripts/check-bundle.ts",
     "schema": "tsx scripts/build-schema.ts",
+    "fields": "tsx scripts/build-job-fields.ts",
     "preview": "vite preview",
     "test": "vitest run",
     "test:e2e": "playwright test",

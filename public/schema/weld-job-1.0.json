@@ -34,11 +34,13 @@
       "properties": {
         "name": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Name of the app that wrote the file."
         },
         "version": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Version of that app."
         }
       },
       "required": [
@@ -53,35 +55,43 @@
       "properties": {
         "length": {
           "type": "string",
-          "const": "mm"
+          "const": "mm",
+          "description": "Lengths and positions."
         },
         "angle": {
           "type": "string",
-          "const": "deg"
+          "const": "deg",
+          "description": "Every angle; quaternions are unitless."
         },
         "time": {
           "type": "string",
-          "const": "s"
+          "const": "s",
+          "description": "Times, except fields whose name ends in Ms."
         },
         "speed": {
           "type": "string",
-          "const": "mm/s"
+          "const": "mm/s",
+          "description": "Travel and air speeds."
         },
         "wireFeed": {
           "type": "string",
-          "const": "m/min"
+          "const": "m/min",
+          "description": "Wire feed speed."
         },
         "gasFlow": {
           "type": "string",
-          "const": "L/min"
+          "const": "L/min",
+          "description": "Shielding gas flow."
         },
         "heatInput": {
           "type": "string",
-          "const": "kJ/mm"
+          "const": "kJ/mm",
+          "description": "Heat input."
         },
         "mass": {
           "type": "string",
-          "const": "kg"
+          "const": "kg",
+          "description": "Wire mass."
         }
       },
       "required": [
@@ -102,7 +112,8 @@
       "properties": {
         "convention": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Readable statement of handedness, quaternion order and tool axes."
         },
         "gravity": {
           "type": "array",
@@ -119,7 +130,8 @@
           ],
           "items": false,
           "minItems": 3,
-          "maxItems": 3
+          "maxItems": 3,
+          "description": "Unit gravity direction in the part frame; welding positions are computed from it."
         },
         "partToCell": {
           "type": "object",
@@ -139,7 +151,8 @@
               ],
               "items": false,
               "minItems": 3,
-              "maxItems": 3
+              "maxItems": 3,
+              "description": "Part origin in the cell frame, in mm."
             },
             "quaternion": {
               "type": "array",
@@ -167,14 +180,16 @@
               ],
               "items": false,
               "minItems": 4,
-              "maxItems": 4
+              "maxItems": 4,
+              "description": "Part orientation in the cell frame, x, y, z, w."
             }
           },
           "required": [
             "position",
             "quaternion"
           ],
-          "additionalProperties": {}
+          "additionalProperties": {},
+          "description": "Where the part sits in the cell."
         }
       },
       "required": [
@@ -190,11 +205,13 @@
       "properties": {
         "name": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "File name of the STL the plan was made on."
         },
         "sha256": {
           "type": "string",
-          "pattern": "^[0-9a-f]{64}$"
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "SHA-256 of the STL bytes in lowercase hex; a plan is only restored onto the same file."
         },
         "sourceUnits": {
           "type": "string",
@@ -202,21 +219,25 @@
             "mm",
             "in",
             "m"
-          ]
+          ],
+          "description": "Units the STL was drawn in."
         },
         "scaleToMm": {
           "type": "number",
-          "exclusiveMinimum": 0
+          "exclusiveMinimum": 0,
+          "description": "Factor that took the STL coordinates to mm."
         },
         "triangles": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 9007199254740991
+          "maximum": 9007199254740991,
+          "description": "Triangle count after welding vertices and dropping degenerate triangles."
         },
         "bodies": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 9007199254740991
+          "maximum": 9007199254740991,
+          "description": "Number of separate connected bodies."
         },
         "boundingBox": {
           "type": "object",
@@ -236,7 +257,8 @@
               ],
               "items": false,
               "minItems": 3,
-              "maxItems": 3
+              "maxItems": 3,
+              "description": "Smallest corner in mm, part frame."
             },
             "max": {
               "type": "array",
@@ -253,14 +275,16 @@
               ],
               "items": false,
               "minItems": 3,
-              "maxItems": 3
+              "maxItems": 3,
+              "description": "Largest corner in mm, part frame."
             }
           },
           "required": [
             "min",
             "max"
           ],
-          "additionalProperties": {}
+          "additionalProperties": {},
+          "description": "Axis-aligned bounding box of the part."
         }
       },
       "required": [
@@ -279,19 +303,23 @@
       "type": "object",
       "properties": {
         "creaseAngleDeg": {
-          "type": "number"
+          "type": "number",
+          "description": "Bend in degrees between neighbouring faces above which an edge counts as a crease."
         },
         "poseSpacingMm": {
           "type": "number",
-          "exclusiveMinimum": 0
+          "exclusiveMinimum": 0,
+          "description": "Arc length in mm between two exported poses."
         },
         "airSpeedMmS": {
           "type": "number",
-          "exclusiveMinimum": 0
+          "exclusiveMinimum": 0,
+          "description": "Torch speed for air moves in mm/s, used for air time."
         },
         "approachMm": {
           "type": "number",
-          "minimum": 0
+          "minimum": 0,
+          "description": "Approach and retract distance in mm along minus tool z."
         },
         "cleanEveryS": {
           "description": "Arc time between torch cleaning stops in seconds, 0 for none. Absent in files written before cleaning was modelled.",
@@ -359,7 +387,8 @@
             "properties": {
               "spec": {
                 "type": "string",
-                "minLength": 1
+                "minLength": 1,
+                "description": "Base material designation, for example S355."
               },
               "thicknessMm": {
                 "type": "array",
@@ -375,7 +404,8 @@
                 ],
                 "items": false,
                 "minItems": 2,
-                "maxItems": 2
+                "maxItems": 2,
+                "description": "Plate thickness range in mm this procedure is qualified for, smaller value first."
               }
             },
             "required": [
@@ -390,11 +420,13 @@
             "properties": {
               "classification": {
                 "type": "string",
-                "minLength": 1
+                "minLength": 1,
+                "description": "Filler wire classification, for example ER70S-6."
               },
               "diameterMm": {
                 "type": "number",
-                "exclusiveMinimum": 0
+                "exclusiveMinimum": 0,
+                "description": "Wire diameter in mm."
               }
             },
             "required": [
@@ -410,11 +442,13 @@
             "properties": {
               "mix": {
                 "type": "string",
-                "minLength": 1
+                "minLength": 1,
+                "description": "Shielding gas mix, for example Ar 82 / CO2 18."
               },
               "flowLpm": {
                 "type": "number",
-                "exclusiveMinimum": 0
+                "exclusiveMinimum": 0,
+                "description": "Gas flow in L/min."
               }
             },
             "required": [
@@ -428,13 +462,16 @@
             "properties": {
               "currentA": {
                 "type": "number",
-                "exclusiveMinimum": 0
+                "exclusiveMinimum": 0,
+                "description": "Welding current in A."
               },
               "voltageV": {
                 "type": "number",
-                "exclusiveMinimum": 0
+                "exclusiveMinimum": 0,
+                "description": "Arc voltage in V."
               },
               "wireFeedMpm": {
+                "description": "Wire feed speed in m/min; wire mass is estimated from it when present.",
                 "type": "number",
                 "exclusiveMinimum": 0
               },
@@ -444,7 +481,8 @@
                   "DCEP",
                   "DCEN",
                   "AC"
-                ]
+                ],
+                "description": "Electrode polarity."
               }
             },
             "required": [
@@ -476,18 +514,21 @@
             "type": "object",
             "properties": {
               "workAngleOffsetDeg": {
-                "type": "number"
+                "type": "number",
+                "description": "Tilt of the torch away from the joint bisector, across the seam, in degrees."
               },
               "travelAngleDeg": {
                 "type": "number",
-                "minimum": 0
+                "minimum": 0,
+                "description": "Lean of the torch along the seam in degrees, always 0 or more; technique gives its sense."
               },
               "technique": {
                 "type": "string",
                 "enum": [
                   "push",
                   "drag"
-                ]
+                ],
+                "description": "push leans the torch forward along travel, drag leans it back."
               }
             },
             "required": [
@@ -508,19 +549,23 @@
                   "zigzag",
                   "triangle",
                   "circle"
-                ]
+                ],
+                "description": "Weave pattern, none for a straight bead."
               },
               "amplitudeMm": {
                 "type": "number",
-                "minimum": 0
+                "minimum": 0,
+                "description": "Weave amplitude in mm."
               },
               "frequencyHz": {
                 "type": "number",
-                "minimum": 0
+                "minimum": 0,
+                "description": "Weave frequency in Hz."
               },
               "dwellMs": {
                 "type": "number",
-                "minimum": 0
+                "minimum": 0,
+                "description": "Dwell at each edge of the weave in ms."
               }
             },
             "required": [
@@ -537,7 +582,8 @@
             "properties": {
               "preflowS": {
                 "type": "number",
-                "minimum": 0
+                "minimum": 0,
+                "description": "Gas flow before the arc strikes, in seconds."
               }
             },
             "required": [
@@ -551,15 +597,18 @@
             "properties": {
               "craterFillS": {
                 "type": "number",
-                "minimum": 0
+                "minimum": 0,
+                "description": "Crater fill time at the end of the seam, in seconds."
               },
               "burnbackMs": {
                 "type": "number",
-                "minimum": 0
+                "minimum": 0,
+                "description": "Wire burnback after the arc stops, in ms."
               },
               "postflowS": {
                 "type": "number",
-                "minimum": 0
+                "minimum": 0,
+                "description": "Gas flow after the arc stops, in seconds."
               }
             },
             "required": [
@@ -699,7 +748,8 @@
                 "properties": {
                   "spec": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "description": "Base material designation, for example S355."
                   },
                   "thicknessMm": {
                     "type": "array",
@@ -715,7 +765,8 @@
                     ],
                     "items": false,
                     "minItems": 2,
-                    "maxItems": 2
+                    "maxItems": 2,
+                    "description": "Plate thickness range in mm this procedure is qualified for, smaller value first."
                   }
                 },
                 "additionalProperties": {}
@@ -725,11 +776,13 @@
                 "properties": {
                   "classification": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "description": "Filler wire classification, for example ER70S-6."
                   },
                   "diameterMm": {
                     "type": "number",
-                    "exclusiveMinimum": 0
+                    "exclusiveMinimum": 0,
+                    "description": "Wire diameter in mm."
                   }
                 },
                 "additionalProperties": {}
@@ -739,11 +792,13 @@
                 "properties": {
                   "mix": {
                     "type": "string",
-                    "minLength": 1
+                    "minLength": 1,
+                    "description": "Shielding gas mix, for example Ar 82 / CO2 18."
                   },
                   "flowLpm": {
                     "type": "number",
-                    "exclusiveMinimum": 0
+                    "exclusiveMinimum": 0,
+                    "description": "Gas flow in L/min."
                   }
                 },
                 "additionalProperties": {}
@@ -753,13 +808,16 @@
                 "properties": {
                   "currentA": {
                     "type": "number",
-                    "exclusiveMinimum": 0
+                    "exclusiveMinimum": 0,
+                    "description": "Welding current in A."
                   },
                   "voltageV": {
                     "type": "number",
-                    "exclusiveMinimum": 0
+                    "exclusiveMinimum": 0,
+                    "description": "Arc voltage in V."
                   },
                   "wireFeedMpm": {
+                    "description": "Wire feed speed in m/min; wire mass is estimated from it when present.",
                     "type": "number",
                     "exclusiveMinimum": 0
                   },
@@ -769,14 +827,16 @@
                       "DCEP",
                       "DCEN",
                       "AC"
-                    ]
+                    ],
+                    "description": "Electrode polarity."
                   }
                 },
                 "additionalProperties": {}
               },
               "travelSpeedMmS": {
                 "type": "number",
-                "exclusiveMinimum": 0
+                "exclusiveMinimum": 0,
+                "description": "Travel speed in mm/s."
               },
               "ctwdMm": {
                 "anyOf": [
@@ -787,24 +847,28 @@
                   {
                     "type": "null"
                   }
-                ]
+                ],
+                "description": "Contact tip to work distance in mm, null when not applicable."
               },
               "torch": {
                 "type": "object",
                 "properties": {
                   "workAngleOffsetDeg": {
-                    "type": "number"
+                    "type": "number",
+                    "description": "Tilt of the torch away from the joint bisector, across the seam, in degrees."
                   },
                   "travelAngleDeg": {
                     "type": "number",
-                    "minimum": 0
+                    "minimum": 0,
+                    "description": "Lean of the torch along the seam in degrees, always 0 or more; technique gives its sense."
                   },
                   "technique": {
                     "type": "string",
                     "enum": [
                       "push",
                       "drag"
-                    ]
+                    ],
+                    "description": "push leans the torch forward along travel, drag leans it back."
                   }
                 },
                 "additionalProperties": {}
@@ -819,19 +883,23 @@
                       "zigzag",
                       "triangle",
                       "circle"
-                    ]
+                    ],
+                    "description": "Weave pattern, none for a straight bead."
                   },
                   "amplitudeMm": {
                     "type": "number",
-                    "minimum": 0
+                    "minimum": 0,
+                    "description": "Weave amplitude in mm."
                   },
                   "frequencyHz": {
                     "type": "number",
-                    "minimum": 0
+                    "minimum": 0,
+                    "description": "Weave frequency in Hz."
                   },
                   "dwellMs": {
                     "type": "number",
-                    "minimum": 0
+                    "minimum": 0,
+                    "description": "Dwell at each edge of the weave in ms."
                   }
                 },
                 "additionalProperties": {}
@@ -841,7 +909,8 @@
                 "properties": {
                   "preflowS": {
                     "type": "number",
-                    "minimum": 0
+                    "minimum": 0,
+                    "description": "Gas flow before the arc strikes, in seconds."
                   }
                 },
                 "additionalProperties": {}
@@ -851,15 +920,18 @@
                 "properties": {
                   "craterFillS": {
                     "type": "number",
-                    "minimum": 0
+                    "minimum": 0,
+                    "description": "Crater fill time at the end of the seam, in seconds."
                   },
                   "burnbackMs": {
                     "type": "number",
-                    "minimum": 0
+                    "minimum": 0,
+                    "description": "Wire burnback after the arc stops, in ms."
                   },
                   "postflowS": {
                     "type": "number",
-                    "minimum": 0
+                    "minimum": 0,
+                    "description": "Gas flow after the arc stops, in seconds."
                   }
                 },
                 "additionalProperties": {}
@@ -884,13 +956,16 @@
               "thermalEfficiency": {
                 "type": "number",
                 "exclusiveMinimum": 0,
-                "maximum": 1
+                "maximum": 1,
+                "description": "Process factor k used for heat input."
               },
               "preheatC": {
-                "type": "number"
+                "type": "number",
+                "description": "Preheat temperature in degrees C."
               },
               "interpassMaxC": {
-                "type": "number"
+                "type": "number",
+                "description": "Maximum interpass temperature in degrees C."
               }
             },
             "additionalProperties": {},
@@ -915,16 +990,20 @@
                 "index": {
                   "type": "integer",
                   "minimum": 1,
-                  "maximum": 9007199254740991
+                  "maximum": 9007199254740991,
+                  "description": "Pass number, 1 for the root pass."
                 },
                 "lateralOffsetMm": {
-                  "type": "number"
+                  "type": "number",
+                  "description": "Offset of this pass across the seam in mm, along tool y."
                 },
                 "verticalOffsetMm": {
-                  "type": "number"
+                  "type": "number",
+                  "description": "Offset of this pass away from the root in mm, along minus tool z."
                 },
                 "workAngleOffsetDeg": {
-                  "type": "number"
+                  "type": "number",
+                  "description": "Change of the work angle for this pass in degrees."
                 }
               },
               "required": [
@@ -944,11 +1023,13 @@
                 "properties": {
                   "lengthMm": {
                     "type": "number",
-                    "exclusiveMinimum": 0
+                    "exclusiveMinimum": 0,
+                    "description": "Length of each welded segment in mm."
                   },
                   "pitchMm": {
                     "type": "number",
-                    "exclusiveMinimum": 0
+                    "exclusiveMinimum": 0,
+                    "description": "Distance from the start of one segment to the start of the next in mm."
                   }
                 },
                 "required": [
@@ -967,14 +1048,17 @@
             "type": "object",
             "properties": {
               "start": {
-                "type": "boolean"
+                "type": "boolean",
+                "description": "True to wrap the weld around the start of the seam."
               },
               "end": {
-                "type": "boolean"
+                "type": "boolean",
+                "description": "True to wrap the weld around the end of the seam."
               },
               "lengthMm": {
                 "type": "number",
-                "minimum": 0
+                "minimum": 0,
+                "description": "Length of each wrap in mm."
               }
             },
             "required": [
@@ -1000,13 +1084,14 @@
               "forward",
               "reverse"
             ],
-            "description": "Direction relative to the stored points."
+            "description": "reverse when the seam is welded against its stored points, forward otherwise; it matches sequence.order[].reversed."
           },
           "geometry": {
             "type": "object",
             "properties": {
               "openingAngleDeg": {
-                "type": "number"
+                "type": "number",
+                "description": "Angle between the two plate faces on the side the torch works from, 180 minus the angle between the normals, length weighted, in degrees; 90 for a square T."
               },
               "plateNormals": {
                 "type": "array",
@@ -1048,9 +1133,11 @@
                 ],
                 "items": false,
                 "minItems": 2,
-                "maxItems": 2
+                "maxItems": 2,
+                "description": "Unit outward normals of the two plates at the middle of the seam."
               },
               "plateThicknessMm": {
+                "description": "Thickness in mm of the plate behind each normal, null where it could not be measured.",
                 "type": "array",
                 "prefixItems": [
                   {
@@ -1085,7 +1172,8 @@
                 ],
                 "items": false,
                 "minItems": 3,
-                "maxItems": 3
+                "maxItems": 3,
+                "description": "Where the weld starts in mm, part frame; the first pose position."
               },
               "end": {
                 "type": "array",
@@ -1102,7 +1190,8 @@
                 ],
                 "items": false,
                 "minItems": 3,
-                "maxItems": 3
+                "maxItems": 3,
+                "description": "Where the weld ends in mm, part frame; equal to start for a closed seam."
               }
             },
             "required": [
@@ -1131,17 +1220,21 @@
                   {
                     "type": "null"
                   }
-                ]
+                ],
+                "description": "AWS fillet position, null when the ISO position has no AWS fillet name."
               },
               "iso6947": {
                 "type": "string",
-                "minLength": 1
+                "minLength": 1,
+                "description": "ISO 6947 position that covers most of the seam length, for example PB."
               },
               "inclinationDeg": {
-                "type": "number"
+                "type": "number",
+                "description": "Weld axis inclination from horizontal in degrees, length weighted over the dominant position."
               },
               "rotationDeg": {
-                "type": "number"
+                "type": "number",
+                "description": "Rotation of the weld face about the weld axis in degrees, a circular mean over the dominant position."
               }
             },
             "required": [
@@ -1161,7 +1254,8 @@
               "properties": {
                 "s": {
                   "type": "number",
-                  "minimum": 0
+                  "minimum": 0,
+                  "description": "Arc length in mm from the arc start, along the travel direction; 0 at the first pose."
                 },
                 "position": {
                   "type": "array",
@@ -1178,7 +1272,8 @@
                   ],
                   "items": false,
                   "minItems": 3,
-                  "maxItems": 3
+                  "maxItems": 3,
+                  "description": "TCP at the weld root in mm, part frame."
                 },
                 "quaternion": {
                   "type": "array",
@@ -1206,7 +1301,8 @@
                   ],
                   "items": false,
                   "minItems": 4,
-                  "maxItems": 4
+                  "maxItems": 4,
+                  "description": "Tool orientation as a unit quaternion x, y, z, w with w of at least 0; tool z points from the torch into the joint, tool x along travel."
                 }
               },
               "required": [
@@ -1216,14 +1312,15 @@
               ],
               "additionalProperties": {}
             },
-            "description": "s is arc length in mm; position is the TCP at the weld root in the part frame; quaternion is the tool orientation, x,y,z,w."
+            "description": "Tool poses in the order they are welded, along the travel direction: already reversed for a seam welded against its stored points. s is arc length in mm; position is the TCP at the weld root in the part frame; quaternion is the tool orientation, x,y,z,w."
           },
           "approach": {
             "type": "object",
             "properties": {
               "distanceMm": {
                 "type": "number",
-                "minimum": 0
+                "minimum": 0,
+                "description": "Approach distance in mm."
               }
             },
             "required": [
@@ -1237,7 +1334,8 @@
             "properties": {
               "distanceMm": {
                 "type": "number",
-                "minimum": 0
+                "minimum": 0,
+                "description": "Retract distance in mm."
               }
             },
             "required": [
@@ -1269,11 +1367,13 @@
                       ],
                       "items": false,
                       "minItems": 3,
-                      "maxItems": 3
+                      "maxItems": 3,
+                      "description": "Unit search direction, towards the plate it finds."
                     },
                     "searchMm": {
                       "type": "number",
-                      "exclusiveMinimum": 0
+                      "exclusiveMinimum": 0,
+                      "description": "Longest search distance in mm."
                     }
                   },
                   "required": [
@@ -1281,14 +1381,16 @@
                     "searchMm"
                   ],
                   "additionalProperties": {}
-                }
+                },
+                "description": "Touch-sensing searches to run before the arc starts, one per plate."
               },
               "seamTracking": {
                 "type": "string",
                 "enum": [
                   "through-arc",
                   "none"
-                ]
+                ],
+                "description": "through-arc tracking while welding, or none (GTAW)."
               }
             },
             "required": [
@@ -1302,6 +1404,7 @@
             "type": "object",
             "properties": {
               "clearanceDeg": {
+                "description": "Smallest free cone half-angle in degrees around the torch axis out to 300 mm, over the poses of the seam; null before access was analysed.",
                 "type": [
                   "number",
                   "null"
@@ -1309,6 +1412,7 @@
               },
               "nearClearanceDeg": {
                 "default": null,
+                "description": "The same free cone measured only out to 60 mm, the room the snake arm nozzle needs; null in files written before the field existed.",
                 "type": [
                   "number",
                   "null"
@@ -1328,9 +1432,11 @@
                   {
                     "type": "null"
                   }
-                ]
+                ],
+                "description": "Which tool reaches the seam: a standard torch, a slim torch, the snake arm through a port, or none."
               },
               "portId": {
+                "description": "The access port the snake arm enters through, null for other classes.",
                 "type": [
                   "string",
                   "null"
@@ -1346,7 +1452,8 @@
                   {
                     "type": "null"
                   }
-                ]
+                ],
+                "description": "Share of the seam length the arm reaches, 0 to 1, null before reach was run."
               },
               "unreachable": {
                 "type": "array",
@@ -1365,7 +1472,8 @@
                   "items": false,
                   "minItems": 2,
                   "maxItems": 2
-                }
+                },
+                "description": "Arc-length intervals [from, to] in mm the arm cannot reach, measured like poses[].s along the travel direction."
               }
             },
             "required": [
@@ -1383,19 +1491,23 @@
             "properties": {
               "arcTimeS": {
                 "type": "number",
-                "minimum": 0
+                "minimum": 0,
+                "description": "Arc-on time in seconds: passes x length / travel speed."
               },
               "heatInputKJmm": {
                 "type": "number",
-                "minimum": 0
+                "minimum": 0,
+                "description": "Heat input in kJ/mm: k x V x I / (1000 x travel speed in mm/s)."
               },
               "wireKg": {
                 "type": "number",
-                "minimum": 0
+                "minimum": 0,
+                "description": "Wire mass in kg from wire feed speed, wire diameter and arc time; 0 without a wire feed speed."
               },
               "gasL": {
                 "type": "number",
-                "minimum": 0
+                "minimum": 0,
+                "description": "Gas volume in L over pre-flow, arc time and post-flow; 0 without a gas."
               }
             },
             "required": [
@@ -1414,9 +1526,11 @@
               "properties": {
                 "code": {
                   "type": "string",
-                  "minLength": 1
+                  "minLength": 1,
+                  "description": "Stable machine-readable code, for example LEG_OUT_OF_RANGE."
                 },
                 "seamId": {
+                  "description": "The seam the issue is about, null when it concerns the whole job.",
                   "type": [
                     "string",
                     "null"
@@ -1424,7 +1538,8 @@
                 },
                 "message": {
                   "type": "string",
-                  "minLength": 1
+                  "minLength": 1,
+                  "description": "Readable explanation: what happened, why, and what to do next."
                 }
               },
               "required": [
@@ -1444,7 +1559,8 @@
               "properties": {
                 "s": {
                   "type": "number",
-                  "minimum": 0
+                  "minimum": 0,
+                  "description": "Arc length in mm along the stored points from the first point."
                 },
                 "p": {
                   "type": "array",
@@ -1461,7 +1577,8 @@
                   ],
                   "items": false,
                   "minItems": 3,
-                  "maxItems": 3
+                  "maxItems": 3,
+                  "description": "Point on the weld root in mm, part frame."
                 },
                 "t": {
                   "type": "array",
@@ -1478,7 +1595,8 @@
                   ],
                   "items": false,
                   "minItems": 3,
-                  "maxItems": 3
+                  "maxItems": 3,
+                  "description": "Unit tangent along the stored points."
                 },
                 "n1": {
                   "type": "array",
@@ -1495,7 +1613,8 @@
                   ],
                   "items": false,
                   "minItems": 3,
-                  "maxItems": 3
+                  "maxItems": 3,
+                  "description": "Unit outward normal of the first plate."
                 },
                 "n2": {
                   "type": "array",
@@ -1512,7 +1631,8 @@
                   ],
                   "items": false,
                   "minItems": 3,
-                  "maxItems": 3
+                  "maxItems": 3,
+                  "description": "Unit outward normal of the second plate."
                 }
               },
               "required": [
@@ -1566,7 +1686,8 @@
             "min-air-move",
             "balanced-heat",
             "manual"
-          ]
+          ],
+          "description": "How the order was chosen."
         },
         "order": {
           "type": "array",
@@ -1575,10 +1696,12 @@
             "properties": {
               "seamId": {
                 "type": "string",
-                "minLength": 1
+                "minLength": 1,
+                "description": "Id of a seam in seams."
               },
               "reversed": {
-                "type": "boolean"
+                "type": "boolean",
+                "description": "True when the seam is welded against its stored points. Its poses, geometry.start and geometry.end already follow the travel direction, so weld the poses in the order given and never reverse them again."
               }
             },
             "required": [
@@ -1586,7 +1709,8 @@
               "reversed"
             ],
             "additionalProperties": {}
-          }
+          },
+          "description": "Weld order: every seam exactly once."
         },
         "airMoves": {
           "type": "array",
@@ -1595,15 +1719,18 @@
             "properties": {
               "from": {
                 "type": "string",
-                "minLength": 1
+                "minLength": 1,
+                "description": "Seam id the move leaves, or home."
               },
               "to": {
                 "type": "string",
-                "minLength": 1
+                "minLength": 1,
+                "description": "Seam id the move enters, or home."
               },
               "lengthMm": {
                 "type": "number",
-                "minimum": 0
+                "minimum": 0,
+                "description": "Path length in mm, including the retract and approach."
               }
             },
             "required": [
@@ -1612,7 +1739,8 @@
               "lengthMm"
             ],
             "additionalProperties": {}
-          }
+          },
+          "description": "Moves with the arc off: home to the first seam, between seams in order, and the last seam back home."
         }
       },
       "required": [
@@ -1633,7 +1761,8 @@
             "properties": {
               "id": {
                 "type": "string",
-                "minLength": 1
+                "minLength": 1,
+                "description": "Port id referenced by seams[].access.portId."
               },
               "position": {
                 "type": "array",
@@ -1650,7 +1779,8 @@
                 ],
                 "items": false,
                 "minItems": 3,
-                "maxItems": 3
+                "maxItems": 3,
+                "description": "Centre of the port opening in mm, part frame."
               },
               "direction": {
                 "type": "array",
@@ -1667,11 +1797,13 @@
                 ],
                 "items": false,
                 "minItems": 3,
-                "maxItems": 3
+                "maxItems": 3,
+                "description": "Unit direction the arm enters along, into the part."
               },
               "diameterMm": {
                 "type": "number",
-                "exclusiveMinimum": 0
+                "exclusiveMinimum": 0,
+                "description": "Clear diameter of the opening in mm."
               }
             },
             "required": [
@@ -1681,7 +1813,8 @@
               "diameterMm"
             ],
             "additionalProperties": {}
-          }
+          },
+          "description": "Openings the snake arm can enter through."
         },
         "arm": {
           "anyOf": [
@@ -1691,31 +1824,38 @@
                 "links": {
                   "type": "integer",
                   "minimum": 1,
-                  "maximum": 9007199254740991
+                  "maximum": 9007199254740991,
+                  "description": "Number of links in the snake arm."
                 },
                 "linkLengthMm": {
                   "type": "number",
-                  "exclusiveMinimum": 0
+                  "exclusiveMinimum": 0,
+                  "description": "Length of one link in mm."
                 },
                 "diameterMm": {
                   "type": "number",
-                  "exclusiveMinimum": 0
+                  "exclusiveMinimum": 0,
+                  "description": "Outer diameter of the arm in mm."
                 },
                 "maxBendDeg": {
                   "type": "number",
-                  "exclusiveMinimum": 0
+                  "exclusiveMinimum": 0,
+                  "description": "Largest bend between two neighbouring links in degrees."
                 },
                 "torchLengthMm": {
                   "type": "number",
-                  "minimum": 0
+                  "minimum": 0,
+                  "description": "Torch length from the last link to the contact tip in mm."
                 },
                 "insertionMm": {
                   "default": 500,
+                  "description": "Longest straight feed in mm along the port axis before the links bend; the solver picks a depth up to it.",
                   "type": "number",
                   "minimum": 0
                 },
                 "clearanceMm": {
                   "default": 10,
+                  "description": "Gap in mm added to the link radius when the arm is checked for collisions with the part.",
                   "type": "number",
                   "minimum": 0
                 }
@@ -1732,7 +1872,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "Snake-arm parameters, null when the job has no port."
         }
       },
       "required": [
@@ -1748,19 +1889,23 @@
         "seamCount": {
           "type": "integer",
           "minimum": 0,
-          "maximum": 9007199254740991
+          "maximum": 9007199254740991,
+          "description": "Number of seams in the job."
         },
         "weldLengthMm": {
           "type": "number",
-          "minimum": 0
+          "minimum": 0,
+          "description": "Sum of the seam lengths in mm."
         },
         "arcTimeS": {
           "type": "number",
-          "minimum": 0
+          "minimum": 0,
+          "description": "Sum of the seam arc times in seconds."
         },
         "airTimeS": {
           "type": "number",
-          "minimum": 0
+          "minimum": 0,
+          "description": "Sum of the air move lengths over the air speed, in seconds."
         },
         "cycleTimeS": {
           "type": "number",
@@ -1780,11 +1925,13 @@
         },
         "wireKg": {
           "type": "number",
-          "minimum": 0
+          "minimum": 0,
+          "description": "Total wire mass in kg."
         },
         "gasL": {
           "type": "number",
-          "minimum": 0
+          "minimum": 0,
+          "description": "Total gas volume in L."
         }
       },
       "required": [
@@ -1810,9 +1957,11 @@
             "properties": {
               "code": {
                 "type": "string",
-                "minLength": 1
+                "minLength": 1,
+                "description": "Stable machine-readable code, for example LEG_OUT_OF_RANGE."
               },
               "seamId": {
+                "description": "The seam the issue is about, null when it concerns the whole job.",
                 "type": [
                   "string",
                   "null"
@@ -1820,7 +1969,8 @@
               },
               "message": {
                 "type": "string",
-                "minLength": 1
+                "minLength": 1,
+                "description": "Readable explanation: what happened, why, and what to do next."
               }
             },
             "required": [
@@ -1829,7 +1979,8 @@
               "message"
             ],
             "additionalProperties": {}
-          }
+          },
+          "description": "Always empty: a job with pre-flight errors is not exported."
         },
         "warnings": {
           "type": "array",
@@ -1838,9 +1989,11 @@
             "properties": {
               "code": {
                 "type": "string",
-                "minLength": 1
+                "minLength": 1,
+                "description": "Stable machine-readable code, for example LEG_OUT_OF_RANGE."
               },
               "seamId": {
+                "description": "The seam the issue is about, null when it concerns the whole job.",
                 "type": [
                   "string",
                   "null"
@@ -1848,7 +2001,8 @@
               },
               "message": {
                 "type": "string",
-                "minLength": 1
+                "minLength": 1,
+                "description": "Readable explanation: what happened, why, and what to do next."
               }
             },
             "required": [
@@ -1857,7 +2011,8 @@
               "message"
             ],
             "additionalProperties": {}
-          }
+          },
+          "description": "Pre-flight warnings the user exported with."
         }
       },
       "required": [
