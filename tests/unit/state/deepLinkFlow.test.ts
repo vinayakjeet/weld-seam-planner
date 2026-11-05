@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SeamReach } from '../../../src/core/snake/reach'
-import { AUTOSAVE_DELAY_MS, startAutosave, type PlanStorage } from '../../../src/state/autosave'
+import { AUTOSAVE_DELAY_MS, startAutosave, startFresh, type PlanStorage } from '../../../src/state/autosave'
 import { DEMO_PORT, DEMO_PROCEDURE, DEMO_SAMPLE, DEMO_SEAM_ID, DEMO_STATION_MM } from '../../../src/state/demo'
 import { openDeepLink } from '../../../src/state/deepLinkFlow'
 import { savedKey, snapshotOf } from '../../../src/state/savedPlan'
@@ -180,6 +180,29 @@ describe('openDeepLink: a returning visitor with a saved plan', () => {
         expect(writes).toEqual([])
         expect(data.get(key)).toBe(saved)
         expect(state().notice?.what).toBe('Autosave is paused for this demo.')
+      } finally {
+        stop()
+      }
+    } finally {
+      vi.useRealTimers()
+    }
+  }, 120_000)
+
+  it('ends the demo when its sample does not load, so the next part is offered its plan and autosaved', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const { fetchFn, writes, storage } = await savedTankPlan()
+      const failing = async (url: string) => (url.endsWith('.stl') ? new Response('gone', { status: 500 }) : fetchFn(url))
+      const stop = startAutosave(storage)
+      try {
+        await openDeepLink({ sample: DEMO_SAMPLE, demo: true }, client().stub, failing)
+        expect(state().part).toBeNull()
+        await openDeepLink({ sample: DEMO_SAMPLE, demo: false }, client().stub, fetchFn)
+        expect(state().offer, 'the restore question for the next part').not.toBeNull()
+        startFresh()
+        state().toggleAccepted(state().seams[1]!.id)
+        await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY_MS * 3)
+        expect(writes.length, 'the edit was saved').toBeGreaterThan(0)
       } finally {
         stop()
       }

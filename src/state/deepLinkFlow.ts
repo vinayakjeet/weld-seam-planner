@@ -2,7 +2,7 @@ import type { UserError } from '../worker/geometry.api'
 import type { GeometryClient } from '../worker/client'
 import type { DeepLink } from '../ui/shell/deepLink'
 import { accessFor } from './accessSlice'
-import { beginDemoSession } from './autosave'
+import { beginDemoSession, endDemoSession } from './autosave'
 import { DEMO_PORT, DEMO_PROCEDURE, DEMO_SAMPLE, DEMO_SEAM_ID, DEMO_STATION_MM } from './demo'
 import { ensureAccess, fetchManifest, importSample, setNotice, showError, type FetchFn } from './flows'
 import { runReach } from './reachFlow'
@@ -97,6 +97,7 @@ export async function openDeepLink(link: DeepLink, client: GeometryClient, fetch
     return null
   }
   // A failed load has already put its reason in the banner.
+  if (demo && useStore.getState().part === null) endDemoSession()
   if (!demo || useStore.getState().part === null) return null
   return runDemo(client)
 }

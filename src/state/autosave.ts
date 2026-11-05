@@ -106,6 +106,12 @@ export function beginDemoSession(): void {
   active.demo = { sha: null }
 }
 
+// Called when the demo sample did not load: the next part the person opens is theirs, so it is offered and autosaved.
+export function endDemoSession(): void {
+  declineNextOffer = false
+  if (active) active.demo = null
+}
+
 // After a part has loaded: opens the restore offer if this STL has a saved plan. A saved plan that cannot be read gives
 // a notice and no offer.
 export async function offerRestore(): Promise<void> {
