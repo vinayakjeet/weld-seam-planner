@@ -281,7 +281,7 @@ function intersectionSeams(model: MeshModel, bvhs: BodyBvh[], minLength: number,
   const segments = findIntersectionSegments(model, bvhs, contactTolerance(diagonal))
   const seams: RawSeam[] = []
   for (const line of chainSegments(segments, Math.max(WELD_FRACTION * diagonal, MIN_WELD_MM))) {
-    const { points, lengthMm } = pointsFromPolyline(line.points, line.closed, (segment) => line.normals[segment]!)
+    const { points, lengthMm, surface = points } = pointsFromPolyline(line.points, line.closed, (segment) => line.normals[segment]!, { smooth: true })
     if (lengthMm < minLength) continue
     let weighted = 0
     let total = 0
@@ -306,7 +306,7 @@ function intersectionSeams(model: MeshModel, bvhs: BodyBvh[], minLength: number,
       lengthMm,
       openingAngleDeg,
       points,
-      thicknessMm: thicknessOf(points, jointType, NO_STRIP),
+      thicknessMm: thicknessOf(surface, jointType, NO_STRIP),
     })
   }
   return seams
@@ -349,9 +349,9 @@ function seamsFromEdges(
   const seams: RawSeam[] = []
   for (const chain of chains) {
     const normalsOf: NormalsOf | undefined = normalsOfEdge && ((segment) => normalsOfEdge(chain.edges[segment]!))
-    const { points, lengthMm } = buildSeamPoints(chain, edges.edgeIds, model, faces, normalsOf)
+    const { points, lengthMm, surface = points } = buildSeamPoints(chain, edges.edgeIds, model, faces, normalsOf, { smooth: true })
     if (lengthMm < minLength) continue
-    if (keep && !keep({ closed: chain.closed, points })) continue
+    if (keep && !keep({ closed: chain.closed, points: surface })) continue
     const { openingAngleDeg, medianAdjacentAreaMm2 } = describeChain(chain, edges, model, faces)
     const { jointType, strip } = jointOf
       ? jointOf(chain.edges[chain.edges.length >> 1]!, { closed: chain.closed, points })
@@ -367,7 +367,7 @@ function seamsFromEdges(
       lengthMm,
       openingAngleDeg,
       points,
-      thicknessMm: thicknessOf(points, jointType, strip),
+      thicknessMm: thicknessOf(surface, jointType, strip),
     })
   }
   return seams

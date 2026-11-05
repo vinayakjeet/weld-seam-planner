@@ -111,12 +111,13 @@ describe('tank with manhole', () => {
     expect(lengths('crease')).toHaveLength(12)
   })
 
-  it('measures the contact lengths: 4 of 864 mm, 4 of 272 mm and one closed loop of 1934 mm, all fillets', () => {
+  // The coaming is a 64-gon; its loop follows the 308 mm circle the facets were cut from, not their chords (1934.4).
+  it('measures the contact lengths: 4 of 864 mm, 4 of 272 mm and one closed loop of 2 pi 308 mm, all fillets', () => {
     expect(count('contact', 864, 2)).toBe(4)
     expect(count('contact', 272, 2)).toBe(4)
     const loops = seams.filter((s) => s.source === 'contact' && s.closed)
     expect(loops).toHaveLength(1)
-    expect(Math.abs(loops[0]!.lengthMm - 1934)).toBeLessThanOrEqual(2)
+    expect(Math.abs(loops[0]!.lengthMm - 2 * Math.PI * 308)).toBeLessThan(0.05)
     for (const seam of seams) expect(seam.jointType).toBe('fillet')
   })
 })
@@ -131,7 +132,7 @@ describe('intersection seams', () => {
       expect(seam.jointType).toBe('fillet')
       expect(seam.closed).toBe(true)
       expect(seam.id.startsWith('intersection-')).toBe(true)
-      expect(Math.abs(seam.lengthMm / (2 * Math.PI * 25) - 1)).toBeLessThan(0.01)
+      expect(Math.abs(seam.lengthMm / (2 * Math.PI * 25) - 1)).toBeLessThan(2e-5)
       expect(Math.abs(seam.openingAngleDeg - 90)).toBeLessThan(0.5)
     }
     expect(loops.map((s) => Math.round(s.points[0]!.p[2])).sort((a, b) => a - b)).toEqual([0, 10])
@@ -223,12 +224,13 @@ describe('detectSeams on single samples', () => {
     }
   })
 
-  it('gives the pipe an outer and a bore loop within 1% of 2 pi r', () => {
+  // Both loops are 96-gons, 0.018% short of the circle on their chords; the seams follow the circles.
+  it('gives the pipe an outer and a bore loop within 0.002% of 2 pi r', () => {
     const [outer, bore] = detect('pipe-on-plate')
     expect(outer!.closed).toBe(true)
     expect(bore!.closed).toBe(true)
-    expect(Math.abs(outer!.lengthMm / (2 * Math.PI * 25) - 1)).toBeLessThan(0.01)
-    expect(Math.abs(bore!.lengthMm / (2 * Math.PI * 19) - 1)).toBeLessThan(0.01)
+    expect(Math.abs(outer!.lengthMm / (2 * Math.PI * 25) - 1)).toBeLessThan(2e-5)
+    expect(Math.abs(bore!.lengthMm / (2 * Math.PI * 19) - 1)).toBeLessThan(2e-5)
     for (const seam of [outer!, bore!]) expect(Math.abs(seam.openingAngleDeg - 90)).toBeLessThan(1)
   })
 
