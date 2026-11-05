@@ -141,6 +141,14 @@ describe('standard view keys', () => {
   it('does nothing in a text field', () => {
     expect(shortcutFor(key('!', { shiftKey: true, code: 'Digit1' }, { tagName: 'INPUT', type: 'text' }))).toBeNull()
   })
+
+  // AZERTY types & without Shift and 1 with it on the same key, so "1" and "Shift+1" are one keystroke there.
+  it('gives the top row to the views on AZERTY and leaves the steps on the numpad', () => {
+    expect(shortcutFor(key('1', { shiftKey: true, code: 'Digit1' }))).toBe('view1')
+    expect(shortcutFor(key('&', { code: 'Digit1' }))).toBeNull()
+    expect(shortcutFor(key('1', { code: 'Numpad1' }))).toBe('step1')
+    expect(shortcutFor(key('6', { code: 'Numpad6' }))).toBe('step6')
+  })
 })
 
 describe('stepForShortcut', () => {
