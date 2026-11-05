@@ -28,6 +28,11 @@ describe('warningChips', () => {
     }
   })
 
+  it('labels a part above the corner pass limit from its triangle count', () => {
+    const chips = warningChips(selectPartWarnings({ part: partInfo({ triangles: 3_000_001 }) }))
+    expect(chips.map((c) => [c.label, c.severity])).toEqual([['Large part', 'info']])
+  })
+
   it('shows no chips for a clean part', () => {
     expect(warningChips([])).toEqual([])
   })

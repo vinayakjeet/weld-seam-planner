@@ -359,13 +359,13 @@ describe('thickness', () => {
 })
 
 describe('corner thickness that measured plate extent', () => {
-  const hidden = detectSeams(loadSampleModel('t-joint-merged'), DEFAULT_DETECT_SETTINGS).filter((s) => s.hidden)
-  const ratio = (s: SeamCandidate) => Math.max(...(s.thicknessMm as number[])) / Math.min(...(s.thicknessMm as number[]))
-  const corner = hidden.find((s) => ratio(s) > 3)!
+  // A ray through the end face of a plate edge reads the plate extent: [10, 200] on a 10 mm plate. Detection no longer
+  // offers plate edges as corners, but a seam set to corner by hand, or one in an older saved plan, can carry such a pair.
+  const seams = detectSeams(loadSampleModel('t-joint-merged'), DEFAULT_DETECT_SETTINGS)
+  const corner: SeamCandidate = { ...seams.find((s) => !s.hidden)!, jointType: 'corner', hidden: true, thicknessMm: [10, 200] }
 
-  it('has a hidden corner of t-joint-merged whose larger entry is a plate extent', () => {
-    expect(corner.jointType).toBe('corner')
-    expect(ratio(corner)).toBeGreaterThan(3)
+  it('is no longer offered by detection on the edges of the t-joint-merged plates', () => {
+    expect(seams.filter((s) => s.hidden)).toEqual([])
   })
 
   it('treats the larger entry as unknown, so the known plate sets the minimum leg and a warning is raised', () => {

@@ -277,8 +277,8 @@ describe('geometry api: contact seams', () => {
     const outcome = await api.detect(DEFAULT_DETECT_SETTINGS, () => {})
     expect(outcome.status).toBe('ok')
     if (outcome.status !== 'ok') return
-    expect(outcome.seams.length).toBeGreaterThan(0)
-    for (const s of outcome.seams) expect(s.thicknessMm).toEqual([null, null])
+    // A lone plate has no seam, and without a ray its convex edges cannot pass the second plate check.
+    expect(outcome.seams).toEqual([])
     expect(built.count).toBe(0)
   })
 

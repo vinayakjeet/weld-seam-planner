@@ -13,6 +13,7 @@ const LABELS: Record<MeshWarning['code'], string> = {
   'non-manifold': 'Non-manifold edges',
   reoriented: 'Winding repaired',
   'concavity-unknown': 'Concavity unknown',
+  'large-part': 'Large part',
 }
 
 export function warningChips(warnings: MeshWarning[]): WarningChip[] {

@@ -1,13 +1,14 @@
 import { dot, normalize, sub, type Vec3 } from '../math/vec3'
 import { computeFaceData, type FaceData } from '../mesh/faces'
+import { LARGE_PART_TRIANGLES } from '../mesh/health'
 import type { MeshModel } from '../mesh/model'
 import type { PlateThickness } from '../process/filletRules'
 import { buildBodyBvhs, wholeBvhFor, type BodyBvh } from './bodyBvh'
 import { chainEdges, edgeEnds, type Chain } from './chain'
-import { classifyJoint, patchWidth, thicknessBehind, type JointType } from './classify'
+import { classifyJoint, meetsSecondPlate, patchWidth, thicknessBehind, type JointType } from './classify'
 import { confidence } from './confidence'
 import { contactTolerance, findContactEdges, type ContactEdges } from './contact'
-import { extractCreaseEdges, type CreaseEdges } from './crease'
+import { extractCreaseEdges, type CreaseEdges, type CreaseResult } from './crease'
 import { buildSeamPoints, pointsFromPolyline, type NormalsOf, type SeamPoint } from './frames'
 import { chainSegments, findIntersectionSegments } from './intersect'
 import { extractNonManifoldWedges } from './nonManifold'
@@ -24,6 +25,8 @@ export interface DetectContext {
   bodyBvhs?: BodyBvh[]
   // The whole-mesh BVH of a single-body part, or null when there is none to use (too large). Built here when absent.
   wholeBvh?: BodyBvh | null
+  // Above this many triangles the outside corner pass is skipped. LARGE_PART_TRIANGLES when absent.
+  maxCornerTriangles?: number
 }
 
 export type SeamSource = 'crease' | 'contact' | 'intersection' | 'nonmanifold' | 'manual'
@@ -94,20 +97,9 @@ export function detectSeams(model: MeshModel, settings: DetectSettings, context:
       return { jointType: classifyJoint({ source: 'crease', ...seam, ...strip, convex: false }), strip }
     },
   })
-  // A convex edge that is a contact seam is already listed as one, so it is not a corner as well.
-  const taken = new Set(contact?.edgeIds)
-  const outside = creases.convex.edgeIds.filter((e) => !taken.has(e))
-  const corners: CreaseEdges = {
-    edgeIds: outside,
-    dihedralDeg: creases.convex.dihedralDeg.filter((_, i) => !taken.has(creases.convex.edgeIds[i]!)),
-    unknown: new Uint8Array(outside.length),
+  if (model.mesh.triangleCount <= (context.maxCornerTriangles ?? LARGE_PART_TRIANGLES)) {
+    found.push(...cornerSeams(model, faces, creases, contact, minLength, rayProbe, thicknessOf))
   }
-  found.push(
-    ...seamsFromEdges('crease', corners, model, faces, minLength, {
-      thicknessOf,
-      jointOf: (_, seam) => ({ jointType: classifyJoint({ source: 'crease', ...seam, ...NO_STRIP, convex: true }), strip: NO_STRIP }),
-    }),
-  )
   found.push(...nonManifoldSeams(model, faces, settings, minLength, thicknessOf))
 
   if (contact) {
@@ -128,6 +120,42 @@ export function detectSeams(model: MeshModel, settings: DetectSettings, context:
     for (let n = 2; used.has(id); n++) id = `${seam.id}-${n}`
     used.add(id)
     return { ...seam, id, label: `S${i + 1}` }
+  })
+}
+
+// Under-face depth of the width ray in the second plate check: deep enough to clear float noise on a part far from
+// the origin, shallow against the thinnest sheet.
+const CORNER_DEPTH_FRACTION = 1e-4
+const MAX_CORNER_DEPTH_MM = 0.05
+
+// Outside corners where a second plate meets the first. The edges of a single plate are convex creases too but
+// join nothing, so a chain is kept only when the plate check passes at its middle point; with no ray to cast there is
+// no check, and no candidate.
+function cornerSeams(
+  model: MeshModel,
+  faces: FaceData,
+  creases: CreaseResult,
+  contact: ContactEdges | null,
+  minLength: number,
+  rayProbe: () => RayProbe | null,
+  thicknessOf: ThicknessOf,
+): RawSeam[] {
+  // A convex edge that is a contact seam is already listed as one, so it is not a corner as well.
+  const taken = new Set(contact?.edgeIds)
+  const outside = creases.convex.edgeIds.filter((e) => !taken.has(e))
+  if (outside.length === 0) return []
+  const probe = rayProbe()
+  if (!probe) return []
+  const depthMm = Math.min(MAX_CORNER_DEPTH_MM, CORNER_DEPTH_FRACTION * model.bounds.diagonal)
+  const corners: CreaseEdges = {
+    edgeIds: outside,
+    dihedralDeg: creases.convex.dihedralDeg.filter((_, i) => !taken.has(creases.convex.edgeIds[i]!)),
+    unknown: new Uint8Array(outside.length),
+  }
+  return seamsFromEdges('crease', corners, model, faces, minLength, {
+    thicknessOf,
+    keep: ({ points }) => meetsSecondPlate(points[points.length >> 1]!, probe, depthMm),
+    jointOf: (_, seam) => ({ jointType: classifyJoint({ source: 'crease', ...seam, ...NO_STRIP, convex: true }), strip: NO_STRIP }),
   })
 }
 
@@ -242,6 +270,8 @@ interface EdgeOptions {
   normalsOfEdge?: (edge: number) => [Vec3, Vec3]
   // Joint type of a chain, decided from its middle entry of the edge list. Fillet when absent.
   jointOf?: (edge: number, seam: { closed: boolean; points: SeamPoint[] }) => JointInfo
+  // Whether a chain that is long enough is a seam at all. Every chain is when absent.
+  keep?: (seam: { closed: boolean; points: SeamPoint[] }) => boolean
 }
 
 // Chains the edges, drops chains under minLength and describes the rest. Edge numbers in the options index the edge list.
@@ -251,7 +281,7 @@ function seamsFromEdges(
   model: MeshModel,
   faces: FaceData,
   minLength: number,
-  { normalsOfEdge, jointOf, thicknessOf }: EdgeOptions,
+  { normalsOfEdge, jointOf, thicknessOf, keep }: EdgeOptions,
 ): RawSeam[] {
   const chains = chainEdges(model.mesh.positions, edgeEnds(model.edges, edges.edgeIds), TURN_BREAK_DEG)
   const seams: RawSeam[] = []
@@ -259,6 +289,7 @@ function seamsFromEdges(
     const normalsOf: NormalsOf | undefined = normalsOfEdge && ((segment) => normalsOfEdge(chain.edges[segment]!))
     const { points, lengthMm } = buildSeamPoints(chain, edges.edgeIds, model, faces, normalsOf)
     if (lengthMm < minLength) continue
+    if (keep && !keep({ closed: chain.closed, points })) continue
     const { openingAngleDeg, medianAdjacentAreaMm2 } = describeChain(chain, edges, model, faces)
     const { jointType, strip } = jointOf
       ? jointOf(chain.edges[chain.edges.length >> 1]!, { closed: chain.closed, points })

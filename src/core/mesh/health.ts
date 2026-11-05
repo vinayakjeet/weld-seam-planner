@@ -4,10 +4,14 @@ export interface MeshHealth {
   nonManifoldEdges: number
   reorientedBodies: number
   unsignedBodies: number
+  triangles?: number
 }
 
+// Above this the outside corner pass of detection is skipped, as the spec's risk register asks for huge parts.
+export const LARGE_PART_TRIANGLES = 3_000_000
+
 export interface MeshWarning {
-  code: 'open-mesh' | 'non-manifold' | 'reoriented' | 'concavity-unknown'
+  code: 'open-mesh' | 'non-manifold' | 'reoriented' | 'concavity-unknown' | 'large-part'
   severity: 'info' | 'warn'
   what: string
   why: string
@@ -52,6 +56,15 @@ export function meshWarnings(health: MeshHealth): MeshWarning[] {
       what: `${count(health.unsignedBodies, 'body has', 'bodies have')} no known inside.`,
       why: 'Open or non-manifold bodies do not say which side of a surface is solid, so a seam may be an outside corner instead of a fillet.',
       next: 'Review the seams on these bodies and set the joint type by hand.',
+    })
+  }
+  if ((health.triangles ?? 0) > LARGE_PART_TRIANGLES) {
+    warnings.push({
+      code: 'large-part',
+      severity: 'info',
+      what: `The part has ${health.triangles} triangles.`,
+      why: `Above ${LARGE_PART_TRIANGLES} triangles the search for outside corner candidates is skipped to keep memory in bounds. Fillets, contact and intersection seams are still found, and the display keeps full detail.`,
+      next: 'Draw any outside corner seams you need, or export a coarser mesh to get corner candidates.',
     })
   }
   return warnings

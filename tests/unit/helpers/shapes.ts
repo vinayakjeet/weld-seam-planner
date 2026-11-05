@@ -62,6 +62,16 @@ export const steppedLap = () =>
     (x, z, y) => [x, y, z],
   )
 
+// Two 10 mm plates 100 mm long joined end on end into an L as one body, 60 mm deep (profile in x and z, extruded
+// along y). The heel at x 0, z 0 is the outside corner of the joint; the inside corner at x 10, z 10 is its fillet.
+export const mergedL = (depth = 60) =>
+  extrude(
+    [[0, 0], [100, 0], [100, 10], [10, 10], [10, 100], [0, 100]],
+    [[0, 1, 2], [0, 2, 3], [0, 3, 4], [0, 4, 5]],
+    depth,
+    (x, z, y) => [x, y, z],
+  )
+
 // A 10 mm web 80 mm tall on a 10 mm plate that reaches only 8 mm past the web on each side (profile in y and z).
 export const narrowFlangeT = () =>
   extrude(

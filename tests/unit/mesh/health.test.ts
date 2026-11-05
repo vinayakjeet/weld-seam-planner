@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { meshWarnings, type MeshHealth } from '../../../src/core/mesh/health'
+import { LARGE_PART_TRIANGLES, meshWarnings, type MeshHealth } from '../../../src/core/mesh/health'
 import { loadSampleModel } from '../helpers/models'
 import { readManifest } from '../helpers/samples'
 
@@ -49,6 +49,16 @@ describe('meshWarnings', () => {
         expect(part, warning.code).not.toMatch(/[\u2013\u2014]/)
       }
     }
+  })
+
+  it('says above 3000000 triangles that corner candidates were not searched', () => {
+    expect(codes({ triangles: LARGE_PART_TRIANGLES })).toEqual([])
+    expect(codes({ triangles: LARGE_PART_TRIANGLES + 1 })).toEqual(['large-part'])
+    const [large] = meshWarnings({ ...clean, triangles: 3_250_000 })
+    expect(large!.severity).toBe('info')
+    expect(large!.what).toContain('3250000 triangles')
+    expect(large!.why).toContain('corner')
+    for (const part of [large!.what, large!.why, large!.next]) expect(part).not.toMatch(new RegExp('[\\u2013\\u2014]'))
   })
 
   it('warns about nothing on the samples except the repaired winding of flipped-normals', () => {
