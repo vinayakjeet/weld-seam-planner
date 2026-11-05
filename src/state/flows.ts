@@ -821,9 +821,9 @@ export async function importPlan(file: Pick<File, 'name' | 'text'>, client: Geom
     }
     const { plan } = imported
     const settings = { ...useStore.getState().detectSettings, creaseAngleDeg: plan.settings.creaseAngleDeg }
-    // A slider change still waiting would run its angle after the file's.
+    // A slider change still waiting would run its angle after the file's. The file's angle is set with the plan, so a
+    // failed detection leaves the angle the seams on screen came from.
     clearTimeout(scheduledDetect)
-    useStore.getState().setDetectSettings(settings)
     const tolerance = plan.settings.weldToleranceRel
     const detected = tolerance === useStore.getState().weldTolerance ? await runDetect(settings, client) : await runReweld(tolerance, client, settings)
     if (!detected) {

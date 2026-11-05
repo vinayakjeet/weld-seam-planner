@@ -1600,6 +1600,7 @@ describe('importPlan', () => {
     expect(detect).not.toHaveBeenCalled()
     expect(state().manualSeams).toEqual([])
     expect(state().weldTolerance).toBe(1e-5)
+    expect(state().detectSettings.creaseAngleDeg, 'the angle the seams on screen came from').toBe(30)
     expect(expectErrorState().what).toBe('w')
   })
 
@@ -1640,6 +1641,7 @@ describe('importPlan', () => {
     await importPlan(file, fakeClient({ detect }))
     expect(state().manualSeams).toEqual([])
     expect(state().info).toBeNull()
+    expect(state().detectSettings.creaseAngleDeg, 'the angle the seams on screen came from').toBe(30)
     expect(expectErrorState().what).toBe('w')
   })
 })

@@ -308,6 +308,14 @@ describe('restoreSaved and startFresh', () => {
     stop()
   })
 
+  it('keeps the crease angle in use when the detection for the restore fails', async () => {
+    const { stop, client, detect } = await offered()
+    detect.mockImplementation(async () => ({ status: 'error' as const, error: { what: 'w', why: 'y', next: 'n' } }))
+    await restoreSaved(client)
+    expect(state().detectSettings.creaseAngleDeg).toBe(30)
+    stop()
+  })
+
   it('does not weld again when the saved tolerance is the one in use', async () => {
     const reweld = vi.fn(async () => readyOutcome())
     const { stop, client } = await offered()

@@ -181,11 +181,10 @@ function apply(saved: SavedPlan): Partial<AppState> {
 export async function restoreSaved(client: GeometryClient): Promise<void> {
   const { offer } = useStore.getState()
   if (offer === null) return
+  // The saved angle is set with the rest of the plan, so a failed detection leaves the angle its seams came from.
   if (offer.weldTolerance !== useStore.getState().weldTolerance) {
-    useStore.getState().setDetectSettings(offer.detectSettings)
     if (!(await runReweld(offer.weldTolerance, client, offer.detectSettings))) return
   } else if (offer.detectSettings.creaseAngleDeg !== useStore.getState().detectSettings.creaseAngleDeg) {
-    useStore.getState().setDetectSettings(offer.detectSettings)
     if (!(await runDetect(offer.detectSettings, client))) return
   }
   // The offer may have been closed, or another part loaded, while detection ran.
