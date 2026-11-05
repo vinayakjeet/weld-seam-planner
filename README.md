@@ -1,16 +1,141 @@
 # Weld Seam Planner
 
-Browser app to plan robotic welds on STL parts.
+A browser app that turns an STL part into a robot weld plan. Drop in a part and it finds the weld seams for you (concave creases, contact lines between touching bodies, intersection curves between penetrating ones), assigns weld procedures with heat input and travel speed checked against the leg size, works out the ISO 6947 and AWS positions from gravity, samples a torch pose every 5 mm in a documented frame, orders the seams for the least air travel, and exports one validated JSON job a controller can run. Seams a rigid torch cannot reach are flagged and handed to a snake-arm reach model that plays the arm in through a manhole, so the plan ends where a fixed robot stops: inside a closed tank.
 
-npm install, npm run dev
+Everything runs in the browser. The part never leaves the machine, heavy geometry runs in a Web Worker, and the page makes no request to any other origin.
 
-## How it works
+Author: Vinayakjeet Singh Karki, f20221641@pilani.bits-pilani.ac.in
 
-### Access and reach
+## Live demo and deep link
 
-The Access step places ports on the part and edits the snake arm (links, link length, diameter, bend limit, torch length). Run reach measures, for each seam the torch cannot reach on its own, how much of it the arm reaches from a port, and the arm can be played in through the port to a chosen point on the seam. This is a kinematic feasibility preview with editable arm parameters, not the Armatrix controller, so treat coverage as a planning estimate. Changing a port or any arm field makes earlier results stale until reach is run again. The ABB RAPID file (Export menu) is a template for the standard and slim seams: the tool, work object and seam, weld and weave data are placeholders to verify on a controller before running.
+- Live app: https://weld-seam-planner.vercel.app
+- Snake-arm demo in one click: https://weld-seam-planner.vercel.app/?sample=tank-with-manhole&demo=1
+
+The demo link loads the tank sample, accepts its seams with the spray procedure, places a port on the manhole, runs reach, and stops the arm at a reached station on seam S16, inside the tank where no rigid torch fits. `demo=1` is defined only for `tank-with-manhole`; on any other sample the link loads the sample normally and says so in a notice. `?sample=<id>` alone opens any of the eleven built-in samples. An unknown id shows a readable error: the id is only ever compared with the ids in the sample manifest, so no value in the address can reach a fetch. The `main` branch deploys to the production URL; every other branch gets its own Vercel preview URL.
+
+## Quick start
+
+Node 24 and npm.
+
+```
+npm install
+npm run dev          # http://localhost:5173
+npm test             # unit tests (Vitest, node)
+npm run test:e2e     # browser tests (Playwright; npx playwright install first)
+npm run build        # checks the schema and field table, type checks, bundles, checks the entry budget
+```
+
+Other scripts: `npm run lint`, `npm run typecheck`, `npm run schema` (regenerates the JSON Schema from the zod types), `npm run fields` (regenerates the field table in this README), `npx tsx scripts/key-numbers.ts` (measures the numbers under Key numbers).
+
+## The six-step workflow
+
+The stepper across the top bar walks a plan from part to file. The number keys jump to the steps.
+
+| Key | Step | What happens there |
+| --- | --- | --- |
+| 1 | Import | Open an STL or one of the samples: binary or ASCII, in mm, inches or metres, with a unit guess you confirm when it is unsure. |
+| 2 | Seams | Review the detected candidates, accept or reject them (A, Shift+A), draw a seam on the part (D), split (S), reverse (R), and set the joint type and plate thickness in the inspector. Detection settings and the weld tolerance live here. |
+| 3 | Procedures | Assign a procedure from the library to one seam or a selection, override single values per seam, set the fillet leg; heat input and travel speed are checked live. |
+| 4 | Access | Every accepted seam gets a free-cone clearance and a class (standard, slim, snake, blocked). Place ports, edit the snake arm, run reach and play the arm in. |
+| 5 | Sequence | Order the seams by table order, minimum air travel or balanced heat, lock seams in place, reverse directions, scrub the timeline. |
+| 6 | Export | Pre-flight lists every error and warning with what to do; export the job JSON or the ABB RAPID template, copy a one-line summary, or import an exported plan back onto the same part. |
+
+Other keys: F fits the view, X toggles x-ray, Shift+1 to Shift+6 are the six standard views, Space plays the timeline, Ctrl+E exports, Ctrl+Z and Ctrl+Shift+Z undo and redo, and ? opens the full list. Keys never fire while a text field has focus. Plans autosave in the browser and are offered back when the same part is opened again.
+
+## Who it is for
+
+A weld or robot engineer in a shipyard or fabrication shop who has the CAD export of a welded assembly and needs a robot program skeleton: which seams, in which order, with which procedure, from which torch poses, and which ones a fixed robot cannot reach. It is built for Armatrix, whose snake-arm robots weld inside double bottoms, tanks and other closed structures, so the access step and the snake-arm model are first-class rather than an afterthought.
+
+## Architecture and why
+
+| Layer | Where | Why |
+| --- | --- | --- |
+| Domain core | `src/core` | Pure TypeScript with no React, DOM or renderer: mesh welding, seam detection, frames, positions, welding maths, access, snake kinematics, sequencing, job build and import. Every file has unit tests that run in node, so the maths is tested without a browser. |
+| Worker | `src/worker` | Parsing, detection, access, reach and sequencing run in a Web Worker through comlink, so a 1M-triangle part never freezes the page. A watchdog restarts a hung worker and replays the loaded part. |
+| State | `src/state` | zustand slices with zundo undo history; flows in `src/state/flows.ts` call the worker and apply results only when they still belong to the current part. |
+| View | `src/ui` | React, three.js through @react-three/fiber and drei, three-mesh-bvh for picking, Radix primitives and Tailwind v4 mapped to `src/styles/tokens.css`. |
+| Export format | [src/core/job/schema.ts](src/core/job/schema.ts) | One zod schema is the single source of truth: the exporter is typed by it, the importer validates with it, and [public/schema/weld-job-1.0.json](public/schema/weld-job-1.0.json) and the field table below are generated from it. The build fails when either is stale. |
+
+Internal units are mm, degrees and seconds everywhere; units are converted only at import and for display. The viewport and the RAPID writer load as separate chunks, so the entry chunk stays under a 500 kB budget that the build enforces.
+
+## Detection pipeline
+
+1. **Parse and weld.** Binary and ASCII STL are read in the worker and scaled to mm. Vertices are welded on a grid whose cell is the weld tolerance times the bounding box diagonal, degenerate triangles are dropped, edges and bodies are labelled, and each closed body is oriented outward.
+2. **Creases.** An edge whose two faces bend by more than the crease angle (30 degrees by default) and that is concave becomes a crease candidate: the inside corner of a single merged body, such as a T-joint exported as one solid.
+3. **Contact.** Where two bodies touch, faces of one that lie on the other are found with a BVH per body; the boundary of the shared area is the fillet line.
+4. **Intersection.** Where bodies penetrate (a pipe pushed through a plate), the triangle pair intersections are chained into curves.
+5. **Non-manifold and corner edges.** Edges shared by more than two faces, and the outside corners of plate ends, give the remaining candidates.
+6. **Classify and measure.** Each chain is smoothed back onto the curve it was tessellated from, keeping real corners, and given a joint type (fillet, lap, corner, saddle), an opening angle, the plate thickness behind each face, and a confidence from 0 to 1. Seam ids come from a start-independent signature of the geometry, so they survive a new detection run.
+
+### Weld tolerance
+
+The weld tolerance (Seams step, Detection tab, Advanced) sets how close two vertices must be to be merged, as a fraction of the part diagonal: default 1e-5, range 1e-6 to 1e-3. CAD exports share exact vertices and need nothing else. A scanned or remeshed part with vertex noise can grow short, low-confidence creases beside holes; raising the tolerance (5e-4 cleans the noisy pipe-on-plate sample in 20 of 20 runs) welds the noise away. It also sets the height under which a needle triangle takes its neighbour's normal. Changing it welds the file again and detects again; seams that survive keep their ids and status. It cannot be raised freely: at 1e-3 the tank's thin plates merge. The value is written to the job as `settings.weldToleranceRel` (files without it were made at 1e-5), and importing a job welds the part at the file's tolerance before detecting, so the restored seams match the file.
+
+## Torch frame and quaternion convention
+
+All positions are in the part frame, in mm, right-handed. At each seam point the detector stores the tangent t along the seam and the outward normals n1 and n2 of the two plates. The torch frame is built in [src/core/torch/frames.ts](src/core/torch/frames.ts):
+
+- b = normalize(n1 + n2), the bisector pointing out of the joint.
+- a = minus b rotated about t by the work angle offset.
+- z = normalize(a cos(alpha) + t sin(alpha)), where alpha is the travel angle, positive for push and negative for drag. **Tool z points from the torch into the joint.**
+- x = t projected perpendicular to z and normalized: **tool x runs along travel.** y = z cross x.
+
+The pose quaternion is that basis as **[x, y, z, w]** with w of at least 0, unit length to 1e-4. Poses are resampled every `settings.poseSpacingMm` (5 mm by default) with `s` the arc length from the arc start; at a sharp corner the orientation is blended over a short distance instead of jumping. Approach and retract run along minus tool z. Gravity is stored with the job (`frames.gravity`) because the welding positions are computed from it.
+
+## Welding maths
+
+The formulas below are the ones in the code, with their units.
+
+Heat input, from [src/core/process/heatInput.ts](src/core/process/heatInput.ts):
+
+- Arc energy E = (V x I x 60) / (1000 x v) in kJ/mm, with v the travel speed in mm/min.
+- Heat input Q = k x E, with the thermal efficiency k from ISO/TR 18491 and EN 1011-1: SAW 1.0, GMAW 0.8, FCAW 0.8, GTAW 0.6.
+- Checks: amber above 2.5 kJ/mm, red above 3.5 kJ/mm, amber below 0.4 kJ/mm on a part 6 mm or thicker.
+
+Travel speed from deposition, from [src/core/process/travelSpeed.ts](src/core/process/travelSpeed.ts):
+
+- Deposited volume per minute = WFS x 1000 x (pi x d^2 / 4) x eta in mm3/min, with WFS the wire feed in m/min, d the wire diameter in mm, eta 0.95.
+- Fillet cross section = 0.5 x z^2 x (1 + r), with z the leg in mm and r the bead reinforcement, 0.1.
+- Suggested travel speed = deposited volume per minute / fillet cross section, in mm/min. A procedure travel speed more than 25 percent off is amber, more than 50 percent off is red.
+
+Per seam estimates, from [src/core/process/estimates.ts](src/core/process/estimates.ts):
+
+- Arc time = passes x L / v, with L in mm and v in mm/s.
+- Wire mass = (WFS x 1000 / 60) x arc time x (pi x d^2 / 4) x 7.85e-6 kg/mm3.
+- Gas volume = flow x (arc time + pre-flow + post-flow) / 60, in L with the flow in L/min.
+
+Fillet throat = 0.707 x leg for equal legs. A seam without a set leg takes the leg its procedure deposits (the formula above solved for z, rounded to 0.5 mm and kept within the AWS D1.1 minimum for the thicker plate and the maximum along an edge), or that minimum when the procedure has no wire feed. Cycle time = arc time + air time + the pre-flow, crater fill and post-flow of every seam + the torch cleaning stops; air time is the air move length over `settings.airSpeedMmS`.
+
+## Access classes and the snake-arm model
+
+For every pose (every 20 mm) the app casts rings of rays around minus tool z, 5 degrees apart up to 60 degrees, and finds the widest free cone out to 300 mm, and again out to 60 mm. The seam takes the smallest cone along its length:
+
+| Class | Rule | Meaning |
+| --- | --- | --- |
+| standard | cone of 30 degrees or more | A standard torch on a fixed robot reaches it. |
+| slim | 15 to 30 degrees | A slim or long-neck torch reaches it. |
+| snake | under 15 degrees, but 10 degrees or more out to 60 mm | Only an arm that arrives along the seam reaches it: the snake arm. |
+| blocked | less than 10 degrees out to 60 mm | Nothing fits at the joint. |
+
+Snake seams are handed to a reach model: ports placed on the part (the arm enters along the port axis), and an arm of N links (24 x 150 mm, 80 mm diameter, 18 degrees bend between links and a 250 mm torch by default, all editable). For each station along the seam the solver pushes a straight part in along the port axis, then fits the links with a constrained FABRIK that respects the bend limit, finished with an exact Jacobian step, retries blocked stations from a chain peaked over the contact, and checks every link as a capsule against the part's BVH with the arm's clearance. The answer is a reach coverage from 0 to 1 per seam and the arc-length intervals it misses, both written into the export, and the arm can be played in along its follow-the-leader insertion path.
+
+This is a kinematic feasibility preview with editable arm parameters, not Armatrix's controller or its real arm geometry: treat coverage as a planning estimate. Changing a port or any arm field marks earlier results stale until reach runs again.
 
 ## The job JSON
+
+One self-contained file per plan, version 1.0.0: units and frames first, reusable procedures, every accepted seam with its sampled tool poses, the sequence, access data, a summary and the pre-flight warnings. It validates against [public/schema/weld-job-1.0.json](public/schema/weld-job-1.0.json), which is generated from the same zod types the app uses. Rules a consumer can rely on: positions in mm in the part frame, angles in degrees, quaternions unit length in x, y, z, w order with w of at least 0, `s` starting at 0 at the first pose, `sequence.order` listing every seam exactly once, and any unknown field safe to ignore (minor versions only add optional fields).
+
+A seam welded against its stored points has `sequence.order[].reversed` true and `direction` "reverse"; its poses, start and end are already in weld direction, so a consumer welds the poses in the order given and never reverses them again. [examples/consume_job.py](examples/consume_job.py) is a 42-line standard library consumer that prints the weld order with the first and last pose of each seam; a unit test runs it against the exporter's output.
+
+```
+$ python3 examples/consume_job.py tests/unit/job/fixtures/spec-example.json
+1  S07  WPS-GMAW-SPRAY-FW6  first=(1200.000, 300.000, 12.000)  last=(2000.000, 300.000, 12.000)  arc=88.9 s  access=standard
+```
+
+Every field, generated from the schema by `npm run fields` (the overrides of a seam use the procedure keys listed under `procedures[]`):
+
+<details>
+<summary>Field table (194 fields)</summary>
 
 <!-- job-fields:start -->
 
@@ -212,3 +337,58 @@ The Access step places ports on the part and edits the snake arm (links, link le
 | `validation.warnings[].message` | string | yes | Readable explanation: what happened, why, and what to do next. |
 
 <!-- job-fields:end -->
+
+</details>
+
+## RAPID as a template
+
+The Export step also writes an ABB RAPID module for the standard and slim seams, in sequence order, with `MoveL` approach and retract and `ArcLStart`, `ArcL` and `ArcLEnd` along the poses. The tool, the work object and the seam, weld and weave data are placeholders named in the file header: they belong to the cell, which the app does not know. Verify them on a controller before running anything. Snake and blocked seams are left out because a fixed robot cannot reach them.
+
+## Brand usage
+
+The interface follows the Armatrix brand kit: Onest for all text with tabular numbers, Redaction only for the app title, the empty-state headline and the one heading at the top of each step's panel; Sand and Dark Forest neutrals; Revolution Green for selection, focus and the active step, and Bright Discovery for accepted seams, the torch nozzle, the arc glow and the Export button. The two highlight colours stay under 10 percent of any screen, measured from screenshots in the e2e suite. Fonts and logos are served from the app's own origin under their licences in `public/brand` and `src/styles/fonts`, and every colour is a token in `src/styles/tokens.css`.
+
+## Testing
+
+- **Unit (Vitest, node):** more than 2,000 tests over `src/core`, the worker API, the state flows and the build scripts, including the round trip export, import, export byte for byte on the samples, detection on every sample against expected seam sets, vertex noise stability, and the JSON Schema validated with ajv against exported jobs.
+- **End to end (Playwright):** 21 specs drive the real app: load, pick, accept, draw, ports, reach and arm playback, sequence, export, autosave, deep links, the help sheet, layout at several widths, lighting and brand colour shares from pixels.
+- **Origin only:** a spec records every request while a sample is loaded and exported, checks that each one goes to the app's own origin, and that Onest and Redaction load from it.
+- **CI:** GitHub Actions runs lint, typecheck, unit tests and the build on every push, the full Chromium e2e suite on every push, and the cross-browser specs in Firefox and WebKit on `main`.
+
+## Browser support
+
+The app targets current Chromium, Firefox and WebKit (Safari). CI runs every e2e spec in Chromium on every push, and on `main` runs the load, export, isolation, offline, reach and weld tolerance specs in Firefox and WebKit as well (the projects in `playwright.config.ts`).
+
+When the page is cross-origin isolated (COOP same-origin and COEP require-corp, sent by `vercel.json` and the Vite dev and preview servers), the display mesh and its BVH live in a SharedArrayBuffer that the page and the worker both read, so a large part is not copied between them. Isolation alone is not enough: a browser may refuse to upload a WebGL buffer from shared memory. So the page runs a runtime capability probe once ([src/worker/sharedMemory.ts](src/worker/sharedMemory.ts)): it uploads a small shared vertex and index array to a throwaway WebGL context, checks for an exception or a GL error, and names the worker for the answer. A browser that refuses, or a host that drops the two headers, gets the copy path with the same results. The app loads no cross-origin resources, so the isolation headers break nothing.
+
+## Key numbers
+
+Measured with `npx tsx scripts/key-numbers.ts` in Node 24 on an Intel i7-14700HX under WSL2, three runs:
+
+| What | Measured |
+| --- | --- |
+| Parse plus detect, a generated 1M-triangle single-body part (999,996 triangles) | 4.7 to 4.9 s |
+| Access analysis for the 56 seams of `double-bottom-cell` | 0.12 s |
+| Air travel, table order to minimum air travel, `double-bottom-cell` | 24.3 m to 8.5 m, 65 percent less |
+| Reach coverage of the tank seam at x 746 from the manhole port | 21 percent at an 18 degree bend limit, 100 percent at 25 degrees |
+| Entry chunk of the production build | 412 kB (budget 500 kB) |
+
+## Known limits
+
+- **Unit guess:** the split between inches and metres for a part about 1 unit across needs real SolidWorks exports to choose; the app asks when it is unsure.
+- **Bodies:** an STL has no body ids, so bodies that share a welded vertex fuse into one, and contact and intersection passes trust the winding of open or non-orientable bodies.
+- **Vertex noise:** with 0.02 mm of noise on every vertex at the default weld tolerance, short low-confidence creases appear beside holes on some samples (8 of 20 runs on l-bracket-gussets, 12 on box-beam, 15 on pipe-on-plate, 1 on the tank). Raising the weld tolerance removes most of them; box-beam keeps a spurious crease in 7 of 20 runs. Seams found again keep their ids (99.4 percent of 5,200 comparisons).
+- **Faceted curves:** a faceted 50 mm bar measures 49.97 mm; the true cylinder is not in the file.
+- **Drawn seams on open surface** read "Fillet ?": with no second plate, inside and outside are undefined. Plate thickness is set per seam, not for a selection.
+- **Positions:** PE (groove overhead) is not produced; groove welds are out of scope, so overhead fillets report PD.
+- **Reach:** the tank reach takes about 9 s at defaults (7 to 13 s with machine load) against a 5 s target, because 660 stations out of reach have to be proven so. There is no free-space path search where FABRIK finds no chain; a bend-limited search would be needed and no sample needs it. Some exact-fit failures are physics: 4 links at 18 degrees shift the wrist about 180 mm sideways.
+- **Keyboard layouts:** on French AZERTY the step keys and Shift plus a digit are the same keystroke; the view keys win and the steps stay on the numpad and the stepper.
+- **RAPID data:** seamdata, welddata and weavedata belong to the cell and are placeholders.
+- **Key numbers:** parse plus detect of the 1M-triangle part takes 4.7 to 4.9 s here, and access for `double-bottom-cell` 0.12 s, against planning targets of 2.2 s and 0.1 s.
+
+## Next steps
+
+- STEP import, so seams come from exact B-rep edges instead of facets.
+- Scan-based seam refinement: touch sensing or a laser line scan to correct each seam against the real part before welding.
+- A ROS 2 bridge that publishes the job as poses and services for a cell.
+- KUKA (ArcTech), FANUC and Yaskawa exporters beside the ABB RAPID template.
