@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { Vec3 } from '../../../src/core/math/vec3'
-import { SEQUENCE_STRATEGIES, type SequenceNode, type Visit } from '../../../src/core/sequence/types'
+import { SEQUENCE_STRATEGIES, type EdgeCost, type SequenceNode, type Visit } from '../../../src/core/sequence/types'
+import { balancedEdge } from '../../../src/core/sequence/balance'
+import { optimiseByRecosting } from '../helpers/tspReference'
 import { airEdge, airLengthMm, optimise, tourCost } from '../../../src/core/sequence/tsp'
 import { exactOptimum } from '../helpers/exact'
 import { seededRandom } from '../helpers/random'
@@ -165,4 +167,51 @@ describe('optimise progress', () => {
     const { fractions } = run(nodes, { locked: nodes.map((n) => n.id) })
     expect(fractions[fractions.length - 1]).toBe(1)
   })
+})
+
+describe('optimise prices a candidate from the edges it changes', () => {
+  const shuffled = (nodes: SequenceNode[], seed: number): Visit[] => {
+    const random = seededRandom(seed)
+    const order = nodes.map((node) => ({ node, reversed: !node.closed && random() < 0.5 }))
+    for (let i = order.length - 1; i > 0; i--) {
+      const j = Math.floor(random() * (i + 1))
+      ;[order[i], order[j]] = [order[j]!, order[i]!]
+    }
+    return order
+  }
+  const withLocks = (nodes: SequenceNode[], seed: number, share: number) => {
+    const random = seededRandom(seed)
+    return nodes.map((n) => ({ ...n, locked: random() < share }))
+  }
+  const counted = (cost: EdgeCost) => {
+    const counter = { calls: 0 }
+    const edgeCost: EdgeCost = (a, b) => (counter.calls++, cost(a, b))
+    return { counter, edgeCost }
+  }
+  // A clock that never moves lets both searches run to their local optimum.
+  const still = { timeBoxMs: 1, now: () => 0 }
+
+  it('walks the same path to the same tour as recosting every candidate, with locked seams and either edge cost', () => {
+    for (let seed = 1; seed <= 60; seed++) {
+      const random = seededRandom(1000 + seed)
+      const nodes = withLocks(grid(2 + Math.floor(random() * 22), seed), seed + 7, seed % 3 === 0 ? 0 : 0.25)
+      const start = shuffled(nodes, seed + 11)
+      for (const cost of [airEdge(HOME, 15), balancedEdge(nodes, HOME, 15)]) {
+        const fast = optimise(nodes, cost, { ...still, start })
+        const slow = optimiseByRecosting(nodes, cost, { ...still, start })
+        expect(fast.map((v) => [v.node.id, v.reversed]), `seed ${seed}`).toEqual(slow.map((v) => [v.node.id, v.reversed]))
+      }
+    }
+  }, 120_000)
+
+  it('calls the edge cost a small share as often as recosting on 60 seams', () => {
+    const nodes = withLocks(grid(60, 5), 3, 0.05)
+    const start = shuffled(nodes, 9)
+    const fast = counted(airEdge(HOME, 15))
+    const slow = counted(airEdge(HOME, 15))
+    const a = optimise(nodes, fast.edgeCost, { ...still, start })
+    const b = optimiseByRecosting(nodes, slow.edgeCost, { ...still, start })
+    expect(ids(a)).toEqual(ids(b))
+    expect(fast.counter.calls * 8).toBeLessThan(slow.counter.calls)
+  }, 60_000)
 })
