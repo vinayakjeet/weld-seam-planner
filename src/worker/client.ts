@@ -141,8 +141,21 @@ export function wrapGeometryApi(endpoint: Endpoint, options: ClientOptions = {})
     exportJob: (plan, createdAt) => supervise<ExportOutcome>(options, 'building the job file', () => remote.exportJob(plan, createdAt)),
     planTiming: (plan) => supervise<TimingOutcome>(options, 'working out the cycle time', () => remote.planTiming(plan)),
     playbackPath: (plan) => supervise<PlaybackOutcome>(options, 'working out the torch path', () => remote.playbackPath(plan)),
-    optimiseSequence: (plan, strategy, locked, current) =>
-      supervise<SequenceOutcome>(options, 'ordering the seams', () => remote.optimiseSequence(plan, strategy, locked, current)),
+    optimiseSequence: (plan, strategy, locked, current, onProgress) =>
+      supervise<SequenceOutcome>(options, 'ordering the seams', (activity) =>
+        remote.optimiseSequence(
+          plan,
+          strategy,
+          locked,
+          current,
+          // A long search counts as alive while it reports, so the watchdog does not replace the worker under it.
+          onProgress &&
+            proxy((fraction: number) => {
+              activity()
+              onProgress(fraction)
+            }),
+        ),
+      ),
   }
 }
 

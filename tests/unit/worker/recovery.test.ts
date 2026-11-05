@@ -47,7 +47,7 @@ function harness() {
       preflight: (plan) => real.preflight(plan),
       planTiming: (plan) => real.planTiming(plan),
       playbackPath: (plan) => real.playbackPath(plan),
-      optimiseSequence: (plan, strategy, locked, order) => real.optimiseSequence(plan, strategy, locked, order),
+      optimiseSequence: (plan, strategy, locked, order, onProgress) => real.optimiseSequence(plan, strategy, locked, order, onProgress),
       exportJob: (plan, createdAt) => real.exportJob(plan, createdAt),
     }
     const { port1, port2 } = new MessageChannel()

@@ -186,6 +186,18 @@ describe('runOptimise', () => {
     expect(selectSequenceOrder(state())[3]!.locked).toBe(true)
   })
 
+  it('hands the progress callback to the worker and applies the answer', async () => {
+    load()
+    const seen: number[] = []
+    const optimiseSequence = vi.fn(async (plan, strategy, locked, current, onProgress) => {
+      onProgress?.(0.5)
+      return createGeometryApi().optimiseSequence(plan, strategy, locked, current)
+    })
+    expect(await runOptimise(fakeClient({ optimiseSequence }), 'min-air-move', (f) => seen.push(f))).toBeNull()
+    expect(seen).toEqual([0.5])
+    expect(state().strategy).toBe('min-air-move')
+  })
+
   it('applies table order without asking the worker', async () => {
     load()
     state().reorder(0, 4)

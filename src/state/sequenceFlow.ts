@@ -7,8 +7,9 @@ import { useStore } from './store'
 
 // Applies a strategy to the sequence: table order is applied here, the other two ask the worker, which starts from the
 // current order and leaves locked seams where they are. One undo step. Returns what went wrong, or null. An answer for
-// a plan that changed while the worker was busy is dropped, because its order would no longer fit.
-export async function runOptimise(client: GeometryClient, strategy: SequenceStrategy): Promise<Explained | null> {
+// a plan that changed while the worker was busy is dropped, because its order would no longer fit. onProgress hears the
+// share of the search done, 0 to 1.
+export async function runOptimise(client: GeometryClient, strategy: SequenceStrategy, onProgress?: (fraction: number) => void): Promise<Explained | null> {
   const state = useStore.getState()
   const plan = selectPlan(state)
   if (plan.seams.length === 0) {
@@ -29,6 +30,7 @@ export async function runOptimise(client: GeometryClient, strategy: SequenceStra
       strategy,
       current.filter((e) => e.locked).map((e) => e.seamId),
       current.map(({ seamId, reversed }) => ({ seamId, reversed })),
+      onProgress,
     ),
   )
   if (outcome.status === 'error') return outcome.error

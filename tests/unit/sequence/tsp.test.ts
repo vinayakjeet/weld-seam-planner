@@ -118,3 +118,50 @@ describe('airLengthMm', () => {
     expect(airLengthMm(tour, home, 50)).toBe(50 + (50 + 10 + 50) + (50 + 30))
   })
 })
+
+describe('optimise progress', () => {
+  const run = (nodes: SequenceNode[], extra: { locked?: string[] } = {}) => {
+    const fractions: number[] = []
+    const tour = optimise(
+      nodes.map((n) => ({ ...n, locked: extra.locked?.includes(n.id) ?? false })),
+      edge,
+      { onProgress: (fraction) => fractions.push(fraction) },
+    )
+    return { fractions, tour }
+  }
+
+  it('reports fractions in 0 to 1 that never go back, and ends at 1', () => {
+    const { fractions } = run(grid(60, 7))
+    expect(fractions.length).toBeGreaterThan(5)
+    for (const f of fractions) {
+      expect(f).toBeGreaterThanOrEqual(0)
+      expect(f).toBeLessThanOrEqual(1)
+    }
+    for (let i = 1; i < fractions.length; i++) expect(fractions[i]!).toBeGreaterThanOrEqual(fractions[i - 1]!)
+    expect(fractions[fractions.length - 1]).toBe(1)
+  })
+
+  it('reports while the nearest neighbour order is built, which is the part that grows with the square of the seam count', () => {
+    const { fractions } = run(grid(200, 3))
+    // A fraction below 0.8 can only come from the construction.
+    expect(fractions.filter((f) => f > 0 && f < 0.8).length).toBeGreaterThan(10)
+  })
+
+  it('reports no more often than a few hundred times, however many seams there are', () => {
+    const { fractions } = run(grid(400, 5))
+    expect(fractions.length).toBeLessThan(300)
+  })
+
+  it('does not change the answer', () => {
+    const nodes = grid(40, 11)
+    const plain = optimise(nodes, edge)
+    const reported = optimise(nodes, edge, { onProgress: () => undefined })
+    expect(ids(reported)).toEqual(ids(plain))
+  })
+
+  it('reports 1 for an order with nothing free to place', () => {
+    const nodes = grid(3, 1)
+    const { fractions } = run(nodes, { locked: nodes.map((n) => n.id) })
+    expect(fractions[fractions.length - 1]).toBe(1)
+  })
+})

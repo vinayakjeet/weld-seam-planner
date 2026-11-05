@@ -19,6 +19,23 @@ const airMm = (p: Plan, order: { seamId: string; reversed: boolean }[]) =>
 describe('optimiseSequence on double-bottom-cell', () => {
   const api = createGeometryApi()
 
+  it('reports progress up to 1 for a search, and none for table order', async () => {
+    const fractions: number[] = []
+    ok(await api.optimiseSequence(plan, 'min-air-move', [], table, (f) => fractions.push(f)))
+    expect(fractions.length).toBeGreaterThan(1)
+    expect(fractions[fractions.length - 1]).toBe(1)
+    const none: number[] = []
+    ok(await api.optimiseSequence(plan, 'table-order', [], table, (f) => none.push(f)))
+    expect(none).toEqual([])
+  })
+
+  it('does not fail when a progress callback throws, because progress is cosmetic', async () => {
+    const outcome = await api.optimiseSequence(plan, 'min-air-move', [], table, () => {
+      throw new Error('ui gone')
+    })
+    expect(ok(outcome).order).toHaveLength(tableIds.length)
+  })
+
   it('returns every seam once and seams + 1 moves, home at both ends', async () => {
     const { order, moves } = ok(await api.optimiseSequence(plan, 'min-air-move', [], table))
     expect([...order.map((o) => o.seamId)].sort()).toEqual([...tableIds].sort())

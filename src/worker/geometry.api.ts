@@ -135,8 +135,15 @@ export interface GeometryApi {
   // The torch path of the plan in its sequence order, with the timing the playback runs on.
   playbackPath(plan: Plan): Promise<PlaybackOutcome>
   // Orders the seams of the plan by the strategy, starting from the current order. Locked seams keep their slot and
-  // direction. Returns the new order and the air moves it gives, home included.
-  optimiseSequence(plan: Plan, strategy: SequenceStrategy, locked: string[], current: { seamId: string; reversed: boolean }[]): Promise<SequenceOutcome>
+  // direction. Returns the new order and the air moves it gives, home included. onProgress hears the share of the
+  // search done, 0 to 1; table order has no search and reports nothing.
+  optimiseSequence(
+    plan: Plan,
+    strategy: SequenceStrategy,
+    locked: string[],
+    current: { seamId: string; reversed: boolean }[],
+    onProgress?: (fraction: number) => void,
+  ): Promise<SequenceOutcome>
 }
 
 // Where each load stage starts on the overall bar; the index stage runs to 1.
@@ -160,6 +167,18 @@ function reporter(onProgress: Progress): Progress {
       void Promise.resolve(onProgress(stage, last)).catch(() => undefined)
     } catch {
       return
+    }
+  }
+}
+
+// Across a worker boundary a progress callback returns a promise; progress is cosmetic, so a callback that fails must not fail the work.
+function quietly(onProgress: ((fraction: number) => void) | undefined): ((fraction: number) => void) | undefined {
+  if (!onProgress) return undefined
+  return (fraction) => {
+    try {
+      void Promise.resolve(onProgress(fraction)).catch(() => undefined)
+    } catch {
+      // ignored on purpose
     }
   }
 }
@@ -468,7 +487,7 @@ export function createGeometryApi(): GeometryApi {
       return exportJob(plan, { createdAt })
     },
 
-    async optimiseSequence(plan, strategy, locked, current) {
+    async optimiseSequence(plan, strategy, locked, current, onProgress) {
       try {
         const lockedIds = new Set(locked)
         const tableIds = plan.seams.map((p) => p.seam.id)
@@ -483,7 +502,7 @@ export function createGeometryApi(): GeometryApi {
           const home = homePoint(plan)
           const lead = plan.settings.approachMm
           const edge = strategy === 'balanced-heat' ? balancedEdge(nodes, home, lead) : airEdge(home, lead)
-          order = optimise(nodes, edge, { start: visits }).map((v) => ({ seamId: v.node.id, reversed: v.reversed }))
+          order = optimise(nodes, edge, { start: visits, onProgress: quietly(onProgress) }).map((v) => ({ seamId: v.node.id, reversed: v.reversed }))
         }
         const timing = planTiming({ ...plan, sequence: { strategy, order } })
         return { status: 'ok', order, moves: timing.moves }

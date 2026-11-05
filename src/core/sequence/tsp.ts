@@ -32,7 +32,15 @@ export interface OptimiseOptions {
   // The order to start from and to compare against; table order, all forward, when absent. Locked seams keep the
   // slot and direction they have here.
   start?: Visit[]
+  // Called with the share of the work done, 0 to 1, never going back and at most a few hundred times. The nearest
+  // neighbour construction takes the first 0.8, which is the part that grows with the square of the seam count; the
+  // improvement passes take the rest by the share of the time box spent.
+  onProgress?: (fraction: number) => void
 }
+
+const CONSTRUCTION_SHARE = 0.8
+// A report is sent only when the fraction has moved this far since the last one.
+const REPORT_STEP = 0.005
 
 // A flipped visit; a closed loop has one way to be travelled.
 const flip = (v: Visit): Visit => (v.node.closed ? v : { node: v.node, reversed: !v.reversed })
@@ -44,7 +52,16 @@ export function optimise(nodes: SequenceNode[], edge: EdgeCost, options: Optimis
   const n = nodes.length
   if (n === 0) return []
   const now = options.now ?? (() => performance.now())
-  const deadline = now() + (options.timeBoxMs ?? DEFAULT_TIME_BOX_MS)
+  const timeBox = options.timeBoxMs ?? DEFAULT_TIME_BOX_MS
+  const deadline = now() + timeBox
+  let reported = -1
+  const report = (fraction: number, force = false) => {
+    if (!options.onProgress) return
+    const next = Math.min(1, Math.max(reported, fraction, 0))
+    if (force ? next === reported : next - reported < REPORT_STEP) return
+    reported = next
+    options.onProgress(next)
+  }
 
   const base: Visit[] = options.start ?? nodes.map((node) => ({ node, reversed: false }))
   // A locked visit fills its slot as given; a free slot is null until the search places a seam there.
@@ -63,6 +80,7 @@ export function optimise(nodes: SequenceNode[], edge: EdgeCost, options: Optimis
   const constructed: Visit[] = []
   let previous: Visit | null = null
   slots.forEach((slot) => {
+    report((CONSTRUCTION_SHARE * constructed.length) / Math.max(free.length, 1))
     if (slot !== null) {
       previous = slot
       return
@@ -87,7 +105,11 @@ export function optimise(nodes: SequenceNode[], edge: EdgeCost, options: Optimis
   let sequence = constructed
   let cost = tourCost(assemble(sequence), edge)
   const m = sequence.length
-  const expired = () => now() > deadline
+  const expired = () => {
+    const left = deadline - now()
+    report(CONSTRUCTION_SHARE + (1 - CONSTRUCTION_SHARE) * (1 - Math.max(left, 0) / Math.max(timeBox, 1)))
+    return left < 0
+  }
 
   const consider = (candidate: Visit[]): boolean => {
     const c = tourCost(assemble(candidate), edge)
@@ -129,6 +151,7 @@ export function optimise(nodes: SequenceNode[], edge: EdgeCost, options: Optimis
     }
   }
 
+  report(1, true)
   const result = assemble(sequence)
   const startOrder = base.map((v) => (v.node.locked ? v : forwardOnly(v)))
   return tourCost(result, edge) <= tourCost(startOrder, edge) + EPS ? result : startOrder

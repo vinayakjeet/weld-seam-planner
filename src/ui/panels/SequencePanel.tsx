@@ -53,6 +53,8 @@ function Padlock({ locked }: { locked: boolean }) {
 function Controls() {
   const [choice, setChoice] = useState<Choice>('min-air-move')
   const [busy, setBusy] = useState(false)
+  // The share of the search done, as the worker reports it; null before the first report.
+  const [progress, setProgress] = useState<number | null>(null)
   const accepted = useStore((s) => selectPlan(s).seams.length)
   const used = useStore((s) => s.strategy)
   const setNotice = useStore((s) => s.setNotice)
@@ -60,11 +62,13 @@ function Controls() {
 
   const run = async () => {
     setBusy(true)
+    setProgress(null)
     try {
-      const problem = await runOptimise(getGeometryClient(), choice)
+      const problem = await runOptimise(getGeometryClient(), choice, setProgress)
       setNotice(problem)
     } finally {
       setBusy(false)
+      setProgress(null)
     }
   }
 
@@ -86,8 +90,20 @@ function Controls() {
         </select>
       </label>
       <Button disabled={reason !== null || busy} title={reason ?? undefined} onClick={() => void run()} className="w-full">
-        {busy ? 'Optimising' : 'Optimise'}
+        {busy ? (progress === null ? 'Optimising' : `Optimising ${Math.round(progress * 100)}%`) : 'Optimise'}
       </Button>
+      {busy && progress !== null && (
+        <div
+          role="progressbar"
+          aria-label="Optimising the sequence"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(progress * 100)}
+          className="h-1 bg-surface-2"
+        >
+          <div className="h-full bg-brand" style={{ width: `${Math.round(progress * 100)}%` }} />
+        </div>
+      )}
       {reason === null && <p className="text-ink-2">Current order: {STRATEGY_NAMES[used]}. Drag a row, or press Alt and an arrow key, to set it by hand.</p>}
       <Summary />
     </div>
