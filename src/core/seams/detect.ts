@@ -24,7 +24,7 @@ export const DEFAULT_DETECT_SETTINGS: DetectSettings = { creaseAngleDeg: 30 }
 // Passes that need per-body BVHs reuse these when given; otherwise they build their own.
 export interface DetectContext {
   bodyBvhs?: BodyBvh[]
-  // The whole-mesh BVH of a single-body part, or null when there is none to use (too large). Built here when absent.
+  // The whole-mesh BVH of a single-body part, or null when there is none to use. Built here when absent.
   wholeBvh?: BodyBvh | null
   // Above this many triangles the outside corner pass is skipped. LARGE_PART_TRIANGLES when absent.
   maxCornerTriangles?: number
@@ -385,8 +385,8 @@ interface Strip {
 const NO_STRIP: Strip = { stripWidthMm: Infinity, touchedThicknessMm: Infinity, stripLengthMm: Infinity, stripNormal: null }
 
 // The lap rule needs the width of the free face's flat patch, the thickness of the plate behind the touched surface
-// and the depth of the plate behind the free face. A patch wider than a tenth of the part is a wall, not a strip, so it costs no ray and, in a single body,
-// no BVH. A single body shares one BVH over the whole mesh with the thickness rays, unless the mesh is large.
+// and the depth of the plate behind the free face. A patch wider than a tenth of the part is a wall, not a strip, so it
+// costs no ray. A single body shares one BVH over the whole mesh with the thickness rays.
 // The ray starts on the junction line itself; a ray along a face plane still registers the edge it grazes.
 const STRIP_CAP_FRACTION = 0.1
 

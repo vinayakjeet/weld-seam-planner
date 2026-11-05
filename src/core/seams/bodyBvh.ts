@@ -28,18 +28,15 @@ export function buildBodyBvhs(model: MeshModel): BodyBvh[] {
   return lists.map((triangles) => indexTriangles(model, triangles))
 }
 
-// One BVH over the whole mesh, for the few checks on a single-body part that need a ray (the lap rule). Built only
-// on demand, never for detection of contact or intersection.
+// One BVH over the whole mesh: the rays of detection on a single-body part, and access, reach and drawing on any part.
+// Built only on demand, never for detection of contact or intersection.
 export function buildWholeBvh(model: MeshModel): BodyBvh {
   return indexTriangles(model, Uint32Array.from({ length: model.mesh.triangleCount }, (_, t) => t))
 }
 
-// Above this a single-body mesh gets no whole-mesh BVH, so nothing that needs a ray is measured on it.
-export const MAX_WHOLE_BVH_TRIANGLES = 300_000
-
-// The whole-mesh BVH for a single-body part, or null for a multi-body part (which has body BVHs) and a very large one.
+// The whole-mesh BVH for a single-body part, or null for a multi-body part, which has body BVHs.
 export function wholeBvhFor(model: MeshModel): BodyBvh | null {
-  return model.bodies.count > 1 || model.mesh.triangleCount > MAX_WHOLE_BVH_TRIANGLES ? null : buildWholeBvh(model)
+  return model.bodies.count > 1 ? null : buildWholeBvh(model)
 }
 
 function indexTriangles(model: MeshModel, triangles: Uint32Array): BodyBvh {

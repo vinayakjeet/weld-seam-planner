@@ -21,7 +21,7 @@ import { sha256Hex } from '../core/mesh/hash'
 import { buildMeshModel, type MeshModel } from '../core/mesh/model'
 import { parseStl, StlError } from '../core/mesh/parseStl'
 import { guessUnits, scaleToMm, type KnownUnits, type Units } from '../core/mesh/units'
-import { buildBodyBvhs, buildWholeBvh, MAX_WHOLE_BVH_TRIANGLES, wholeBvhFor, type BodyBvh } from '../core/seams/bodyBvh'
+import { buildBodyBvhs, buildWholeBvh, type BodyBvh } from '../core/seams/bodyBvh'
 import { detectSeams, type DetectSettings, type SeamCandidate } from '../core/seams/detect'
 import { buildSnapContext, snapPoint, snapPolyline, type DrawClick, type SnapContext } from '../core/seams/draw'
 import { isManualError } from '../core/seams/manual'
@@ -229,10 +229,10 @@ export function createGeometryApi(): GeometryApi {
   let current: MeshModel | null = null
   // Built on the first detect of a multi body part and kept until another part replaces it.
   let bodyBvhs: BodyBvh[] | null = null
-  // The single-body counterpart: undefined until the first detect, null when the part is too large to ray cast.
-  let wholeBvh: BodyBvh | null | undefined
-  // One BVH over every triangle for access rays, built on the first access run of a part. Unlike wholeBvh it has no size cap.
-  let accessBvh: BodyBvh | null = null
+  // One BVH over every triangle of the part, built on first use and shared: detection rays on a single-body part,
+  // access, reach, insertion and drawing.
+  let partBvh: BodyBvh | null = null
+  const wholeMesh = (model: MeshModel): BodyBvh => (partBvh ??= buildWholeBvh(model))
   // Feature edges and the surface BVH for drawing, built on the first drawn seam of a part.
   let snapContext: SnapContext | null = null
 
@@ -244,13 +244,14 @@ export function createGeometryApi(): GeometryApi {
     // Only a fully built part replaces the current one, so a failed load leaves the old part usable.
     current = model
     bodyBvhs = null
-    wholeBvh = undefined
-    accessBvh = null
+    partBvh = null
     snapContext = null
     const outcome: LoadOutcome = { status: 'ready', part: describePart(model, name, sha256, units), display }
     const buffers = [display.positions.buffer, display.indices.buffer, ...display.bvh.roots]
     return transfer(outcome, buffers as Transferable[])
   }
+
+  const snapContextFor = (model: MeshModel) => buildSnapContext(model, computeFaceData(model.mesh), () => wholeMesh(model).bvh)
 
   return {
     async loadStl(buffer, name, onProgress) {
@@ -312,7 +313,7 @@ export function createGeometryApi(): GeometryApi {
           bodyBvhs = buildBodyBvhs(current)
           report('detect', 0.3)
         }
-        if (current.bodies.count < 2 && wholeBvh === undefined) wholeBvh = wholeBvhFor(current)
+        const wholeBvh = current.bodies.count < 2 ? wholeMesh(current) : null
         const seams = detectSeams(current, settings, { bodyBvhs: bodyBvhs ?? undefined, wholeBvh })
         const ms = performance.now() - start
         report('detect', 1)
@@ -334,11 +335,10 @@ export function createGeometryApi(): GeometryApi {
         }
       }
       try {
-        snapContext ??= buildSnapContext(current, computeFaceData(current.mesh))
+        snapContext ??= snapContextFor(current)
         const result = snapPolyline(clicks, snapContext, snapRadiusMm)
         if (isManualError(result)) return { status: 'error', error: result }
-        const tooLarge = current.bodies.count < 2 && current.mesh.triangleCount > MAX_WHOLE_BVH_TRIANGLES
-        if (result.approximateNormals || tooLarge) return { status: 'ok', seam: result }
+        if (result.approximateNormals) return { status: 'ok', seam: result }
         const thicknessMm = seamThickness(result.points, probeFromBvhs([snapContext.surface()]))
         return { status: 'ok', seam: { ...result, thicknessMm } }
       } catch (error) {
@@ -349,7 +349,7 @@ export function createGeometryApi(): GeometryApi {
     async snapPreview(point, radiusMm) {
       if (!current) return null
       try {
-        snapContext ??= buildSnapContext(current, computeFaceData(current.mesh))
+        snapContext ??= snapContextFor(current)
         return snapPoint(snapContext, point, radiusMm)
       } catch {
         return null
@@ -391,8 +391,7 @@ export function createGeometryApi(): GeometryApi {
       try {
         const start = performance.now()
         report('access', 0)
-        accessBvh ??= buildWholeBvh(current)
-        const occluded = occluderFromBvh(accessBvh.bvh)
+        const occluded = occluderFromBvh(wholeMesh(current).bvh)
         const results: Record<string, AccessAnalysis> = {}
         seams.forEach((seam, i) => {
           results[seam.id] = seamAccess(seam, occluded)
@@ -429,8 +428,7 @@ export function createGeometryApi(): GeometryApi {
       try {
         const start = performance.now()
         report('reach', 0)
-        accessBvh ??= buildWholeBvh(current)
-        const near = proximityFromBvh(accessBvh.bvh)
+        const near = proximityFromBvh(wholeMesh(current).bvh)
         const results: Record<string, SeamReach> = {}
         seams.forEach((seam, i) => {
           results[seam.id] = seamReach(seam, ports, arm, near)
@@ -454,8 +452,7 @@ export function createGeometryApi(): GeometryApi {
         }
       }
       try {
-        accessBvh ??= buildWholeBvh(current)
-        const near = proximityFromBvh(accessBvh.bvh)
+        const near = proximityFromBvh(wholeMesh(current).bvh)
         const poses = torchPoses(seam.points, seam.closed, DEFAULT_TORCH)
         const pose = poseAt(poses, s, seam.closed)
         const solved = solveArm(port, approachGoal(pose.p, rotate(pose.q, [0, 0, 1]), arm, approachMm), arm, near)

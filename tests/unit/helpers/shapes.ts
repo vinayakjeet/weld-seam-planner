@@ -18,21 +18,6 @@ export function cubeTriangles(min: number[], size: number[]): Tri[] {
   ])
 }
 
-// A box whose six faces are each a k x k grid of quads: 12 k^2 triangles, still one closed body.
-export function gridBoxTriangles(size: number[], k: number): Tri[] {
-  const tris: Tri[] = []
-  for (const [a, b, , d] of QUADS) {
-    const at = (i: number, j: number) =>
-      [0, 1, 2].map((ax) => (a![ax]! + (b![ax]! - a![ax]!) * (i / k) + (d![ax]! - a![ax]!) * (j / k)) * size[ax]!)
-    for (let i = 0; i < k; i++) {
-      for (let j = 0; j < k; j++) {
-        tris.push([...at(i, j), ...at(i + 1, j), ...at(i + 1, j + 1)], [...at(i, j), ...at(i + 1, j + 1), ...at(i, j + 1)])
-      }
-    }
-  }
-  return tris
-}
-
 export function soupOf(tris: Tri[]): Float32Array {
   return Float32Array.from(tris.flat())
 }
@@ -92,3 +77,21 @@ export const narrowFlangeT = () =>
     100,
     (y, z, x) => [x, y, z],
   )
+
+// The T-joint (a 100 x 10 plate, a 10 x 80 web, 200 mm long along x) cut into thin slices along its length, so that a
+// single body has as many triangles as a large scan: 16 per slice and 12 for the two end caps.
+export function slicedTJoint(slices: number): Tri[] {
+  const profile: Array<[number, number]> = [[-50, 0], [50, 0], [50, 10], [5, 10], [5, 90], [-5, 90], [-5, 10], [-50, 10]]
+  const caps: Array<[number, number, number]> = [[0, 1, 2], [0, 2, 3], [0, 3, 6], [0, 6, 7], [3, 4, 5], [3, 5, 6]]
+  const at = (i: number, x: number) => [x, profile[i]![0], profile[i]![1]]
+  const tris: Tri[] = []
+  for (const x of [0, 200]) for (const [a, b, c] of caps) tris.push([...at(a, x), ...at(b, x), ...at(c, x)])
+  for (let k = 0; k < slices; k++) {
+    const [x0, x1] = [(200 * k) / slices, (200 * (k + 1)) / slices]
+    profile.forEach((_, i) => {
+      const j = (i + 1) % profile.length
+      tris.push([...at(i, x0), ...at(j, x0), ...at(j, x1)], [...at(i, x0), ...at(j, x1), ...at(i, x1)])
+    })
+  }
+  return tris
+}

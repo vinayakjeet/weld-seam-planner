@@ -6,7 +6,8 @@ import { computeFaceData } from '../../../src/core/mesh/faces'
 import { contactTolerance, findContactEdges } from '../../../src/core/seams/contact'
 import { DEFAULT_DETECT_SETTINGS, detectSeams } from '../../../src/core/seams/detect'
 import { loadSampleModel } from '../helpers/models'
-import { cubeTriangles, soupOf, steppedLap } from '../helpers/shapes'
+import { cubeTriangles, slicedTJoint, soupOf, steppedLap } from '../helpers/shapes'
+import { shown } from '../helpers/state'
 
 const built = vi.hoisted(() => ({ count: 0 }))
 
@@ -100,6 +101,19 @@ describe('detectSeams and the BVH of a single body', () => {
     detectSeams(model(steppedLap()), DEFAULT_DETECT_SETTINGS)
     expect(built.count).toBe(1)
   })
+
+  // The memory guard skipped the lap rule and the thickness rays above 300000 triangles, but the access check builds the
+  // same BVH as soon as a seam is accepted, so it saved nothing.
+  it('builds it for a single body of any size: a sliced T of 304012 triangles gets its plate thicknesses', () => {
+    const big = model(slicedTJoint(19000))
+    expect(big.mesh.triangleCount).toBe(304012)
+    expect(big.bodies.count).toBe(1)
+    built.count = 0
+    const seams = shown(detectSeams(big, DEFAULT_DETECT_SETTINGS))
+    expect(built.count).toBe(1)
+    expect(seams).toHaveLength(2)
+    for (const s of seams) expect(s.thicknessMm).toEqual([10, 10])
+  }, 60_000)
 
   it('builds none when the caller hands one in, and none at all when it hands in null', () => {
     const lap = model(steppedLap())

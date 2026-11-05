@@ -15,7 +15,8 @@ import { seam, shown } from '../helpers/state'
 import { pointsFromPolyline } from '../../../src/core/seams/frames'
 import { DEFAULT_TORCH, poseAt } from '../../../src/core/torch/frames'
 import { readSample } from '../helpers/samples'
-import { gridBoxTriangles } from '../helpers/shapes'
+import { slicedTJoint } from '../helpers/shapes'
+import { DEFAULT_ARM } from '../../../src/core/snake/arm'
 import { makeBinaryStl, TRIANGLES } from '../helpers/stl'
 import { createHash } from 'node:crypto'
 import { jobSchema } from '../../../src/core/job/schema'
@@ -269,18 +270,30 @@ describe('geometry api: contact seams', () => {
     expect(built.count).toBe(1)
   })
 
-  it('measures no thickness and builds no BVH for a single body over 300000 triangles', async () => {
+  it('builds one whole-mesh BVH per part and shares it between detection, access, reach and drawing', async () => {
     const api = createGeometryApi()
-    const stl = makeBinaryStl(gridBoxTriangles([100, 60, 10], 160))
-    ready(await api.loadStl(stl, 'big.stl', () => {}))
+    ready(await api.loadStl(readSample('t-joint-merged'), 't-joint-merged.stl', () => {}))
+    built.count = 0
+    const detected = await api.detect(DEFAULT_DETECT_SETTINGS, () => {})
+    if (detected.status !== 'ok') throw new Error('detect failed')
+    const seams = shown(detected.seams)
+    expect(seams.every((s) => s.thicknessMm.every((t) => t === 10))).toBe(true)
+    expect((await api.access(seams, () => {})).status).toBe('ok')
+    expect(await api.snapPreview(seams[0]!.points[0]!.p, 5)).not.toBeNull()
+    const port = { id: 'P1', position: [0, 0, 300] as [number, number, number], direction: [0, 0, -1] as [number, number, number], diameterMm: 200 }
+    expect((await api.reach(seams.slice(0, 1), [port], DEFAULT_ARM, () => {})).status).toBe('ok')
+    expect(built.count).toBe(1)
+  })
+
+  it('measures thickness on a single body above 300000 triangles', async () => {
+    const api = createGeometryApi()
+    ready(await api.loadStl(makeBinaryStl(slicedTJoint(19000)), 'big.stl', () => {}))
     built.count = 0
     const outcome = await api.detect(DEFAULT_DETECT_SETTINGS, () => {})
-    expect(outcome.status).toBe('ok')
-    if (outcome.status !== 'ok') return
-    // A lone plate has no seam, and without a ray its convex edges cannot pass the second plate check.
-    expect(outcome.seams).toEqual([])
-    expect(built.count).toBe(0)
-  })
+    if (outcome.status !== 'ok') throw new Error('detect failed')
+    expect(shown(outcome.seams).map((s) => s.thicknessMm)).toEqual([[10, 10], [10, 10]])
+    expect(built.count).toBe(1)
+  }, 60_000)
 
   it('builds the body BVHs once per loaded part and reuses them when the slider changes', async () => {
     const api = createGeometryApi()

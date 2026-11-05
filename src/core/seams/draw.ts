@@ -33,7 +33,8 @@ const SAME_POINT_MM = 1e-9
 const PROJECTION_SPACING_MM = 2
 const MAX_PROJECTION_SAMPLES = 200
 
-export function buildSnapContext(model: MeshModel, faces: FaceData): SnapContext {
+// surface hands over a whole-mesh BVH the caller already has; without it one is built on first use.
+export function buildSnapContext(model: MeshModel, faces: FaceData, surface?: () => MeshBVH): SnapContext {
   const { edges } = model
   const flat = Math.cos((FEATURE_DEG * Math.PI) / 180)
   const feature: number[] = []
@@ -53,7 +54,7 @@ export function buildSnapContext(model: MeshModel, faces: FaceData): SnapContext
     }
   }
   let bvh: MeshBVH | null = null
-  return { model, faces, featureEdges: Uint32Array.from(feature), edgesAt, surface: () => (bvh ??= buildWholeBvh(model).bvh) }
+  return { model, faces, featureEdges: Uint32Array.from(feature), edgesAt, surface: surface ?? (() => (bvh ??= buildWholeBvh(model).bvh)) }
 }
 
 const vertex = (ctx: SnapContext, v: number): Vec3 => {
