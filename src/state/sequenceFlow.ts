@@ -34,7 +34,20 @@ export async function runOptimise(client: GeometryClient, strategy: SequenceStra
     ),
   )
   if (outcome.status === 'error') return outcome.error
-  if (plan !== selectPlan(useStore.getState())) return null
+  // The answer still fits when the same seams are accepted with the same locks; an access result does not change that.
+  if (fitKey(useStore.getState()) !== fitKey(state)) {
+    return {
+      what: 'The sequence was not optimised.',
+      why: 'The accepted seams or the locked rows changed while the order was being worked out, so that order no longer fits them.',
+      next: 'Optimise again.',
+    }
+  }
   useStore.getState().setSequence(strategy, outcome.order)
   return null
+}
+
+const fitKey = (state: ReturnType<typeof useStore.getState>) => {
+  const ids = selectPlan(state).seams.map((p) => p.seam.id)
+  const locked = selectSequenceOrder(state).filter((e) => e.locked).map((e) => e.seamId)
+  return JSON.stringify([ids, locked])
 }

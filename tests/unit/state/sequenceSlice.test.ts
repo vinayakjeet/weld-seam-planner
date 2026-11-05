@@ -7,6 +7,7 @@ import { useStore } from '../../../src/state/store'
 import { createGeometryApi } from '../../../src/worker/geometry.api'
 import { CREATED_AT, samplePlan, SPRAY_ID } from '../helpers/jobs'
 import { fakeClient, partInfo, resetStore } from '../helpers/state'
+import { SNAKE as SNAKE_ACCESS } from '../helpers/reach'
 
 const state = () => useStore.getState()
 const planIds = () => selectPlan(state()).seams.map((p) => p.seam.id)
@@ -223,7 +224,7 @@ describe('runOptimise', () => {
     expect(state().order).toEqual([])
   })
 
-  it('drops an answer for a plan that changed while the worker was busy', async () => {
+  it('drops an answer for seams that changed while the worker was busy, and says so', async () => {
     const ids = load(8)
     const client = fakeClient({
       optimiseSequence: async (plan, strategy, locked, current) => {
@@ -232,8 +233,24 @@ describe('runOptimise', () => {
         return answer
       },
     })
-    expect(await runOptimise(client, 'min-air-move')).toBeNull()
+    const error = await runOptimise(client, 'min-air-move')
+    expect(error?.what).toBe('The sequence was not optimised.')
+    expect(error?.why).toMatch(/changed while/)
+    expect(error?.next).toMatch(/again/)
     expect(state().strategy).toBe('table-order')
+  })
+
+  it('applies an answer when only an access result arrived while the worker was busy', async () => {
+    const ids = load(8)
+    const client = fakeClient({
+      optimiseSequence: async (plan, strategy, locked, current) => {
+        const answer = await createGeometryApi().optimiseSequence(plan, strategy, locked, current)
+        state().mergeAccess({ [ids[0]!]: { access: SNAKE_ACCESS, stations: [], points: plan.seams[0]!.seam.points } })
+        return answer
+      },
+    })
+    expect(await runOptimise(client, 'min-air-move')).toBeNull()
+    expect(state().strategy).toBe('min-air-move')
   })
 })
 
