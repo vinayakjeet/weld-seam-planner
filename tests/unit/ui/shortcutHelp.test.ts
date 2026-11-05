@@ -6,6 +6,8 @@ function key(k: string, mods: Partial<KeyEventLike> = {}, target: KeyEventLike['
   return { key: k, ctrlKey: false, metaKey: false, shiftKey: false, altKey: false, target, ...mods }
 }
 
+// What a US keyboard types for Shift and a digit.
+const SHIFTED_DIGIT: Record<string, string> = { '1': '!', '2': '@', '3': '#', '4': '$', '5': '%', '6': '^' }
 const NAMED: Record<string, string> = { Space: ' ', Delete: 'Delete', Enter: 'Enter', Escape: 'Escape', Backspace: 'Backspace' }
 
 // Reads a row's key label ("Ctrl+Shift+Z", "?", "Space") as the event a browser would send for it.
@@ -13,16 +15,18 @@ function eventFor(chord: string): KeyEventLike {
   const parts = chord === '+' ? ['+'] : chord.split('+')
   const last = parts[parts.length - 1]!
   const mods = parts.slice(0, -1)
-  return key(NAMED[last] ?? last, {
+  const shifted = mods.includes('Shift') && SHIFTED_DIGIT[last] !== undefined
+  return key(shifted ? SHIFTED_DIGIT[last]! : (NAMED[last] ?? last), {
     ctrlKey: mods.includes('Ctrl'),
     metaKey: mods.includes('Cmd'),
     shiftKey: mods.includes('Shift') || last === '?',
+    ...(/^\d$/.test(last) ? { code: `Digit${last}` } : {}),
   })
 }
 
 const ALL: Shortcut[] = [
   'fit', 'undo', 'redo', 'draw', 'split', 'reverse', 'remove', 'play', 'xray', 'finish', 'cancel', 'undoPoint',
-  'help', 'accept', 'reject', 'export', 'step1', 'step2', 'step3', 'step4', 'step5', 'step6',
+  'help', 'view1', 'view2', 'view3', 'view4', 'view5', 'view6', 'accept', 'reject', 'export', 'step1', 'step2', 'step3', 'step4', 'step5', 'step6',
 ]
 
 describe('SHORTCUT_HELP', () => {
@@ -111,6 +115,31 @@ describe('accept, reject and export keys', () => {
     const target = { tagName: 'INPUT', type: 'text' }
     expect(shortcutFor(key('a', {}, target))).toBeNull()
     expect(shortcutFor(key('e', { ctrlKey: true }, target))).toBeNull()
+  })
+})
+
+describe('standard view keys', () => {
+  it('maps Shift and a digit to the six views by key position, whatever symbol the layout types', () => {
+    for (let n = 1; n <= 6; n++) {
+      expect(shortcutFor(key('!', { shiftKey: true, code: `Digit${n}` }))).toBe(`view${n}`)
+    }
+    expect(shortcutFor(key('"', { shiftKey: true, code: 'Digit2' }))).toBe('view2')
+  })
+
+  it('keeps the plain digit for the steps even when the key position is known', () => {
+    expect(shortcutFor(key('3', { code: 'Digit3' }))).toBe('step3')
+  })
+
+  it('leaves Shift with 0, 7 to 9 and with Ctrl, Cmd or Alt alone', () => {
+    expect(shortcutFor(key(')', { shiftKey: true, code: 'Digit0' }))).toBeNull()
+    expect(shortcutFor(key('&', { shiftKey: true, code: 'Digit7' }))).toBeNull()
+    expect(shortcutFor(key('!', { shiftKey: true, ctrlKey: true, code: 'Digit1' }))).toBeNull()
+    expect(shortcutFor(key('!', { shiftKey: true, metaKey: true, code: 'Digit1' }))).toBeNull()
+    expect(shortcutFor(key('!', { shiftKey: true, altKey: true, code: 'Digit1' }))).toBeNull()
+  })
+
+  it('does nothing in a text field', () => {
+    expect(shortcutFor(key('!', { shiftKey: true, code: 'Digit1' }, { tagName: 'INPUT', type: 'text' }))).toBeNull()
   })
 })
 

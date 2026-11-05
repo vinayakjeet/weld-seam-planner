@@ -2,9 +2,9 @@ import { useEffect } from 'react'
 import { acceptSelected, chooseTool, exportPlan, redoEdit, rejectSelected, removeSelected, reverseSelected, toolEvent, undoEdit } from '../../state/flows'
 import { STEPS, useStore } from '../../state/store'
 import { getGeometryClient } from '../../worker/client'
-import { shortcutFor, shortcutGate, stepForShortcut, type StepShortcut } from './shortcuts'
+import { shortcutFor, shortcutGate, stepForShortcut, viewForShortcut, type StepShortcut, type ViewShortcut } from './shortcuts'
 
-export function useShortcuts(fit: () => void): void {
+export function useShortcuts(fit: () => void, showView: (index: number) => void): void {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.isComposing) return
@@ -14,6 +14,7 @@ export function useShortcuts(fit: () => void): void {
         metaKey: event.metaKey,
         shiftKey: event.shiftKey,
         altKey: event.altKey,
+        code: event.code,
         target: event.target as HTMLElement | null,
       })
       if (!shortcut) return
@@ -43,6 +44,12 @@ export function useShortcuts(fit: () => void): void {
         return
       }
       // Export is let through without a part: it tells the user why there is nothing to write.
+      if (shortcut.startsWith('view')) {
+        if (!part) return
+        event.preventDefault()
+        showView(viewForShortcut(shortcut as ViewShortcut))
+        return
+      }
       if (!toolKey && !part && shortcut !== 'fit' && shortcut !== 'undo' && shortcut !== 'redo' && shortcut !== 'export') return
       event.preventDefault()
       const client = getGeometryClient()
@@ -60,5 +67,5 @@ export function useShortcuts(fit: () => void): void {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [fit])
+  }, [fit, showView])
 }

@@ -16,6 +16,7 @@ import { PartMesh } from './PartMesh'
 import { PlaybackTorch } from './PlaybackTorch'
 import { PortMarkers } from './PortMarkers'
 import { PortPlacer } from './PortPlacer'
+import { viewEye, type Vec3 } from './standardViews'
 import { SeamLines } from './SeamLines'
 import { SequenceLabels } from './SequenceLabels'
 import { SplitTool } from './SplitTool'
@@ -46,10 +47,26 @@ export function Scene() {
     void controls.current.fitToSphere(sphere, true)
   }, [])
 
+  // Turns the camera to a standard view of the part, then fits it; the fit keeps the angle that was just set.
+  const showView = useCallback(
+    (index: number) => {
+      const current = useStore.getState().part
+      if (!controls.current || !current) return
+      const min = new Vector3(...current.bbox.min)
+      const max = new Vector3(...current.bbox.max)
+      const centre = min.clone().add(max).multiplyScalar(0.5)
+      const target: Vec3 = [centre.x, centre.y, centre.z]
+      const eye = viewEye(target, min.distanceTo(max) * 2, index)
+      void controls.current.setLookAt(eye[0], eye[1], eye[2], target[0], target[1], target[2], false)
+      fit()
+    },
+    [fit],
+  )
+
   useEffect(() => {
     if (part) fit()
   }, [part, fit])
-  useShortcuts(fit)
+  useShortcuts(fit, showView)
 
   // The loop only runs on demand, so anything that changes the picture outside React has to ask for a frame.
   useEffect(() => useStore.subscribe(() => invalidate()), [invalidate])

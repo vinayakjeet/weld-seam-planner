@@ -17,11 +17,16 @@ export type Shortcut =
   | 'undoPoint'
   | 'help'
   | StepShortcut
+  | ViewShortcut
 
 export type StepShortcut = 'step1' | 'step2' | 'step3' | 'step4' | 'step5' | 'step6'
 
+export type ViewShortcut = 'view1' | 'view2' | 'view3' | 'view4' | 'view5' | 'view6'
+
 export interface KeyEventLike {
   key: string
+  // The physical key. Shift changes what key reads for a digit, so the views are read from here.
+  code?: string
   ctrlKey: boolean
   metaKey: boolean
   shiftKey: boolean
@@ -58,6 +63,9 @@ export function shortcutFor(event: KeyEventLike): Shortcut | null {
   if (key === 'e' && modifier) return event.shiftKey ? null : 'export'
   // Ctrl+R reloads and Ctrl+D bookmarks, so the tool keys never take a modifier. Shift is allowed for caps lock.
   if (modifier) return null
+  // Shift and a digit show a standard view. The symbol Shift types depends on the layout, so the key position is read.
+  const digit = event.shiftKey ? /^Digit([1-6])$/.exec(event.code ?? '') : null
+  if (digit) return `view${digit[1]}` as ViewShortcut
   // A digit jumps to that step; the question mark opens the sheet. Both are read before the generic shift rule.
   if (/^[1-6]$/.test(key)) return `step${key}` as StepShortcut
   if (key === '?') return 'help'
@@ -75,6 +83,11 @@ export function shortcutFor(event: KeyEventLike): Shortcut | null {
 }
 
 // The step a number key opens, by position in the stepper (the same step a click on that button opens).
+// The standard view a view key shows, as a position in STANDARD_VIEWS.
+export function viewForShortcut(id: ViewShortcut): number {
+  return Number(id.slice(4)) - 1
+}
+
 export function stepForShortcut<T extends { id: string }>(id: StepShortcut, steps: ReadonlyArray<T>): T['id'] {
   return steps[Number(id.slice(4)) - 1]!.id
 }
@@ -97,6 +110,12 @@ export const SHORTCUT_HELP: ReadonlyArray<ShortcutHelpRow> = [
   { id: 'fit', keys: ['F'], label: 'Fit view', group: 'View' },
   { id: 'xray', keys: ['X'], label: 'Toggle x-ray', group: 'View' },
   { id: 'help', keys: ['?'], label: 'Show or hide this list', group: 'View' },
+  { id: 'view1', keys: ['Shift+1'], label: 'Front view', group: 'View' },
+  { id: 'view2', keys: ['Shift+2'], label: 'Back view', group: 'View' },
+  { id: 'view3', keys: ['Shift+3'], label: 'Left view', group: 'View' },
+  { id: 'view4', keys: ['Shift+4'], label: 'Right view', group: 'View' },
+  { id: 'view5', keys: ['Shift+5'], label: 'Top view', group: 'View' },
+  { id: 'view6', keys: ['Shift+6'], label: 'Bottom view', group: 'View' },
   { id: 'step1', keys: ['1'], label: 'Go to step 1', group: 'Steps' },
   { id: 'step2', keys: ['2'], label: 'Go to step 2', group: 'Steps' },
   { id: 'step3', keys: ['3'], label: 'Go to step 3', group: 'Steps' },
