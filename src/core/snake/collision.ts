@@ -256,6 +256,8 @@ export function solveArm(port: Port, goal: WristGoal, arm: ArmParams, near: Prox
     let chain = from
     let bestDepth = Infinity
     let stale = 0
+    let bestTip = Infinity
+    let missing = 0
     let deepest: Contact | null = null
     for (let round = 0; round < PUSH_ITERATIONS; round++) {
       iterations++
@@ -275,6 +277,13 @@ export function solveArm(port: Port, goal: WristGoal, arm: ArmParams, near: Prox
         return { solution: null, deepest: null, bad: false }
       }
       last = { ok: false, reason: 'collision', chain: current, iterations }
+      // Pushes that only drive the tip further from the wrist are not going to settle either.
+      if (!solved.ok) {
+        if (solved.tipErrorMm < bestTip - 0.5) {
+          bestTip = solved.tipErrorMm
+          missing = 0
+        } else if (++missing >= PUSH_STALE_ROUNDS) break
+      }
       deepest = contacts.reduce((a, b) => (b.depthMm > a.depthMm ? b : a))
       if (deepest.depthMm < bestDepth - 0.5) {
         bestDepth = deepest.depthMm
