@@ -1002,6 +1002,15 @@ describe('manual tool flows', () => {
       expect(state().notice?.what).toMatch(/merge/i)
     })
 
+    it('loading a new part drops the ports of the old one and numbers the next port P1 again', async () => {
+      state().addPort([1, 2, 3], [0, 0, -1])
+      state().addPort([4, 5, 6], [0, 0, -1])
+      useStore.setState({ selectedPortId: 'P2', placingPort: true })
+      await importBuffer(buffer(), 'b.stl', fakeClient({ loadStl: async () => readyOutcome({ name: 'b.stl', sha256: 'b'.repeat(64) }), detect: async () => detected([]) }))
+      expect(state()).toMatchObject({ ports: [], selectedPortId: null, placingPort: false })
+      expect(state().addPort([0, 0, 0], [0, 0, -1])).toBe('P1')
+    })
+
     it('loading a new part resets the tool and the notice', async () => {
       state().select('a')
       await chooseTool('merge', none)

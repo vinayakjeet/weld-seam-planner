@@ -131,6 +131,11 @@ async function applyLoad(outcome: LoadOutcome, fileName: string, client: Geometr
     thicknessById: {},
     strategy: 'table-order',
     order: [],
+    // Ports sit on the old part's surface; the arm is the equipment and stays.
+    ports: [],
+    selectedPortId: null,
+    placingPort: false,
+    nextPortNumber: 1,
     playing: false,
     timeS: 0,
     playback: null,
