@@ -3,7 +3,7 @@ import { buildMeshModel, type MeshModel } from '../../../src/core/mesh/model'
 import { DEFAULT_DETECT_SETTINGS, detectSeams } from '../../../src/core/seams/detect'
 import { extractNonManifoldWedges } from '../../../src/core/seams/nonManifold'
 import { loadSampleModel } from '../helpers/models'
-import { soupOf } from '../helpers/shapes'
+import { fusedSolidT, soupOf } from '../helpers/shapes'
 
 // Quads of length 100 hinged on the x axis, one per direction in the y z plane; angle 0 points along plus y.
 function pages(anglesDeg: number[]): MeshModel {
@@ -85,6 +85,32 @@ describe('detectSeams with non-manifold edges', () => {
   it('never offers boundary edges: an open fold gives only its crease', () => {
     const seams = detectSeams(pages([0, 90]), DEFAULT_DETECT_SETTINGS)
     expect(seams.every((s) => s.source === 'crease')).toBe(true)
+  })
+
+  // Around a foot edge of the fused solids the four faces leave a 90 degree wedge of free space beside the web and a
+  // 90 degree wedge inside the web; at the ends of the foot both 90 degree wedges are inside the plate or the web.
+  it('offers only the wedges of free space when the fused body is closed solids', () => {
+    const model = buildMeshModel(soupOf(fusedSolidT()), 1)
+    expect(model.bodies.count).toBe(1)
+    expect(model.edges.stats.boundary).toBe(0)
+    const seams = detectSeams(model, DEFAULT_DETECT_SETTINGS).filter((s) => s.source === 'nonmanifold')
+    expect(seams).toHaveLength(2)
+    for (const seam of seams) {
+      expect(seam.lengthMm).toBeCloseTo(100, 2)
+      expect(seam.openingAngleDeg).toBeCloseTo(90, 2)
+      for (const { p, n1, n2 } of seam.points) {
+        const side = Math.sign(p[1])
+        expect(Math.abs(p[1])).toBeCloseTo(5, 4)
+        expect(p[2]).toBeCloseTo(10, 4)
+        // The bisector leans up and away from the web, into the free space.
+        expect(n1[2] + n2[2]).toBeGreaterThan(0.5)
+        expect(side * (n1[1] + n2[1])).toBeGreaterThan(0.5)
+      }
+    }
+  })
+
+  it('still offers every wedge of an open sheet, which has no inside', () => {
+    expect(detectSeams(pages([180, 0, 90]), DEFAULT_DETECT_SETTINGS).filter((s) => s.source === 'nonmanifold')).toHaveLength(2)
   })
 
   it('finds no non-manifold seams in any sample', () => {

@@ -76,6 +76,14 @@ export const mergedL = (depth = 60) =>
     (x, z, y) => [x, y, z],
   )
 
+// A 10 mm web 80 mm tall on a 100 x 100 x 10 plate as two closed solids that an exporter fused: the plate's top face is
+// cut along the foot of the web, so the two long foot edges and the two short ones at the ends each carry four faces.
+// Winding comes from the extrusion, so it is not consistent.
+export const fusedSolidT = () => [
+  ...extrude([[-50, 0], [50, 0], [50, 10], [5, 10], [-5, 10], [-50, 10]], [[0, 1, 2], [0, 2, 3], [0, 3, 4], [0, 4, 5]], 100, (y, z, x) => [x, y, z]),
+  ...extrude([[-5, 10], [5, 10], [5, 90], [-5, 90]], [[0, 1, 2], [0, 2, 3]], 100, (y, z, x) => [x, y, z]),
+]
+
 // A 10 mm web 80 mm tall on a 10 mm plate that reaches only 8 mm past the web on each side (profile in y and z).
 export const narrowFlangeT = () =>
   extrude(

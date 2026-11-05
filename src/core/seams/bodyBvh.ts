@@ -1,4 +1,4 @@
-import { Box3, BufferAttribute, BufferGeometry } from 'three'
+import { Box3, BufferAttribute, BufferGeometry, DoubleSide, Ray, Vector3 } from 'three'
 import { MeshBVH } from 'three-mesh-bvh'
 import type { Vec3 } from '../math/vec3'
 import type { MeshModel } from '../mesh/model'
@@ -53,4 +53,14 @@ function indexTriangles(model: MeshModel, triangles: Uint32Array): BodyBvh {
   const bvh = new MeshBVH(geometry, { indirect: true })
   const box = bvh.getBoundingBox(new Box3())
   return { bvh, triangles, min: [box.min.x, box.min.y, box.min.z], max: [box.max.x, box.max.y, box.max.z] }
+}
+
+// Not along any axis or any likely face, so the ray does not run along a plate or through an edge.
+const PARITY_RAY = new Ray(undefined, new Vector3(0.5373, 0.2961, 0.7899).normalize())
+
+// Inside a union of closed solids a ray crosses the surface an odd number of times on its way out. Coincident faces
+// of fused solids are two crossings, one per solid, so the count does not depend on winding.
+export function insideByParity(bvh: MeshBVH, p: Vec3): boolean {
+  PARITY_RAY.origin.set(p[0], p[1], p[2])
+  return bvh.raycast(PARITY_RAY, DoubleSide).length % 2 === 1
 }

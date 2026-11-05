@@ -1,9 +1,10 @@
+import type { MeshBVH } from 'three-mesh-bvh'
 import { dot, normalize, sub, type Vec3 } from '../math/vec3'
 import { computeFaceData, type FaceData } from '../mesh/faces'
 import { LARGE_PART_TRIANGLES } from '../mesh/health'
 import type { MeshModel } from '../mesh/model'
 import type { PlateThickness } from '../process/filletRules'
-import { buildBodyBvhs, wholeBvhFor, type BodyBvh } from './bodyBvh'
+import { buildBodyBvhs, insideByParity, wholeBvhFor, type BodyBvh } from './bodyBvh'
 import { chainEdges, edgeEnds, type Chain } from './chain'
 import { acrossFace, classifyJoint, isLap, meetsSecondPlate, patchWidth, thicknessBehind, type JointType } from './classify'
 import { confidence } from './confidence'
@@ -11,7 +12,7 @@ import { contactTolerance, findContactEdges, type ContactEdges } from './contact
 import { extractCreaseEdges, type CreaseEdges, type CreaseResult } from './crease'
 import { buildSeamPoints, pointsFromPolyline, type NormalsOf, type SeamPoint } from './frames'
 import { chainSegments, findIntersectionSegments } from './intersect'
-import { extractNonManifoldWedges } from './nonManifold'
+import { extractNonManifoldWedges, openBodies, type SolidTest } from './nonManifold'
 import { cornerThickness, probeFromBvhs, roundDecimals, seamThickness, type RayProbe } from './thickness'
 
 export interface DetectSettings {
@@ -65,7 +66,8 @@ export function detectSeams(model: MeshModel, settings: DetectSettings, context:
   const bvhs = model.bodies.count > 1 ? (context.bodyBvhs ?? buildBodyBvhs(model)) : []
   let whole = context.wholeBvh
   const wholeBvh = () => (whole === undefined ? (whole = wholeBvhFor(model)) : whole)
-  const strips = stripProbe(model, faces, bvhs, wholeBvh)
+  const bvhOf = (body: number) => bvhs[body]?.bvh ?? wholeBvh()?.bvh ?? null
+  const strips = stripProbe(model, faces, bvhOf)
 
   let probe: RayProbe | null | undefined
   const rayProbe = () => {
@@ -102,7 +104,7 @@ export function detectSeams(model: MeshModel, settings: DetectSettings, context:
   if (model.mesh.triangleCount <= (context.maxCornerTriangles ?? LARGE_PART_TRIANGLES)) {
     found.push(...cornerSeams(model, faces, creases, contact, minLength, rayProbe, depthMm, thicknessOf))
   }
-  found.push(...nonManifoldSeams(model, faces, settings, minLength, thicknessOf))
+  found.push(...nonManifoldSeams(model, faces, settings, minLength, bvhOf, thicknessOf))
 
   if (contact) {
     found.push(...contactSeams(model, faces, contact, minLength, strips, thicknessOf), ...intersectionSeams(model, bvhs, minLength, thicknessOf))
@@ -196,8 +198,21 @@ function contactSeams(
 
 // Wedges of one edge run along the same line, so each rank is chained on its own; chaining them together would
 // join the two coincident seams of a fused T into a loop.
-function nonManifoldSeams(model: MeshModel, faces: FaceData, settings: DetectSettings, minLength: number, thicknessOf: ThicknessOf): RawSeam[] {
-  const wedges = extractNonManifoldWedges(model, settings.creaseAngleDeg)
+function nonManifoldSeams(
+  model: MeshModel,
+  faces: FaceData,
+  settings: DetectSettings,
+  minLength: number,
+  bvhOf: (body: number) => MeshBVH | null,
+  thicknessOf: ThicknessOf,
+): RawSeam[] {
+  if (model.edges.stats.nonManifold === 0) return []
+  const open = openBodies(model)
+  const solid: SolidTest = (p, body) => {
+    const bvh = open[body] ? null : bvhOf(body)
+    return bvh ? insideByParity(bvh, p) : null
+  }
+  const wedges = extractNonManifoldWedges(model, settings.creaseAngleDeg, solid)
   const seams: RawSeam[] = []
   for (let rank = 0; wedges.some((w) => w.rank >= rank); rank++) {
     const group = wedges.filter((w) => w.rank === rank)
@@ -335,12 +350,11 @@ interface StripProbe {
   ofContact: (contact: ContactEdges, k: number) => Strip
 }
 
-function stripProbe(model: MeshModel, faces: FaceData, bvhs: BodyBvh[], wholeBvh: () => BodyBvh | null): StripProbe {
+function stripProbe(model: MeshModel, faces: FaceData, bvhOf: (body: number) => MeshBVH | null): StripProbe {
   const { diagonal } = model.bounds
   const { positions } = model.mesh
   const { normals } = faces
   const cap = STRIP_CAP_FRACTION * diagonal
-  const bvhOf = (body: number) => bvhs[body]?.bvh ?? wholeBvh()?.bvh ?? null
   const faceNormal = (f: number): Vec3 => [normals[f * 3]!, normals[f * 3 + 1]!, normals[f * 3 + 2]!]
 
   // Free face x on the seam at mid with tangent t, touched surface with normal nY in the given body.
