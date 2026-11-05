@@ -28,8 +28,14 @@ describe('buildJob on the spec example', () => {
     expect(r.success, r.success ? '' : JSON.stringify(r.error.issues.slice(0, 3))).toBe(true)
   })
 
+  it('gives two exports of one part on one day different ids, from the time of export', () => {
+    const at = (createdAt: string) => buildJob(specExamplePlan(), { createdAt }).id
+    expect(at('2026-11-04T10:15:00Z')).toBe('wj-20261104-101500-aaaaaaaa')
+    expect(at('2026-11-04T10:15:01Z')).not.toBe(at('2026-11-04T10:15:00Z'))
+  })
+
   it('has the id, units, frames and the part of the spec', () => {
-    expect(job.id).toBe('wj-20261104-aaaa')
+    expect(job.id).toBe('wj-20261104-101500-aaaaaaaa')
     expect(job.format).toBe('weld-job')
     expect(job.version).toBe('1.0.0')
     expect(job.generator).toEqual({ name: 'Weld Seam Planner', version: '1.0.0' })

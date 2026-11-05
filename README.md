@@ -144,7 +144,7 @@ Every field, generated from the schema by `npm run fields` (the overrides of a s
 | `$schema` | string | yes | Where the JSON Schema for this version lives. |
 | `format` | "weld-job" | yes | Identifies the document type. |
 | `version` | string | yes | Semver; minor versions only add optional fields. |
-| `id` | string | yes | Unique job id. |
+| `id` | string | yes | Job id: wj-, the UTC date and time of export to the second, and the first 8 hex of the part SHA-256. |
 | `createdAt` | string | yes | Creation time, ISO 8601 UTC. |
 | `generator` | object | yes | App name and version that wrote the file. |
 | `generator.name` | string | yes | Name of the app that wrote the file. |

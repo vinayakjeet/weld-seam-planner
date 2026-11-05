@@ -21,6 +21,12 @@ const round = (value: number, decimals: number) => Math.round(value * 10 ** deci
 const r1 = (v: number) => round(v, 1)
 const r2 = (v: number) => round(v, 2)
 const r3 = (v: number) => round(v, 3)
+
+// wj-, the UTC date and time of export to the second, and the start of the part hash: two exports of a part differ.
+const jobId = (createdAt: string, sha256: string) => {
+  const digits = createdAt.replace(/[^0-9]/g, '')
+  return `wj-${digits.slice(0, 8)}-${digits.slice(8, 14)}-${sha256.slice(0, 8)}`
+}
 const vec = (v: Vec3, decimals: number): Vec3 => [round(v[0], decimals), round(v[1], decimals), round(v[2], decimals)]
 
 const SENSING_SEARCH_MM = 20
@@ -261,7 +267,7 @@ export function buildJob(plan: Plan, options: { createdAt: string }, issues: Job
     $schema: SCHEMA_URL,
     format: 'weld-job',
     version: '1.0.0',
-    id: `wj-${options.createdAt.slice(0, 10).replaceAll('-', '')}-${part.sha256.slice(0, 4)}`,
+    id: jobId(options.createdAt, part.sha256),
     createdAt: options.createdAt,
     generator: { ...GENERATOR },
     units: { ...JOB_UNITS },

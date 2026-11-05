@@ -290,7 +290,7 @@ export const jobSchema = z
     $schema: z.string().meta({ description: 'Where the JSON Schema for this version lives.' }),
     format: z.literal('weld-job').meta({ description: 'Identifies the document type.' }),
     version: z.string().regex(/^1\.\d+\.\d+$/).meta({ description: 'Semver; minor versions only add optional fields.' }),
-    id: z.string().min(1).meta({ description: 'Unique job id.' }),
+    id: z.string().min(1).meta({ description: 'Job id: wj-, the UTC date and time of export to the second, and the first 8 hex of the part SHA-256.' }),
     createdAt: z.iso.datetime().meta({ description: 'Creation time, ISO 8601 UTC.' }),
     generator: z
       .looseObject({

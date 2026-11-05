@@ -21,7 +21,7 @@
     "id": {
       "type": "string",
       "minLength": 1,
-      "description": "Unique job id."
+      "description": "Job id: wj-, the UTC date and time of export to the second, and the first 8 hex of the part SHA-256."
     },
     "createdAt": {
       "type": "string",
