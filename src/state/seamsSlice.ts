@@ -40,6 +40,8 @@ export interface SeamsSlice {
   acceptAbove: (minConfidence: number) => void
   // null, or the detected type, removes the override.
   setType: (id: string, type: JointType | null) => void
+  // The same type for several seams, as one history entry.
+  setTypes: (ids: string[], type: JointType) => void
   // The edit actions return null when they worked, or what went wrong. Each one is a single undo step.
   splitAt: (id: string, s: number) => ManualError | null
   mergeSeamIds: (a: string, b: string) => ManualError | null
@@ -180,6 +182,27 @@ export const createSeamsSlice: StateCreator<AppState, [], [], SeamsSlice> = (set
         }
       }
       return changed ? { statusById } : state
+    }),
+
+  setTypes: (ids, type) =>
+    set((state) => {
+      const known = new Map(selectAllSeams(state).map((s) => [s.id, s]))
+      const typeById = { ...state.typeById }
+      let changed = false
+      for (const id of ids) {
+        const seam = known.get(id)
+        if (!seam) continue
+        if (type === seam.jointType) {
+          if (id in typeById) {
+            delete typeById[id]
+            changed = true
+          }
+        } else if (typeById[id] !== type) {
+          typeById[id] = type
+          changed = true
+        }
+      }
+      return changed ? { typeById } : state
     }),
 
   setType: (id, type) =>

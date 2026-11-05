@@ -17,6 +17,7 @@ export function GeometrySection() {
   const typeById = useStore((s) => s.typeById)
   const thicknessById = useStore((s) => s.thicknessById)
   const setType = useStore((s) => s.setType)
+  const setTypes = useStore((s) => s.setTypes)
   const setThickness = useStore((s) => s.setThickness)
 
   if (seams.length === 0) {
@@ -30,13 +31,43 @@ export function GeometrySection() {
 
   if (seams.length > 1) {
     const total = seams.reduce((sum, s) => sum + s.lengthMm, 0)
+    const types = new Set(seams.map((s) => typeById[s.id] ?? s.jointType))
+    const sameType = types.size === 1 ? [...types][0]! : null
     return (
       <section className="flex flex-col gap-1.5 border-b border-line px-4 py-3">
         <Heading />
         <p className="text-ink-0">
           {seams.length} seams, <span className="num">{oneDecimal(total)}</span> mm in total.
         </p>
-        <p className="text-ink-2">Select one seam to change its joint type or plate thickness.</p>
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3">
+          <label htmlFor="seam-joint-type" className="text-ink-1">
+            Joint type
+          </label>
+          <select
+            id="seam-joint-type"
+            value={sameType === null ? 'mixed' : sameType}
+            onChange={(e) => {
+              setTypes(
+                seams.map((s) => s.id),
+                e.target.value as JointType,
+              )
+              e.target.blur()
+            }}
+            className="h-6 rounded-sm border border-line bg-surface-2 px-1.5 text-ink-0 outline-none focus-visible:border-brand"
+          >
+            {sameType === null && (
+              <option value="mixed" disabled>
+                Mixed
+              </option>
+            )}
+            {JOINT_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {jointLabel(type)}
+              </option>
+            ))}
+          </select>
+        </div>
+        <p className="text-ink-2">Select one seam to change its plate thickness, which is measured per plate.</p>
       </section>
     )
   }

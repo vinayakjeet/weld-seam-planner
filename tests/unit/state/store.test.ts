@@ -76,6 +76,34 @@ describe('accepting seams', () => {
   })
 })
 
+describe('joint type for a selection', () => {
+  it('sets the type of every listed seam in one undo step', () => {
+    state().setTypes(['a', 'b'], 'lap')
+    expect(state().typeById).toEqual({ a: 'lap', b: 'lap' })
+    expect(temporal().pastStates).toHaveLength(1)
+    temporal().undo()
+    expect(state().typeById).toEqual({})
+    temporal().redo()
+    expect(state().typeById).toEqual({ a: 'lap', b: 'lap' })
+  })
+
+  it('drops the override of a seam whose detected type is the one asked for, and skips unknown ids', () => {
+    state().setType('a', 'lap')
+    state().setTypes(['a', 'b', 'ghost'], 'fillet')
+    expect(state().typeById).toEqual({})
+  })
+
+  it('adds no history entry when nothing changes', () => {
+    state().setTypes(['a', 'b'], 'fillet')
+    state().setTypes([], 'lap')
+    state().setTypes(['ghost'], 'lap')
+    expect(temporal().pastStates).toHaveLength(0)
+    state().setTypes(['a'], 'lap')
+    state().setTypes(['a'], 'lap')
+    expect(temporal().pastStates).toHaveLength(1)
+  })
+})
+
 describe('joint type overrides', () => {
   it('sets an override, undoes it and redoes it', () => {
     state().setType('a', 'lap')
