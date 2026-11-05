@@ -3,6 +3,7 @@ import type { JointType } from '../core/seams/classify'
 import { DEFAULT_WELD_TOLERANCE } from '../core/mesh/weld'
 import { DEFAULT_DETECT_SETTINGS, type DetectSettings, type SeamCandidate } from '../core/seams/detect'
 import { isManualError, mergeSeams, reverseSeam, splitSeam, trimSeam, type ManualError } from '../core/seams/manual'
+import { replaceInOrder } from '../core/sequence/order'
 import { selectAllSeams, visibleSeams } from './selectors'
 import type { AppState } from './store'
 
@@ -145,6 +146,7 @@ function replaceSeams(state: AppState, parents: SeamCandidate[], children: SeamC
     overridesById,
     legById,
     thicknessById,
+    order: replaceInOrder(state.order, [...parentIds], made.map((child) => child.id)),
     selectedId: selectedWasParent ? made[0]!.id : state.selectedId,
     selectedIds: touched ? [...remaining, made[0]!.id] : state.selectedIds,
     rangeAnchor: state.rangeAnchor !== null && parentIds.has(state.rangeAnchor) ? made[0]!.id : state.rangeAnchor,

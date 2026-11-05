@@ -236,3 +236,29 @@ describe('runOptimise', () => {
     expect(state().strategy).toBe('table-order')
   })
 })
+
+describe('sequence and manual edits', () => {
+  beforeEach(() => resetStore())
+
+  it('keeps the place, direction and lock of a seam that is trimmed or split', () => {
+    load(3)
+    const [a, b, c] = planIds() as [string, string, string]
+    state().setSequence('manual', [{ seamId: b, reversed: true }, { seamId: a, reversed: false }, { seamId: c, reversed: false }])
+    state().toggleLock(b)
+    expect(state().trim(b, 1, 0)).toBeNull()
+    const trimmed = selectSequenceOrder(state())
+    expect(trimmed.slice(1).map((e) => e.seamId)).toEqual([a, c])
+    expect(trimmed[0]).toMatchObject({ reversed: true, locked: true })
+    const child = trimmed[0]!.seamId
+    expect(child).not.toBe(b)
+
+    const length = selectPlan(state()).seams.find((p) => p.seam.id === child)!.seam.lengthMm
+    expect(state().splitAt(child, length / 2)).toBeNull()
+    const split = selectSequenceOrder(state())
+    expect(split).toHaveLength(4)
+    expect(split.slice(2).map((e) => e.seamId)).toEqual([a, c])
+    expect(split.slice(0, 2).every((e) => e.reversed && e.locked)).toBe(true)
+    // Welded backwards, the second half of the stored points is welded first.
+    expect(split.slice(0, 2).map((e) => e.seamId)).toEqual([`${child}/b`, `${child}/a`])
+  })
+})

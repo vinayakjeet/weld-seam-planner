@@ -24,6 +24,18 @@ export function reconcileOrder<T extends Entry = Entry>(order: T[], tableIds: st
   return [...kept.map((entry) => ({ ...entry })), ...added]
 }
 
+// After an edit replaces seams by new ones (trim, split, merge, reverse), the new seams take the place of the parent
+// that comes first in the order, with its direction and lock. A seam welded backwards is welded from its last part to
+// its first, so its parts go in the order in reverse. The other parents leave the order.
+export function replaceInOrder(order: OrderEntry[], parentIds: string[], childIds: string[]): OrderEntry[] {
+  const parents = new Set(parentIds)
+  const at = order.findIndex((entry) => parents.has(entry.seamId))
+  if (at < 0) return order
+  const { reversed, locked } = order[at]!
+  const children = (reversed ? [...childIds].reverse() : childIds).map((seamId) => ({ seamId, reversed, locked }))
+  return order.flatMap((entry, i) => (i === at ? children : parents.has(entry.seamId) ? [] : [entry]))
+}
+
 const refusal = (what: string, why: string, next: string): Explained => ({ what, why, next })
 
 // Moves the row at index from to the place of the row at index to. Locked rows keep their index: the rows that are not

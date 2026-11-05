@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { reconcileOrder, reorder, resetToTable, toggleLock, type OrderEntry } from '../../../src/core/sequence/order'
+import { reconcileOrder, reorder, replaceInOrder, resetToTable, toggleLock, type OrderEntry } from '../../../src/core/sequence/order'
 
 const entry = (seamId: string, reversed = false) => ({ seamId, reversed })
 
@@ -92,5 +92,27 @@ describe('resetToTable', () => {
     const reset = resetToTable([slot('c'), slot('b', true, true), slot('a')], ['a', 'b', 'c'])
     expect(ids(reset)).toEqual(['a', 'b', 'c'])
     expect(reset[1]).toEqual(slot('b', true, true))
+  })
+})
+
+describe('replaceInOrder', () => {
+  const row = (seamId: string, reversed = false, locked = false): OrderEntry => ({ seamId, reversed, locked })
+
+  it('puts the child of an edited seam in its place, with its direction and lock', () => {
+    expect(replaceInOrder([row('b', true, true), row('a'), row('c')], ['b'], ['b~t'])).toEqual([row('b~t', true, true), row('a'), row('c')])
+  })
+
+  it('puts the halves of a split seam in its place, in weld order: last half first when it is welded backwards', () => {
+    expect(replaceInOrder([row('a'), row('b'), row('c')], ['b'], ['b.1', 'b.2'])).toEqual([row('a'), row('b.1'), row('b.2'), row('c')])
+    expect(replaceInOrder([row('a'), row('b', true), row('c')], ['b'], ['b.1', 'b.2'])).toEqual([row('a'), row('b.2', true), row('b.1', true), row('c')])
+  })
+
+  it('puts a merged seam in the place of the parent welded first and drops the other', () => {
+    expect(replaceInOrder([row('c'), row('b', true), row('a')], ['a', 'b'], ['ab'])).toEqual([row('c'), row('ab', true)])
+  })
+
+  it('leaves an order that lists none of the parents as it is', () => {
+    const order = [row('a'), row('c')]
+    expect(replaceInOrder(order, ['b'], ['b~t'])).toBe(order)
   })
 })
