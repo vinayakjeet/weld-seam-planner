@@ -1,6 +1,6 @@
 import { get as idbGet, set as idbSet } from 'idb-keyval'
 import type { GeometryClient } from '../worker/client'
-import { registerAfterLoad, runDetect } from './flows'
+import { registerAfterLoad, runDetect, runReweld } from './flows'
 import { clampArm } from '../core/snake/arm'
 import { clearHistory } from './history'
 import { nextNumberAfter } from './portsSlice'
@@ -18,7 +18,7 @@ export const AUTOSAVE_DELAY_MS = 1000
 
 // The fields a snapshot is made of. A change to any of them is a change worth saving.
 const read = (s: AppState) =>
-  [s.statusById, s.typeById, s.manualSeams, s.supersededIds, s.nextDrawnId, s.procedures, s.procedureById, s.overridesById, s.legById, s.thicknessById, s.strategy, s.order, s.ports, s.arm, s.gravity, s.detectSettings, s.jobSettings] as const
+  [s.statusById, s.typeById, s.manualSeams, s.supersededIds, s.nextDrawnId, s.procedures, s.procedureById, s.overridesById, s.legById, s.thicknessById, s.strategy, s.order, s.ports, s.arm, s.gravity, s.detectSettings, s.weldTolerance, s.jobSettings] as const
 
 interface Active {
   storage: PlanStorage
@@ -160,6 +160,7 @@ function apply(saved: SavedPlan): Partial<AppState> {
     placingPort: false,
     gravity: saved.gravity,
     detectSettings: saved.detectSettings,
+    weldTolerance: saved.weldTolerance,
     jobSettings: saved.jobSettings,
     selectedId: null,
     selectedIds: [],
@@ -169,11 +170,15 @@ function apply(saved: SavedPlan): Partial<AppState> {
   }
 }
 
-// Detection runs again at the saved crease angle first, because the saved ids belong to the seams found at that angle.
+// The part is welded again at the saved tolerance and detection runs again at the saved crease angle first, because
+// the saved ids belong to the seams found that way.
 export async function restoreSaved(client: GeometryClient): Promise<void> {
   const { offer } = useStore.getState()
   if (offer === null) return
-  if (offer.detectSettings.creaseAngleDeg !== useStore.getState().detectSettings.creaseAngleDeg) {
+  if (offer.weldTolerance !== useStore.getState().weldTolerance) {
+    useStore.getState().setDetectSettings(offer.detectSettings)
+    if (!(await runReweld(offer.weldTolerance, client, offer.detectSettings))) return
+  } else if (offer.detectSettings.creaseAngleDeg !== useStore.getState().detectSettings.creaseAngleDeg) {
     useStore.getState().setDetectSettings(offer.detectSettings)
     if (!(await runDetect(offer.detectSettings, client))) return
   }

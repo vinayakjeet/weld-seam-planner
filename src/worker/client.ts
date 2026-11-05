@@ -121,6 +121,8 @@ export function wrapGeometryApi(endpoint: Endpoint, options: ClientOptions = {})
       ),
     setUnits: (units, onProgress) =>
       supervise<LoadOutcome>(options, 'applying the unit choice', (activity) => remote.setUnits(units, watching(activity, onProgress))),
+    reweld: (weldTolerance, onProgress) =>
+      supervise<LoadOutcome>(options, 'welding the part again', (activity) => remote.reweld(weldTolerance, watching(activity, onProgress))),
     detect: (settings, onProgress) =>
       supervise<DetectOutcome>(options, 'detecting seams', (activity) => remote.detect(settings, watching(activity, onProgress))),
     snapDraw: (clicks, snapRadiusMm) =>

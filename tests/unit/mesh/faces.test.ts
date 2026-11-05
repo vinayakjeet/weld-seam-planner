@@ -46,3 +46,32 @@ describe('computeFaceData', () => {
     expect(sum / 3 / volume).toBeCloseTo(1, 5)
   })
 })
+
+describe('computeFaceData: needles', () => {
+  // A flat square 0..10 split along its diagonal into two sound triangles, plus a needle on the bottom edge whose apex
+  // sits 0.5 mm above the edge, almost straight up, so its own normal is nearly sideways.
+  const mesh = (toleranceMm?: number): IndexedMesh => ({
+    positions: Float32Array.from([0, 0, 0, 10, 0, 0, 10, 10, 0, 0, 10, 0, 5, -0.01, 0.5]),
+    indices: Uint32Array.from([0, 1, 2, 0, 2, 3, 1, 0, 4]),
+    vertexCount: 5,
+    triangleCount: 3,
+    toleranceMm,
+  })
+
+  it('keeps the needle its own sideways normal when the mesh has no weld cell', () => {
+    const { normals } = computeFaceData(mesh())
+    expect(Math.abs(normals[8]!)).toBeLessThan(0.99)
+  })
+
+  it('gives the needle the normal of the triangle across its longest edge once the tolerance covers its height', () => {
+    const { normals } = computeFaceData(mesh(1))
+    expect(Array.from(normals.slice(6, 9))).toEqual(Array.from(normals.slice(0, 3)))
+  })
+
+  it('leaves sound triangles alone', () => {
+    const plain = computeFaceData(mesh())
+    const borrowed = computeFaceData(mesh(1))
+    expect(Array.from(borrowed.normals.slice(0, 6))).toEqual(Array.from(plain.normals.slice(0, 6)))
+  })
+})
+

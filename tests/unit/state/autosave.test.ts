@@ -291,6 +291,31 @@ describe('restoreSaved and startFresh', () => {
     stop()
   })
 
+  it('welds the part again at the saved tolerance, and detects once, before it applies the plan', async () => {
+    const stored = { ...savedSnapshot(), weldTolerance: 4e-4 }
+    const memory = memoryStorage({ [KEY]: stored })
+    const stop = startAutosave(memory.storage)
+    const reweld = vi.fn(async () => readyOutcome())
+    const detect = vi.fn(async () => detected([seam('a'), seam('b'), seam('c')]))
+    const client = loadClient({ reweld, detect })
+    await importBuffer(new ArrayBuffer(8), 'a.stl', client)
+    detect.mockClear()
+    await restoreSaved(client)
+    expect(reweld).toHaveBeenCalledWith(4e-4, expect.anything())
+    expect(detect).toHaveBeenCalledTimes(1)
+    expect(detect).toHaveBeenCalledWith({ creaseAngleDeg: 25 }, expect.anything())
+    expect(state()).toMatchObject({ weldTolerance: 4e-4, statusById: { a: 'accepted' }, offer: null })
+    stop()
+  })
+
+  it('does not weld again when the saved tolerance is the one in use', async () => {
+    const reweld = vi.fn(async () => readyOutcome())
+    const { stop, client } = await offered()
+    await restoreSaved({ ...client, reweld })
+    expect(reweld).not.toHaveBeenCalled()
+    stop()
+  })
+
   it('detects again at the saved crease angle before it applies the plan', async () => {
     const angles: number[] = []
     const detect = vi.fn(async (settings: { creaseAngleDeg: number }) => {

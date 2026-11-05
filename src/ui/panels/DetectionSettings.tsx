@@ -1,8 +1,10 @@
-import { scheduleDetect } from '../../state/flows'
+import { useState } from 'react'
+import { runReweld, scheduleDetect, showError } from '../../state/flows'
 import { selectStats } from '../../state/selectors'
 import { useStore } from '../../state/store'
 import { getGeometryClient } from '../../worker/client'
 import { hiddenAcceptedMessage } from './seamText'
+import { parseWeldMm, weldMmText, weldRangeText } from './weldFields'
 
 export const CREASE_ANGLE_RANGE = { min: 15, max: 60 } as const
 
@@ -14,9 +16,30 @@ export function DetectionSettings() {
   const showCorners = useStore((s) => s.showCorners)
   const setShowCorners = useStore((s) => s.setShowCorners)
   const cornerCount = useStore((s) => s.seams.reduce((n, seam) => n + (seam.hidden ? 1 : 0), 0))
+  const weldTolerance = useStore((s) => s.weldTolerance)
+  const bbox = useStore((s) => s.part?.bbox ?? null)
+  const loading = useStore((s) => s.importState.phase === 'loading')
+  const [draft, setDraft] = useState<string | null>(null)
 
   if (!partLoaded) {
     return <p className="p-3 text-ink-2">Detection settings and the body list appear here once a part is loaded.</p>
+  }
+
+  const diagonalMm = bbox ? Math.hypot(bbox.max[0] - bbox.min[0], bbox.max[1] - bbox.min[1], bbox.max[2] - bbox.min[2]) : 0
+  const shown = weldMmText(weldTolerance, diagonalMm)
+
+  // Enter or leaving the box applies the text; a value that cannot be used is explained and the box goes back.
+  const applyWeld = () => {
+    if (draft === null) return
+    const text = draft
+    setDraft(null)
+    if (text.trim() === shown) return
+    const parsed = parseWeldMm(text, diagonalMm)
+    if ('error' in parsed) {
+      showError(parsed.error)
+      return
+    }
+    void runReweld(parsed.weldTolerance, getGeometryClient())
   }
 
   return (
@@ -54,6 +77,35 @@ export function DetectionSettings() {
           </span>
         </label>
       </div>
+      <details className="border-t border-line pt-3">
+        <summary className="cursor-pointer text-ink-0">Advanced</summary>
+        <div className="mt-2 flex flex-col gap-1">
+          <label htmlFor="weld-tolerance" className="flex items-baseline justify-between gap-2">
+            <span className="text-ink-0">Weld tolerance</span>
+            <span className="flex items-baseline gap-1">
+              <input
+                id="weld-tolerance"
+                type="text"
+                inputMode="decimal"
+                value={draft ?? shown}
+                disabled={loading || diagonalMm === 0}
+                aria-describedby="weld-tolerance-hint"
+                onChange={(e) => setDraft(e.target.value)}
+                onBlur={applyWeld}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') applyWeld()
+                  if (e.key === 'Escape') setDraft(null)
+                }}
+                className="num h-7 w-20 rounded-sm border border-line bg-surface-0 px-1.5 text-right text-ink-0 outline-none focus:border-brand disabled:opacity-50"
+              />
+              <span className="text-ink-2">mm</span>
+            </span>
+          </label>
+          <p id="weld-tolerance-hint" className="text-ink-2">
+            Raise it for scanned or noisy meshes. {weldRangeText(diagonalMm)}. Loads the part again and detects again.
+          </p>
+        </div>
+      </details>
       <p role="status" className="min-h-4 text-ink-1">
         {busy ? 'Detecting seams.' : ''}
       </p>

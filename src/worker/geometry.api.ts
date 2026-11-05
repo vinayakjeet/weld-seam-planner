@@ -21,6 +21,7 @@ import { sha256Hex } from '../core/mesh/hash'
 import { displayOrigin, toLocalArray } from '../core/mesh/displayOrigin'
 import { featureEdgePositions } from '../core/mesh/featureEdges'
 import { buildMeshModel, type MeshModel } from '../core/mesh/model'
+import { DEFAULT_WELD_TOLERANCE, WELD_TOLERANCE_RANGE } from '../core/mesh/weld'
 import { parseStl, StlError } from '../core/mesh/parseStl'
 import { guessUnits, scaleToMm, type KnownUnits, type Units } from '../core/mesh/units'
 import { buildBodyBvhs, buildSharedWholeBvh, buildWholeBvh, type BodyBvh } from '../core/seams/bodyBvh'
@@ -116,6 +117,9 @@ export type ExportOutcome = ExportResult
 export interface GeometryApi {
   loadStl(buffer: ArrayBuffer, name: string, onProgress: Progress): Promise<LoadOutcome>
   setUnits(units: KnownUnits, onProgress: Progress): Promise<LoadOutcome>
+  // Welds the file loaded last again with another tolerance (a fraction of the bounding box diagonal) and answers like a
+  // load, for the same part. A newly loaded file starts at the default tolerance again.
+  reweld(weldTolerance: number, onProgress: Progress): Promise<LoadOutcome>
   detect(settings: DetectSettings, onProgress: Progress): Promise<DetectOutcome>
   // Turns the user's clicks on the part into one seam snapped to its edges.
   snapDraw(clicks: DrawClick[], snapRadiusMm: number): Promise<SnapOutcome>
@@ -272,6 +276,8 @@ export interface GeometryApiOptions {
 export function createGeometryApi({ shareBuffers = canShareMemory() }: GeometryApiOptions = {}): GeometryApi {
   let pending: { soup: Float32Array; name: string; sha256: string } | null = null
   let current: MeshModel | null = null
+  // The file as read, in its own units, so the part can be welded again without sending it twice.
+  let source: { soup: Float32Array; name: string; sha256: string; units: KnownUnits } | null = null
   // Built on the first detect of a multi body part and kept until another part replaces it.
   let bodyBvhs: BodyBvh[] | null = null
   // One BVH over every triangle of the part, built on first use and shared: detection rays on a single-body part,
@@ -281,8 +287,8 @@ export function createGeometryApi({ shareBuffers = canShareMemory() }: GeometryA
   // Feature edges and the surface BVH for drawing, built on the first drawn seam of a part.
   let snapContext: SnapContext | null = null
 
-  function build(soup: Float32Array, name: string, sha256: string, units: KnownUnits, report: Progress): LoadOutcome {
-    const built = buildMeshModel(soup, scaleToMm(units), (stage) => report(stage, STAGE_START[stage]))
+  function build(soup: Float32Array, name: string, sha256: string, units: KnownUnits, report: Progress, weldTolerance = DEFAULT_WELD_TOLERANCE): LoadOutcome {
+    const built = buildMeshModel(soup, scaleToMm(units), (stage) => report(stage, STAGE_START[stage]), weldTolerance)
     report('index', STAGE_START.index)
     const shared = shareBuffers && sharesDisplay(built)
     let model = built
@@ -304,6 +310,7 @@ export function createGeometryApi({ shareBuffers = canShareMemory() }: GeometryA
     report('index', 1)
     // Only a fully built part replaces the current one, so a failed load leaves the old part usable.
     current = model
+    source = { soup, name, sha256, units }
     bodyBvhs = null
     partBvh = whole
     snapContext = null
@@ -353,6 +360,34 @@ export function createGeometryApi({ shareBuffers = canShareMemory() }: GeometryA
       }
       try {
         return build(waiting.soup, waiting.name, waiting.sha256, units, reporter(onProgress))
+      } catch (error) {
+        return { status: 'error', error: toUserError(error) }
+      }
+    },
+
+    async reweld(weldTolerance, onProgress) {
+      if (!source) {
+        return {
+          status: 'error',
+          error: {
+            what: 'There is no part to weld again.',
+            why: 'Welding again uses the file loaded last, and none has been loaded in this session.',
+            next: 'Choose an STL file or a sample first.',
+          },
+        }
+      }
+      if (!(weldTolerance >= WELD_TOLERANCE_RANGE.min && weldTolerance <= WELD_TOLERANCE_RANGE.max)) {
+        return {
+          status: 'error',
+          error: {
+            what: 'That weld tolerance cannot be used.',
+            why: `The tolerance is a fraction of the part's diagonal between ${WELD_TOLERANCE_RANGE.min} and ${WELD_TOLERANCE_RANGE.max}; ${weldTolerance} is outside it.`,
+            next: 'Enter a tolerance inside that range.',
+          },
+        }
+      }
+      try {
+        return build(source.soup, source.name, source.sha256, source.units, reporter(onProgress), weldTolerance)
       } catch (error) {
         return { status: 'error', error: toUserError(error) }
       }

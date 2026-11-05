@@ -168,6 +168,31 @@ describe('the sequence in a saved plan', () => {
   })
 })
 
+describe('the weld tolerance in a saved plan', () => {
+  it('is saved and read back', () => {
+    editedState()
+    useStore.setState({ weldTolerance: 3e-4 })
+    const parsed = parseSaved(JSON.parse(JSON.stringify(snapshotOf(useStore.getState(), NOW))))
+    if (parsed.status !== 'ok') throw new Error(JSON.stringify(parsed.error))
+    expect(parsed.saved.weldTolerance).toBe(3e-4)
+  })
+
+  it('reads as the default in an entry saved before it existed', () => {
+    const snapshot = JSON.parse(JSON.stringify(snapshotOf(editedState(), NOW)))
+    delete snapshot.weldTolerance
+    const parsed = parseSaved(snapshot)
+    if (parsed.status !== 'ok') throw new Error(JSON.stringify(parsed.error))
+    expect(parsed.saved.weldTolerance).toBe(1e-5)
+  })
+
+  it('refuses a tolerance outside 1e-6 to 1e-3', () => {
+    for (const weldTolerance of [1e-7, 0.01]) {
+      const snapshot = { ...JSON.parse(JSON.stringify(snapshotOf(editedState(), NOW))), weldTolerance }
+      expect(parseSaved(snapshot).status).toBe('error')
+    }
+  })
+})
+
 describe('reading a version 1 entry and moving its ids', () => {
   const line = (y: number) => pointsFromPolyline([[0, y, 0], [60, y, 0], [200, y, 0]], false, () => [[0, 0, 1], [0, -1, 0]])
   const detected = [20, 40, 60].map((y, i) => ({ ...seam(`crease-new${i}`, 0.9, line(y).lengthMm, { points: line(y).points }), source: 'crease' as const }))

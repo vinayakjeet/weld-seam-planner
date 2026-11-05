@@ -3,7 +3,7 @@ import { computeBounds, type Bounds } from './bounds'
 import { buildEdgeMap, type EdgeMap } from './edgeMap'
 import { orientBodies, type Orientation } from './orient'
 import { StlError } from './parseStl'
-import { weldVertices, type IndexedMesh } from './weld'
+import { DEFAULT_WELD_TOLERANCE, weldVertices, type IndexedMesh } from './weld'
 
 export interface MeshModel {
   mesh: IndexedMesh
@@ -19,10 +19,10 @@ export type ModelStage = 'weld' | 'topology'
 
 // soup is the parsed triangle soup in file units; scaleToMm converts it before anything is measured.
 // onStage fires before each slow step so a caller can show honest progress.
-export function buildMeshModel(soup: Float32Array, scaleToMm: number, onStage?: (stage: ModelStage) => void): MeshModel {
+export function buildMeshModel(soup: Float32Array, scaleToMm: number, onStage?: (stage: ModelStage) => void, weldTolerance: number = DEFAULT_WELD_TOLERANCE): MeshModel {
   onStage?.('weld')
   const scaled = scaleToMm === 1 ? soup : soup.map((x) => x * scaleToMm)
-  const { mesh, droppedDegenerate } = weldVertices(scaled)
+  const { mesh, droppedDegenerate } = weldVertices(scaled, weldTolerance)
   if (mesh.triangleCount === 0) {
     throw new StlError(
       'no-valid-triangles',

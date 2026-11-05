@@ -2,6 +2,7 @@ import { DEFAULT_JOB_SETTINGS, resolveSeam, torchParamsFor } from '../core/job/p
 import { importJob } from '../core/job/importJob'
 import type { WeldJob } from '../core/job/schema'
 import type { KnownUnits } from '../core/mesh/units'
+import { DEFAULT_WELD_TOLERANCE } from '../core/mesh/weld'
 import { sampleManifestSchema, type SampleEntry, type SampleManifest } from '../core/samples/manifest'
 import { DEFAULT_DETECT_SETTINGS, type DetectSettings, type SeamCandidate } from '../core/seams/detect'
 import type { ManualError } from '../core/seams/manual'
@@ -138,6 +139,7 @@ async function applyLoad(outcome: LoadOutcome, fileName: string, client: Geometr
     rangeAnchor: null,
     hoverId: null,
     detectSettings: DEFAULT_DETECT_SETTINGS,
+    weldTolerance: DEFAULT_WELD_TOLERANCE,
     jobSettings: {
       poseSpacingMm: DEFAULT_JOB_SETTINGS.poseSpacingMm,
       airSpeedMmS: DEFAULT_JOB_SETTINGS.airSpeedMmS,
@@ -215,6 +217,41 @@ export async function chooseUnits(units: KnownUnits, client: GeometryClient): Pr
     const outcome = await attempt(() => client.setUnits(units, loadingProgress(generation)))
     await applyLoad(outcome, importState.fileName, client)
   })
+}
+
+// Welds the loaded file again at another tolerance and detects again. The plan stays: seam ids come from geometry, so
+// the seams that survive keep their status. Access and reach belong to the old mesh and are cleared. A failure leaves
+// the part and the tolerance as they were. Returns true when the new weld and its detection were applied.
+export async function runReweld(weldTolerance: number, client: GeometryClient, settings: DetectSettings = useStore.getState().detectSettings): Promise<boolean> {
+  let applied = false
+  await guarded(async () => {
+    const generation = ++importGeneration
+    useStore.setState({ importState: { phase: 'loading', label: STAGE_LABELS.weld, fraction: 0 } })
+    const outcome = await attempt(() => client.reweld(weldTolerance, loadingProgress(generation)))
+    if (generation !== importGeneration) return
+    if (outcome.status !== 'ready') {
+      if (outcome.status === 'error') showError(outcome.error)
+      else useStore.setState({ importState: { phase: 'idle' } })
+      return
+    }
+    useStore.setState({
+      part: outcome.part,
+      display: outcome.display,
+      weldTolerance,
+      importState: { phase: 'idle' },
+      playing: false,
+      timeS: 0,
+      playback: null,
+      playbackFor: null,
+    })
+    accessRequest++
+    useStore.getState().clearAccess()
+    useStore.getState().setAccessBusy(false)
+    useStore.getState().clearReach()
+    clearTimeout(scheduledDetect)
+    applied = await runDetect(settings, client)
+  })
+  return applied
 }
 
 // Never touches statusById: accepted seams that this result lacks stay accepted and return with the settings.

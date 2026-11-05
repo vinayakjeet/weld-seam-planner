@@ -1,5 +1,6 @@
 import type { StateCreator } from 'zustand'
 import type { JointType } from '../core/seams/classify'
+import { DEFAULT_WELD_TOLERANCE } from '../core/mesh/weld'
 import { DEFAULT_DETECT_SETTINGS, type DetectSettings, type SeamCandidate } from '../core/seams/detect'
 import { isManualError, mergeSeams, reverseSeam, splitSeam, trimSeam, type ManualError } from '../core/seams/manual'
 import { selectAllSeams, visibleSeams } from './selectors'
@@ -35,6 +36,8 @@ export interface SeamsSlice {
   rangeAnchor: string | null
   hoverId: string | null
   detectSettings: DetectSettings
+  // Vertices closer than this fraction of the part's diagonal are one vertex. Changing it welds the loaded file again.
+  weldTolerance: number
   detectBusy: boolean
   toggleAccepted: (id: string) => void
   acceptAbove: (minConfidence: number) => void
@@ -162,6 +165,7 @@ export const createSeamsSlice: StateCreator<AppState, [], [], SeamsSlice> = (set
   rangeAnchor: null,
   hoverId: null,
   detectSettings: DEFAULT_DETECT_SETTINGS,
+  weldTolerance: DEFAULT_WELD_TOLERANCE,
   detectBusy: false,
 
   toggleAccepted: (id) =>

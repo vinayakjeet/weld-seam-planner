@@ -1,4 +1,5 @@
 import type { KnownUnits } from '../core/mesh/units'
+import { DEFAULT_WELD_TOLERANCE } from '../core/mesh/weld'
 import type { GeometryApi, LoadOutcome, UserError } from './geometry.api'
 
 type GeometryClient = GeometryApi
@@ -7,6 +8,8 @@ interface HeldFile {
   buffer: ArrayBuffer
   name: string
   units: KnownUnits | null
+  // The weld tolerance the part was last welded at, which a replacement worker has to be given again.
+  weld: number
 }
 
 const noProgress = () => {}
@@ -19,7 +22,7 @@ export function createRecoveringClient(spawn: (onDead: () => void) => GeometryCl
   // The part the app is showing. A failed load does not replace it, matching what the worker keeps.
   let held: HeldFile | null = null
   // A file the worker has read and is waiting for a unit answer on.
-  let waiting: Omit<HeldFile, 'units'> | null = null
+  let waiting: Omit<HeldFile, 'units' | 'weld'> | null = null
   // The worker that has `held` loaded; a replacement worker differs from it until restored.
   let holder: GeometryClient | null = null
   let restoring: Promise<LoadOutcome> | null = null
@@ -37,6 +40,7 @@ export function createRecoveringClient(spawn: (onDead: () => void) => GeometryCl
   async function rebuild(target: GeometryClient, file: HeldFile): Promise<LoadOutcome> {
     let outcome = await target.loadStl(file.buffer.slice(0), file.name, noProgress)
     if (outcome.status === 'needs-units' && file.units) outcome = await target.setUnits(file.units, noProgress)
+    if (outcome.status === 'ready' && file.weld !== DEFAULT_WELD_TOLERANCE) outcome = await target.reweld(file.weld, noProgress)
     if (outcome.status === 'ready') holder = target
     return outcome
   }
@@ -73,7 +77,7 @@ export function createRecoveringClient(spawn: (onDead: () => void) => GeometryCl
       const target = current()
       const outcome = await target.loadStl(buffer, name, onProgress)
       if (outcome.status === 'ready') {
-        held = { buffer: copy, name, units: null }
+        held = { buffer: copy, name, units: null, weld: DEFAULT_WELD_TOLERANCE }
         holder = target
       } else if (outcome.status === 'needs-units') {
         waiting = { buffer: copy, name }
@@ -87,7 +91,19 @@ export function createRecoveringClient(spawn: (onDead: () => void) => GeometryCl
       const target = current()
       const outcome = await target.setUnits(units, onProgress)
       if (outcome.status === 'ready' && file) {
-        held = { ...file, units }
+        held = { ...file, units, weld: DEFAULT_WELD_TOLERANCE }
+        holder = target
+      }
+      return outcome
+    },
+
+    async reweld(weldTolerance, onProgress) {
+      const target = current()
+      const lost = await restoreFailure(target)
+      if (lost) return lost
+      const outcome = await target.reweld(weldTolerance, onProgress)
+      if (outcome.status === 'ready' && held) {
+        held = { ...held, weld: weldTolerance }
         holder = target
       }
       return outcome

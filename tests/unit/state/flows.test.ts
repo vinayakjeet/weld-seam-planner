@@ -29,6 +29,7 @@ import {
   rejectSelected,
   reverseSelected,
   runDetect,
+  runReweld,
   scheduleDetect,
   startTorchSync,
   toolEvent,
@@ -317,6 +318,64 @@ describe('runDetect', () => {
     await runDetect({ creaseAngleDeg: 30 }, client)
     expect(expectErrorState().why).toContain('port closed')
     expect(state().detectBusy).toBe(false)
+  })
+})
+
+describe('runReweld', () => {
+  const loaded = async () => {
+    const client = fakeClient({ loadStl: async () => readyOutcome(), detect: async () => detected([seam('a'), seam('b')]) })
+    await importBuffer(buffer(), 'a.stl', client)
+    state().toggleAccepted('a')
+    return client
+  }
+
+  it('welds again at the tolerance, applies the new part, detects again and keeps the plan', async () => {
+    const calls: number[] = []
+    const base = await loaded()
+    const detect = vi.fn(async () => detected([seam('a'), seam('c')]))
+    const client = fakeClient({
+      ...base,
+      reweld: async (tolerance) => {
+        calls.push(tolerance)
+        return readyOutcome({ triangles: 40 })
+      },
+      detect,
+    })
+    expect(await runReweld(5e-4, client)).toBe(true)
+    expect(calls).toEqual([5e-4])
+    expect(state()).toMatchObject({ weldTolerance: 5e-4, statusById: { a: 'accepted' }, importState: { phase: 'idle' } })
+    expect(state().part?.triangles).toBe(40)
+    expect(state().seams.map((x) => x.id)).toEqual(['a', 'c'])
+    expect(detect).toHaveBeenCalledTimes(1)
+  })
+
+  it('clears the access answers, which belong to the old mesh', async () => {
+    const base = await loaded()
+    state().setAccessBusy(true)
+    const client = fakeClient({ ...base, reweld: async () => readyOutcome() })
+    await runReweld(2e-4, client)
+    expect(state().accessBusy).toBe(false)
+    expect(state().accessById).toEqual({})
+  })
+
+  it('shows the worker\'s error and leaves the part and the tolerance as they were', async () => {
+    const base = await loaded()
+    const before = state().part
+    const client = fakeClient({
+      ...base,
+      reweld: async () => ({ status: 'error' as const, error: { what: 'w', why: 'y', next: 'n' } }),
+    })
+    expect(await runReweld(1e-3, client)).toBe(false)
+    expect(state().weldTolerance).toBe(1e-5)
+    expect(state().part).toBe(before)
+    expect(state().importState).toMatchObject({ phase: 'error' })
+  })
+
+  it('starts a newly loaded file at the default tolerance', async () => {
+    const base = await loaded()
+    await runReweld(2e-4, fakeClient({ ...base, reweld: async () => readyOutcome() }))
+    await importBuffer(buffer(), 'b.stl', base)
+    expect(state().weldTolerance).toBe(1e-5)
   })
 })
 

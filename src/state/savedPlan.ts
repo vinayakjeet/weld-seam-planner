@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { SEQUENCE_STRATEGIES } from '../core/sequence/types'
 import { procedureOverridesSchema, procedureSchema, vec3Schema } from '../core/job/schema'
 import { DEFAULT_JOB_SETTINGS } from '../core/job/plan'
+import { DEFAULT_WELD_TOLERANCE, WELD_TOLERANCE_RANGE } from '../core/mesh/weld'
 import { DEFAULT_ARM } from '../core/snake/arm'
 import type { SeamCandidate } from '../core/seams/detect'
 import type { ManualError } from '../core/seams/manual'
@@ -74,6 +75,8 @@ export const savedPlanSchema = z.object({
   arm: armSchema.default(DEFAULT_ARM),
   gravity: vec3Schema,
   detectSettings: z.object({ creaseAngleDeg: z.number() }),
+  // Entries written before the weld tolerance could be changed read as the default.
+  weldTolerance: z.number().min(WELD_TOLERANCE_RANGE.min).max(WELD_TOLERANCE_RANGE.max).default(DEFAULT_WELD_TOLERANCE),
   // Entries written before torch cleaning was modelled have neither cleaning field and read as no cleaning.
   jobSettings: z.object({
     poseSpacingMm: z.number().positive(),
@@ -113,6 +116,7 @@ export function snapshotOf(state: AppState, savedAt: string): SavedPlan {
     arm: state.arm,
     gravity: state.gravity,
     detectSettings: state.detectSettings,
+    weldTolerance: state.weldTolerance,
     jobSettings: state.jobSettings,
   }
 }

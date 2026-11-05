@@ -7,6 +7,9 @@ import { createGeometryApi, type DetectOutcome, type GeometryApi } from '../../.
 import { createRecoveringClient } from '../../../src/worker/recovery'
 import { deferred, shown } from '../helpers/state'
 import { readSample } from '../helpers/samples'
+import { loadSoup, transformSoup } from '../helpers/models'
+import { perturbSoup } from '../helpers/noise'
+import { makeBinaryStl } from '../helpers/stl'
 
 const ports: MessagePort[] = []
 afterEach(() => {
@@ -36,6 +39,7 @@ function harness() {
         record.unitCalls.push(units)
         return real.setUnits(units, onProgress)
       },
+      reweld: (tolerance, onProgress) => real.reweld(tolerance, onProgress),
       detect: (settings, onProgress) => real.detect(settings, onProgress),
       snapDraw: (clicks, radius) => real.snapDraw(clicks, radius),
       snapPreview: (point, radius) => real.snapPreview(point, radius),
@@ -82,6 +86,22 @@ describe('recovering client', () => {
     expect(seamCount(await client.detect(DEFAULT_DETECT_SETTINGS, noop))).toBe(2)
     expect(spawned).toHaveLength(2)
     expect(spawned[1]!.loads).toEqual([size])
+  })
+
+  it('welds the part at the chosen tolerance again in a replacement worker', async () => {
+    const { client, spawned } = harness()
+    const soup = perturbSoup(transformSoup(loadSoup('pipe-on-plate'), {}), 0.02, 1)
+    const tris: number[][] = []
+    for (let i = 0; i < soup.length; i += 9) tris.push(Array.from(soup.slice(i, i + 9)))
+    expect((await client.loadStl(makeBinaryStl(tris, 'noisy'), 'noisy.stl', noop)).status).toBe('ready')
+    expect(seamCount(await client.detect(DEFAULT_DETECT_SETTINGS, noop))).toBeGreaterThan(2)
+    expect((await client.reweld(5e-4, noop)).status).toBe('ready')
+    expect(seamCount(await client.detect(DEFAULT_DETECT_SETTINGS, noop))).toBe(2)
+
+    spawned[0]!.die('Uncaught RangeError: out of memory')
+    expect((await client.detect(DEFAULT_DETECT_SETTINGS, noop)).status).toBe('error')
+    expect(seamCount(await client.detect(DEFAULT_DETECT_SETTINGS, noop))).toBe(2)
+    expect(spawned).toHaveLength(2)
   })
 
   it('restores the part before the access check, which casts rays against it', async () => {

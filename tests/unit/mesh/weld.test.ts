@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { weldVertices } from '../../../src/core/mesh/weld'
+import { DEFAULT_WELD_TOLERANCE, WELD_TOLERANCE_RANGE, weldVertices } from '../../../src/core/mesh/weld'
 import { cubeTriangles, soupOf } from '../helpers/shapes'
 
 const cube = cubeTriangles([0, 0, 0], [10, 10, 10])
@@ -53,5 +53,48 @@ describe('weldVertices', () => {
     const { mesh, droppedDegenerate } = weldVertices(soupOf([[1, 1, 1, 1, 1, 1, 1, 1, 1]]))
     expect(mesh.triangleCount).toBe(0)
     expect(droppedDegenerate).toBe(1)
+  })
+})
+
+describe('weld tolerance as a parameter', () => {
+  const diagonal = Math.hypot(100, 100, 100)
+  const pair = (offset: number) =>
+    soupOf([
+      [0, 0, 0, 100, 0, 0, 0, 100, 0],
+      [offset, 0, 0, 100, 0, 0, 0, 0, 100],
+    ])
+
+  it('defaults to 1e-5 of the diagonal and ranges from 1e-6 to 1e-3', () => {
+    expect(DEFAULT_WELD_TOLERANCE).toBe(1e-5)
+    expect(WELD_TOLERANCE_RANGE).toEqual({ min: 1e-6, max: 1e-3 })
+  })
+
+  it('welds vertices further apart as the tolerance is raised', () => {
+    const offset = 5e-4 * diagonal * 0.3
+    expect(weldVertices(pair(offset)).mesh.vertexCount).toBe(5)
+    expect(weldVertices(pair(offset), 5e-4).mesh.vertexCount).toBe(4)
+  })
+
+  it('drops a line-thin triangle at any tolerance, and keeps a needle that only the raised tolerance calls thin', () => {
+    const line = [10, 10, 100, 60, 10, 100, 35, 10.0001, 100]
+    const needle = [10, 10, 100, 60, 10, 100, 35, 10.05, 100]
+    const cube100 = cubeTriangles([0, 0, 0], [100, 100, 100])
+    expect(weldVertices(soupOf([...cube100, line]), 5e-4).droppedDegenerate).toBe(1)
+    expect(weldVertices(soupOf([...cube100, needle]), 5e-4).droppedDegenerate).toBe(0)
+  })
+
+  it('records the weld cell in mm on the mesh', () => {
+    expect(weldVertices(soupOf(cubeTriangles([0, 0, 0], [100, 100, 100])), 5e-4).mesh.toleranceMm).toBeCloseTo(5e-4 * Math.hypot(100, 100, 100), 9)
+  })
+
+  it('welds the same cube at the smallest tolerance, where the cell count is too large to pack into one number', () => {
+    const { mesh } = weldVertices(soupOf(cubeTriangles([0, 0, 0], [100, 100, 100])), WELD_TOLERANCE_RANGE.min)
+    expect(mesh.vertexCount).toBe(8)
+    expect(mesh.triangleCount).toBe(12)
+  })
+
+  it('welds the same at the largest tolerance a cube of 100 mm allows without collapsing it', () => {
+    const { mesh } = weldVertices(soupOf(cubeTriangles([0, 0, 0], [100, 100, 100])), WELD_TOLERANCE_RANGE.max)
+    expect(mesh.vertexCount).toBe(8)
   })
 })

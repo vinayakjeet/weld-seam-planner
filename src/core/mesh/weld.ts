@@ -5,25 +5,36 @@ export interface IndexedMesh {
   indices: Uint32Array
   vertexCount: number
   triangleCount: number
+  // The weld cell in mm. A triangle thinner than this has no reliable normal (see computeFaceData).
+  toleranceMm?: number
 }
 
-const WELD_TOLERANCE = 1e-5
-// A cell index is at most 1 / WELD_TOLERANCE = 100000 < 2^17, so three of them pack exactly into a double.
-const CELLS = 2 ** 17
+// The tolerance is a fraction of the bounding box diagonal. The default suits CAD exports, whose triangles share exact
+// vertices; a scan or a noisy mesh needs more, up to the top of the range. It sets the weld cell and the thickness
+// under which a triangle's normal is taken from its neighbour (computeFaceData); a triangle thinner than the default
+// is a line and is dropped whatever the tolerance, because dropping a thicker one would open a crack in the surface.
+export const DEFAULT_WELD_TOLERANCE = 1e-5
+export const WELD_TOLERANCE_RANGE = { min: 1e-6, max: 1e-3 } as const
 
-// Welds vertices that fall in the same grid cell of size 1e-5 x the bounding box diagonal, and drops triangles
-// that collapse or are thinner than that tolerance. Cells are measured from the bbox minimum so parts far from
-// the origin weld the same way as parts at it.
-export function weldVertices(soup: Float32Array): { mesh: IndexedMesh; droppedDegenerate: number } {
+// Welds vertices that fall in the same grid cell of size `weldTolerance` x the bounding box diagonal, and drops
+// triangles that collapse or are thinner than that tolerance. Cells are measured from the bbox minimum so parts far
+// from the origin weld the same way as parts at it.
+export function weldVertices(soup: Float32Array, weldTolerance: number = DEFAULT_WELD_TOLERANCE): { mesh: IndexedMesh; droppedDegenerate: number } {
   const bounds = computeBounds(soup)
-  const tolerance = bounds.diagonal > 0 ? WELD_TOLERANCE * bounds.diagonal : 1
+  const tolerance = bounds.diagonal > 0 ? weldTolerance * bounds.diagonal : 1
+  const lineMm = bounds.diagonal > 0 ? DEFAULT_WELD_TOLERANCE * bounds.diagonal : 1
   const [minX, minY, minZ] = bounds.min
+  const cells = [0, 1, 2].map((c) => Math.floor((bounds.max[c]! - bounds.min[c]!) / tolerance) + 2)
+  // Three cell indices fit one double exactly while the grid has at most 2^53 cells, which holds for the default
+  // tolerance on any part. A finer grid on a part that fills its box falls back to a text key.
+  const packed = cells[0]! * cells[1]! * cells[2]! <= 2 ** 53
+  const [, ny, nz] = cells as [number, number, number]
 
   const triangleTotal = soup.length / 9
-  const ids = new Map<number, number>()
+  const ids = new Map<number | string, number>()
   const positions = new Float32Array(soup.length)
   const indices = new Uint32Array(triangleTotal * 3)
-  const keys = [0, 0, 0]
+  const keys: Array<number | string> = [0, 0, 0]
   let vertexCount = 0
   let kept = 0
 
@@ -33,9 +44,9 @@ export function weldVertices(soup: Float32Array): { mesh: IndexedMesh; droppedDe
       const qx = Math.round((soup[o + v * 3]! - minX) / tolerance)
       const qy = Math.round((soup[o + v * 3 + 1]! - minY) / tolerance)
       const qz = Math.round((soup[o + v * 3 + 2]! - minZ) / tolerance)
-      keys[v] = (qx * CELLS + qy) * CELLS + qz
+      keys[v] = packed ? (qx * ny + qy) * nz + qz : `${qx},${qy},${qz}`
     }
-    if (keys[0] === keys[1] || keys[1] === keys[2] || keys[0] === keys[2] || isSliver(soup, o, tolerance)) continue
+    if (keys[0] === keys[1] || keys[1] === keys[2] || keys[0] === keys[2] || isLine(soup, o, lineMm)) continue
 
     for (let v = 0; v < 3; v++) {
       let id = ids.get(keys[v]!)
@@ -55,13 +66,14 @@ export function weldVertices(soup: Float32Array): { mesh: IndexedMesh; droppedDe
       indices: indices.slice(0, kept * 3),
       vertexCount,
       triangleCount: kept,
+      toleranceMm: tolerance,
     },
     droppedDegenerate: triangleTotal - kept,
   }
 }
 
 // Height over the longest edge: collinear points and needles both come out at or below the tolerance.
-function isSliver(soup: Float32Array, o: number, tolerance: number): boolean {
+function isLine(soup: Float32Array, o: number, tolerance: number): boolean {
   const ux = soup[o + 3]! - soup[o]!
   const uy = soup[o + 4]! - soup[o + 1]!
   const uz = soup[o + 5]! - soup[o + 2]!
