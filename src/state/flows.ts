@@ -1,6 +1,5 @@
 import { DEFAULT_JOB_SETTINGS } from '../core/job/plan'
 import { importJob } from '../core/job/importJob'
-import { toRapid } from '../core/job/rapid'
 import type { WeldJob } from '../core/job/schema'
 import type { KnownUnits } from '../core/mesh/units'
 import { sampleManifestSchema, type SampleEntry, type SampleManifest } from '../core/samples/manifest'
@@ -689,6 +688,7 @@ export async function exportRapid(client: GeometryClient, save = downloadText, n
   const ready = await exportableJob(client, now)
   if (ready === null) return
   const filename = rapidFilename(ready.partName, ready.createdAt)
+  const { toRapid } = await import('../core/job/rapid')
   save(filename, toRapid(ready.job))
   useStore.getState().setInfo(`Exported ${filename}: a template, verify it on a controller before running.`)
 }

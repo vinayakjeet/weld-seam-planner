@@ -9,6 +9,8 @@ const loadTJoint = (page: Page) => loadSample(page, tJoint)
 // Drops a text file the way a browser does (dragover, then drop) and says whether the page cancelled each event.
 // An uncancelled drop on a link-less page makes the browser open the file and leave the app.
 async function dropTextFile(page: Page, selector: string, name: string) {
+  // The viewport loads as a lazy chunk, so its drop target can appear a moment after the shell.
+  await page.waitForSelector(selector)
   return page.evaluate(
     ({ selector, name }) => {
       const target = document.querySelector(selector)
