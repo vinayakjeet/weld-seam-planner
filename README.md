@@ -357,9 +357,9 @@ The interface follows the Armatrix brand kit: Onest for all text with tabular nu
 
 ## Browser support
 
-The app targets current Chromium, Firefox and WebKit (Safari). CI runs every e2e spec in Chromium on every push, and on `main` runs the load, export, isolation, offline, reach and weld tolerance specs in Firefox and WebKit as well (the projects in `playwright.config.ts`).
+The app targets current Chromium, Firefox and WebKit (Safari). CI runs every e2e spec in Chromium on every push, and on `main` runs the load, export, isolation, offline, reach and weld tolerance specs in Firefox and WebKit as well (the projects in `playwright.config.ts`). Every spec also passes in Firefox and WebKit when run locally with the subset filter lifted.
 
-When the page is cross-origin isolated (COOP same-origin and COEP require-corp, sent by `vercel.json` and the Vite dev and preview servers), the display mesh and its BVH live in a SharedArrayBuffer that the page and the worker both read, so a large part is not copied between them. Isolation alone is not enough: a browser may refuse to upload a WebGL buffer from shared memory. So the page runs a runtime capability probe once ([src/worker/sharedMemory.ts](src/worker/sharedMemory.ts)): it uploads a small shared vertex and index array to a throwaway WebGL context, checks for an exception or a GL error, and names the worker for the answer. A browser that refuses, or a host that drops the two headers, gets the copy path with the same results. The app loads no cross-origin resources, so the isolation headers break nothing.
+When the page is cross-origin isolated (COOP same-origin and COEP require-corp, sent by `vercel.json` and the Vite dev and preview servers), the display mesh and its BVH live in a SharedArrayBuffer that the page and the worker both read, so a large part is not copied between them. WebKit checks the worker's own response against the page's embedder policy, including a 304 on a reload, so the dev and preview servers send both headers on every response, not only full ones. Isolation alone is not enough: a browser may refuse to upload a WebGL buffer from shared memory. So the page runs a runtime capability probe once ([src/worker/sharedMemory.ts](src/worker/sharedMemory.ts)): it uploads a small shared vertex and index array to a throwaway WebGL context, checks for an exception or a GL error, and names the worker for the answer. A browser that refuses, or a host that drops the two headers, gets the copy path with the same results. The app loads no cross-origin resources, so the isolation headers break nothing.
 
 ## Key numbers
 
@@ -371,7 +371,7 @@ Measured with `npx tsx scripts/key-numbers.ts` in Node 24 on an Intel i7-14700HX
 | Access analysis for the 56 seams of `double-bottom-cell` | 0.12 s |
 | Air travel, table order to minimum air travel, `double-bottom-cell` | 24.3 m to 8.5 m, 65 percent less |
 | Reach coverage of the tank seam at x 746 from the manhole port | 21 percent at an 18 degree bend limit, 100 percent at 25 degrees |
-| Entry chunk of the production build | 412 kB (budget 500 kB) |
+| Entry chunk of the production build | 415 kB (budget 500 kB) |
 
 ## Known limits
 
@@ -385,6 +385,9 @@ Measured with `npx tsx scripts/key-numbers.ts` in Node 24 on an Intel i7-14700HX
 - **Keyboard layouts:** on French AZERTY the step keys and Shift plus a digit are the same keystroke; the view keys win and the steps stay on the numpad and the stepper.
 - **RAPID data:** seamdata, welddata and weavedata belong to the cell and are placeholders.
 - **Key numbers:** parse plus detect of the 1M-triangle part takes 4.7 to 4.9 s here, and access for `double-bottom-cell` 0.12 s, against planning targets of 2.2 s and 0.1 s.
+- **Autosave on close:** a change still inside the one second autosave delay is written when the page hides or another part loads, but a browser does not promise to finish a storage write started while the page unloads: an edit made the moment before a reload or a closed tab can be lost.
+- **Access model:** access and reach use the neutral torch (no work or travel angle) and a 50 mm approach, not each procedure's angles and approach, so a seam near a class threshold can change class with the real torch.
+- **Rounding:** the cycle time in the status bar can differ from the exported `summary.cycleTimeS` by 0.1 s, because the export rounds arc and air time before adding them.
 
 ## Next steps
 
