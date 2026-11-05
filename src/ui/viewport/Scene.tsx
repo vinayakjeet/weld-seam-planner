@@ -1,6 +1,6 @@
 import { CameraControls, GizmoHelper, GizmoViewcube, Grid } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useMemo, useEffect, useRef } from 'react'
 import { Sphere, Vector3, type Mesh } from 'three'
 import { useStore } from '../../state/store'
 import { useShortcuts } from '../shell/useShortcuts'
@@ -22,6 +22,8 @@ import { SequenceLabels } from './SequenceLabels'
 import { SplitTool } from './SplitTool'
 import { TorchPreview } from './TorchPreview'
 import { WeldGlow } from './WeldGlow'
+import { displayOrigin } from '../../core/mesh/displayOrigin'
+import { OriginContext } from './origin'
 
 // Face order is +X, -X, +Y, -Y, +Z, -Z; the camera looks along +Y from the front.
 const Z_UP_FACES = ['Right', 'Left', 'Back', 'Front', 'Top', 'Bottom']
@@ -33,6 +35,7 @@ export function Scene() {
   const controls = useRef<CameraControls>(null)
   const partMesh = useRef<Mesh>(null)
   const part = useStore((s) => s.part)
+  const origin = useMemo(() => displayOrigin(part?.bbox ?? null), [part])
   // Read so that the scene draws again, and reads the colour tokens again, when the theme changes.
   useStore((s) => s.theme)
   const invalidate = useThree((state) => state.invalidate)
@@ -92,20 +95,25 @@ export function Scene() {
         fadeStrength={1.5}
         infiniteGrid
       />
-      <PartMesh ref={partMesh} />
-      <PartEdges />
-      <SeamLines partRef={partMesh} />
-      <DrawTool partRef={partMesh} />
-      <SplitTool partRef={partMesh} />
-      <PortMarkers />
-      <ArmCapsules />
-      <PortPlacer partRef={partMesh} />
-      <TorchPreview />
-      <AccessCone />
-      <AirMoves />
-      <WeldGlow />
-      <PlaybackTorch />
-      <SequenceLabels />
+      {/* Everything drawn from the part's coordinates sits in this group at the display origin, relative to it. */}
+      <OriginContext.Provider value={origin}>
+        <group position={origin}>
+            <PartMesh ref={partMesh} />
+            <PartEdges />
+            <SeamLines partRef={partMesh} />
+            <DrawTool partRef={partMesh} />
+            <SplitTool partRef={partMesh} />
+            <PortMarkers />
+            <ArmCapsules />
+            <PortPlacer partRef={partMesh} />
+            <TorchPreview />
+            <AccessCone />
+            <AirMoves />
+            <WeldGlow />
+            <PlaybackTorch />
+            <SequenceLabels />
+        </group>
+      </OriginContext.Provider>
       <GizmoHelper alignment="top-right" margin={[margin, margin]}>
         <GizmoViewcube
           faces={Z_UP_FACES}

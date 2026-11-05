@@ -1,4 +1,6 @@
 import { useEffect, useMemo } from 'react'
+import type { Vec3 } from '../../core/math/vec3'
+import { toLocalArray } from '../../core/mesh/displayOrigin'
 import { Color } from 'three'
 import { cssVar } from './cssVar'
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js'
@@ -15,14 +17,16 @@ interface LineStyle {
   overlay?: boolean
   // Below 1 the line is drawn see-through.
   opacity?: number
+  // World positions are drawn relative to this point (the scene's display origin); positions already relative leave it out.
+  origin?: Vec3
 }
 
 // Steps towards the camera that the lowest layer of lines gets over the part, which is itself pushed back by two.
 const LINE_OFFSET = 4
 
-export function lineSet(positions: Float32Array, { width, colors, color, renderOrder = 0, dashed, overlay = false, opacity = 1 }: LineStyle): LineSegments2 {
+export function lineSet(positions: Float32Array, { width, colors, color, renderOrder = 0, dashed, overlay = false, opacity = 1, origin }: LineStyle): LineSegments2 {
   const geometry = new LineSegmentsGeometry()
-  geometry.setPositions(positions)
+  geometry.setPositions(origin ? toLocalArray(positions, origin) : positions)
   if (colors) geometry.setColors(colors)
   // Every line is drawn in the transparent pass, which is ordered by renderOrder alone: a halo or an edge line is always
   // drawn before the line over it and writes no depth, so none of them can win a depth tie against the line they sit under.

@@ -1,6 +1,8 @@
 import { useEffect, useMemo } from 'react'
 import { CanvasTexture } from 'three'
 import type { Vec3 } from '../../core/math/vec3'
+import { toLocalArray } from '../../core/mesh/displayOrigin'
+import { useOrigin } from './origin'
 
 type Shape = 'dot' | 'ring'
 
@@ -38,7 +40,8 @@ interface PointMarkersProps {
 export function PointMarkers({ positions, shape, color, size }: PointMarkersProps) {
   const texture = useMemo(() => shapeTexture(shape), [shape])
   useEffect(() => () => texture.dispose(), [texture])
-  const array = useMemo(() => Float32Array.from(positions.flat()), [positions])
+  const origin = useOrigin()
+  const array = useMemo(() => toLocalArray(positions.flat(), origin), [positions, origin])
   if (positions.length === 0) return null
   return (
     <points key={positions.length} renderOrder={5} frustumCulled={false}>

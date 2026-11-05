@@ -6,6 +6,7 @@ import { useStore } from '../../state/store'
 import { cssVar } from './cssVar'
 import { airSegmentPositions } from './airPath'
 import { lineSet, useDisposed } from './lineSet'
+import { useOrigin } from './origin'
 
 const WIDTH_PX = 1.5
 
@@ -34,6 +35,7 @@ function straightMoves(path: Array<{ start: Vec3; end: Vec3 }>, home: Vec3): Flo
 // home, through the retract and approach points the torch flies through. Only in the Sequence step. The torch path comes
 // from the worker a moment after an edit; until then the moves are drawn straight between the seam ends.
 export function AirMoves() {
+  const origin = useOrigin()
   const active = useStore((s) => s.activeStep === 'sequence')
   const plan = useStore(selectPlan)
   const order = useStore(selectSequenceOrder)
@@ -54,8 +56,8 @@ export function AirMoves() {
     const { min, max } = plan.part.bbox
     const diagonal = Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2])
     const dash = Math.max(1, diagonal / 120)
-    return lineSet(positions, { width: WIDTH_PX, color: colour, renderOrder: 4, overlay: true, opacity: 0.85, dashed: { dashSize: dash, gapSize: dash } })
-  }, [active, plan, order, playback, colour])
+    return lineSet(positions, { origin, width: WIDTH_PX, color: colour, renderOrder: 4, overlay: true, opacity: 0.85, dashed: { dashSize: dash, gapSize: dash } })
+  }, [origin, active, plan, order, playback, colour])
   useDisposed(lines)
   return lines ? <primitive object={lines} /> : null
 }

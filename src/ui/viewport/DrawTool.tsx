@@ -11,6 +11,7 @@ import { PointMarkers } from './PointMarkers'
 import { polylineSegmentPositions } from './seamSegments'
 import { mmPerPixel, SNAP_RADIUS_PX } from './screenScale'
 import { useCanvasPointer } from './useCanvasPointer'
+import { useOrigin } from './origin'
 
 const PREVIEW_WIDTH_PX = 3
 
@@ -27,6 +28,7 @@ function snapRadiusAt(camera: Camera, point: Vec3, viewportHeightPx: number): nu
 // While the draw tool is armed: picks points on the part, and shows the line so far running on to the cursor. The line
 // is only a preview; where it snaps to the part's edges is decided in the worker when drawing finishes.
 export function DrawTool({ partRef }: { partRef: RefObject<Mesh | null> }) {
+  const origin = useOrigin()
   const tool = useStore((s) => s.tool)
   const camera = useThree((state) => state.camera)
   const active = tool.tool === 'draw'
@@ -96,8 +98,8 @@ export function DrawTool({ partRef }: { partRef: RefObject<Mesh | null> }) {
   const shownCursor = active ? (snapped ?? cursor) : null
   const preview = useMemo(() => {
     const path = shownCursor ? [...placed, shownCursor] : placed
-    return path.length >= 2 ? lineSet(polylineSegmentPositions(path), { width: PREVIEW_WIDTH_PX, color: cssVar('--brand-secondary'), renderOrder: 4 }) : null
-  }, [placed, shownCursor])
+    return path.length >= 2 ? lineSet(polylineSegmentPositions(path), { origin, width: PREVIEW_WIDTH_PX, color: cssVar('--brand-secondary'), renderOrder: 4 }) : null
+  }, [origin, placed, shownCursor])
   useDisposed(preview)
 
   const cursorMarker = useMemo(() => (shownCursor ? [shownCursor] : []), [shownCursor])

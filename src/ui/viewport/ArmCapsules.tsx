@@ -7,6 +7,8 @@ import { useStore } from '../../state/store'
 import { useVisibleSeams } from '../../state/useVisibleSeams'
 import { armTorch } from './armTorch'
 import { cssVar } from './cssVar'
+import { toLocal } from '../../core/mesh/displayOrigin'
+import { useOrigin } from './origin'
 
 const MAX_LINKS = 64
 // The torch is drawn as a rod this share of the arm's radius, in the accent colour, so it reads apart from the links.
@@ -38,7 +40,10 @@ export function ArmCapsules() {
   const active = useStore((s) => s.activeStep === 'access')
   const radius = useStore((s) => s.arm.diameterMm / 2)
   const torchLengthMm = useStore((s) => s.arm.torchLengthMm)
-  const joints = useJoints()
+  const origin = useOrigin()
+  const world = useJoints()
+  // Drawn inside the world group, so relative to the display origin.
+  const joints = useMemo(() => (world ? world.map((p) => toLocal(p, origin)) : null), [world, origin])
   const torch = useMemo(() => (joints ? armTorch(joints, torchLengthMm) : null), [joints, torchLengthMm])
   const torchColor = useMemo(() => cssVar('--brand-accent'), [])
   const torchPlacement = useMemo(() => {

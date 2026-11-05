@@ -9,13 +9,18 @@ import { useStore } from '../../state/store'
 import { useVisibleSeams } from '../../state/useVisibleSeams'
 import { cssVar } from './cssVar'
 import { coneGeometry, nearestStation, type ConeShape } from './coneGeometry'
+import { useOrigin } from './origin'
 
 const SEGMENTS = 32
 // A cone opens from its apex at +Y in three.js; the free cone opens along minus tool z, so +Y has to become tool z.
 const UP = new Vector3(0, 1, 0)
 
 function Cone({ shape, color, opacity }: { shape: ConeShape; color: string; opacity: number }) {
-  const centre = useMemo(() => new Vector3(...shape.apex).add(new Vector3(...shape.baseCentre)).multiplyScalar(0.5), [shape])
+  const origin = useOrigin()
+  const centre = useMemo(
+    () => new Vector3(...shape.apex).add(new Vector3(...shape.baseCentre)).multiplyScalar(0.5).sub(new Vector3(...origin)),
+    [shape, origin],
+  )
   const orientation = useMemo(() => new Quaternion().setFromUnitVectors(UP, new Vector3(...shape.axis).negate()), [shape])
   return (
     <mesh position={centre} quaternion={orientation} renderOrder={3}>

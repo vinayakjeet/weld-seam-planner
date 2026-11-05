@@ -18,6 +18,7 @@ import type { SequenceStrategy, Visit } from '../core/sequence/types'
 import { computeBounds } from '../core/mesh/bounds'
 import { computeFaceData } from '../core/mesh/faces'
 import { sha256Hex } from '../core/mesh/hash'
+import { displayOrigin, toLocalArray } from '../core/mesh/displayOrigin'
 import { buildMeshModel, type MeshModel } from '../core/mesh/model'
 import { parseStl, StlError } from '../core/mesh/parseStl'
 import { guessUnits, scaleToMm, type KnownUnits, type Units } from '../core/mesh/units'
@@ -212,9 +213,10 @@ function giveWay(): Promise<void> {
   })
 }
 
+// Positions are drawn relative to displayOrigin of the part's box, which the viewport computes the same way.
 function buildDisplay(model: MeshModel, report: Progress): DisplayData {
   const geometry = new BufferGeometry()
-  geometry.setAttribute('position', new BufferAttribute(model.mesh.positions.slice(), 3))
+  geometry.setAttribute('position', new BufferAttribute(toLocalArray(model.mesh.positions, displayOrigin(model.bounds)), 3))
   geometry.setIndex(new BufferAttribute(model.mesh.indices.slice(), 1))
   const bvh = new MeshBVH(geometry, {
     onProgress: (p) => report('index', STAGE_START.index + (1 - STAGE_START.index) * p),

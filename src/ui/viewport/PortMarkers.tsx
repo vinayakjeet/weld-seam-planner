@@ -5,6 +5,8 @@ import type { Vec3 } from '../../core/math/vec3'
 import type { Port } from '../../core/snake/arm'
 import { useStore } from '../../state/store'
 import { cssVar } from './cssVar'
+import { toLocal } from '../../core/mesh/displayOrigin'
+import { useOrigin } from './origin'
 
 const Z = new Vector3(0, 0, 1)
 const round = (v: number) => Math.round(v * 1000) / 1000
@@ -42,12 +44,14 @@ function PortMarker({ port, selected, color }: { port: Port; selected: boolean; 
 function Draggable({ port, color }: { port: Port; color: string }) {
   const group = useRef<Group>(null)
   const movePort = useStore((s) => s.movePort)
+  const origin = useOrigin()
+  const local = useMemo(() => toLocal(port.position, origin), [port.position, origin])
   useEffect(() => {
-    group.current?.position.set(...port.position)
-  }, [port.position])
+    group.current?.position.set(...local)
+  }, [local])
   return (
     <>
-      <group ref={group} position={port.position}>
+      <group ref={group} position={local}>
         <PortMarker port={port} selected color={color} />
       </group>
       <TransformControls
@@ -58,7 +62,7 @@ function Draggable({ port, color }: { port: Port; color: string }) {
           const p = group.current?.position
           if (!p) return
           // A release without a drag leaves float noise in the position; to the micrometre it is the stored value.
-          const next: Vec3 = [round(p.x), round(p.y), round(p.z)]
+          const next: Vec3 = [round(p.x + origin[0]), round(p.y + origin[1]), round(p.z + origin[2])]
           if (next.some((v, i) => Math.abs(v - port.position[i]!) > 1e-6)) movePort(port.id, next)
         }}
       />
@@ -71,6 +75,7 @@ export function PortMarkers() {
   const selectedId = useStore((s) => s.selectedPortId)
   const active = useStore((s) => s.activeStep === 'access')
   const colors = useMemo(() => ({ selected: cssVar('--brand-secondary'), other: cssVar('--scene-select') }), [])
+  const origin = useOrigin()
   if (ports.length === 0) return null
   return (
     <>
@@ -78,7 +83,7 @@ export function PortMarkers() {
         active && port.id === selectedId ? (
           <Draggable key={port.id} port={port} color={colors.selected} />
         ) : (
-          <group key={port.id} position={port.position}>
+          <group key={port.id} position={toLocal(port.position, origin)}>
             <PortMarker port={port} selected={false} color={colors.other} />
           </group>
         ),

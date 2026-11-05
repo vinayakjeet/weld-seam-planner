@@ -4,6 +4,8 @@ import { selectSequenceOrder } from '../../state/selectors'
 import { useStore } from '../../state/store'
 import { useVisibleSeams } from '../../state/useVisibleSeams'
 import { sequenceRows } from '../panels/sequenceRows'
+import { toLocal } from '../../core/mesh/displayOrigin'
+import { useOrigin } from './origin'
 
 // A number at the middle of every accepted seam: its place in the sequence. Only in the Sequence step.
 export function SequenceLabels() {
@@ -18,12 +20,13 @@ export function SequenceLabels() {
       return { id: row.id, n: row.n, at: seam.points[seam.points.length >> 1]?.p ?? null }
     })
   }, [order, seams])
+  const origin = useOrigin()
   if (!active) return null
   return (
     <group name="sequence-labels">
       {labels.map(({ id, n, at }) =>
         at === null ? null : (
-          <Html key={id} position={at} center zIndexRange={[5, 0]} style={{ pointerEvents: 'none' }}>
+          <Html key={id} position={toLocal(at, origin)} center zIndexRange={[5, 0]} style={{ pointerEvents: 'none' }}>
             <span
               className={`num grid min-w-5 place-items-center rounded-full border px-1 text-[10px] font-semibold leading-4 ${
                 id === selectedId ? 'border-brand bg-brand-fill text-on-primary' : 'border-line bg-surface-1/90 text-ink-0'

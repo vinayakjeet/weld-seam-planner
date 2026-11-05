@@ -5,6 +5,7 @@ import type { Vec3 } from '../../core/math/vec3'
 import { useStore } from '../../state/store'
 import { cssVar } from './cssVar'
 import { placeTorch, type TorchPart } from './torchModel'
+import { useOrigin } from './origin'
 
 // The torch is drawn about this big for a part this size; other parts scale it, within limits.
 const REFERENCE_DIAGONAL_MM = 300
@@ -16,7 +17,8 @@ const SEGMENTS = 24
 const Y_TO_Z = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), Math.PI / 2)
 
 function Part({ part, orientation, color, metalness = 0.4 }: { part: TorchPart; orientation: Quaternion; color: string; metalness?: number }) {
-  const middle = useMemo(() => new Vector3(...part.tip).add(new Vector3(...part.base)).multiplyScalar(0.5), [part])
+  const origin = useOrigin()
+  const middle = useMemo(() => new Vector3(...part.tip).add(new Vector3(...part.base)).multiplyScalar(0.5).sub(new Vector3(...origin)), [part, origin])
   const height = new Vector3(...part.tip).distanceTo(new Vector3(...part.base))
   return (
     <mesh position={middle} quaternion={orientation}>

@@ -5,6 +5,7 @@ import { useVisibleSeams } from '../../state/useVisibleSeams'
 import { selectSequenceOrder } from '../../state/selectors'
 import { cssVar } from './cssVar'
 import { lineSet, useDisposed } from './lineSet'
+import { useOrigin } from './origin'
 
 const WIDTH_PX = 5
 // The glow is rebuilt this many times per second of playback time, not every frame.
@@ -13,6 +14,7 @@ const STEPS_PER_S = 10
 // The part of every seam that has been welded so far, drawn bright and thick over the seam line, so the arcs glow as
 // the playback goes. Nothing is drawn before the first arc starts.
 export function WeldGlow() {
+  const origin = useOrigin()
   const active = useStore((s) => s.activeStep === 'sequence' || s.activeStep === 'export')
   const data = useStore((s) => s.playback)
   const quantised = useStore((s) => Math.floor(s.timeS * STEPS_PER_S))
@@ -31,8 +33,8 @@ export function WeldGlow() {
       const trail = trailAlong(seam.points, seam.closed, entry.reversed && !seam.closed, length)
       for (let i = 0; i + 1 < trail.length; i++) parts.push(...trail[i]!, ...trail[i + 1]!)
     }
-    return parts.length === 0 ? null : lineSet(new Float32Array(parts), { width: WIDTH_PX, color: cssVar('--brand-accent'), renderOrder: 3 })
-  }, [active, data, quantised, order, seams])
+    return parts.length === 0 ? null : lineSet(new Float32Array(parts), { origin, width: WIDTH_PX, color: cssVar('--brand-accent'), renderOrder: 3 })
+  }, [origin, active, data, quantised, order, seams])
   useDisposed(lines)
   return lines ? <primitive object={lines} /> : null
 }

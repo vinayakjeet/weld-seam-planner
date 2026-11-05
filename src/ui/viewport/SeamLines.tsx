@@ -16,6 +16,7 @@ import { lineSet, useDisposed, useHalo } from './lineSet'
 import { pointerClaimed } from './pickGuard'
 import { chooseSeamHit, occlusionTolerance, type SeamLineHit } from './pickSeam'
 import { buildSeamSegments, positionsOfSeams, seamSegmentPositions, type Rgb, type SeamPalette } from './seamSegments'
+import { useOrigin } from './origin'
 
 // The coloured core. The halo adds 1.5 px on each side, so the seam colour is what the eye reads.
 const BASE_WIDTH_PX = 4
@@ -46,6 +47,7 @@ function readPalette(): SeamPalette {
 // One merged line set holds every seam. Hover and selection are drawn again, thicker, in small overlay sets because
 // line width belongs to the material and cannot differ per seam inside the merged one.
 export function SeamLines({ partRef }: { partRef: RefObject<Mesh | null> }) {
+  const origin = useOrigin()
   const seams = useVisibleSeams()
   const statusById = useStore((s) => s.statusById)
   const colourBy = useStore((s) => s.colourBy)
@@ -81,17 +83,17 @@ export function SeamLines({ partRef }: { partRef: RefObject<Mesh | null> }) {
     [seams, statusById, palette, colourBy, accessById, accessPointsById, accessStep, reachById, reachPointsById, reachKeyById, ports, arm],
   )
   const base = useMemo(
-    () => (built.segmentSeam.length > 0 ? lineSet(built.positions, { width: BASE_WIDTH_PX, colors: built.colors, opacity: dim ? DIM_OPACITY : 1, overlay: xray, renderOrder: xray ? 1 : 0 }) : null),
-    [built, dim, xray],
+    () => (built.segmentSeam.length > 0 ? lineSet(built.positions, { origin, width: BASE_WIDTH_PX, colors: built.colors, opacity: dim ? DIM_OPACITY : 1, overlay: xray, renderOrder: xray ? 1 : 0 }) : null),
+    [origin, built, dim, xray],
   )
   const selected = useMemo(() => {
     const positions = positionsOfSeams(seams, new Set(selectedIds))
-    return positions ? lineSet(positions, { width: HIGHLIGHT_WIDTH_PX, color: cssVar('--scene-select'), renderOrder: 1 + lift, overlay: xray }) : null
-  }, [seams, selectedIds, xray, lift])
+    return positions ? lineSet(positions, { origin, width: HIGHLIGHT_WIDTH_PX, color: cssVar('--scene-select'), renderOrder: 1 + lift, overlay: xray }) : null
+  }, [origin, seams, selectedIds, xray, lift])
   const hovered = useMemo(() => {
     const seam = hoverId === null ? undefined : seams.find((s) => s.id === hoverId)
-    return seam ? lineSet(seamSegmentPositions(seam), { width: HIGHLIGHT_WIDTH_PX, color: cssVar('--seam-hover'), renderOrder: 2 + lift, overlay: xray }) : null
-  }, [seams, hoverId, xray, lift])
+    return seam ? lineSet(seamSegmentPositions(seam), { origin, width: HIGHLIGHT_WIDTH_PX, color: cssVar('--seam-hover'), renderOrder: 2 + lift, overlay: xray }) : null
+  }, [origin, seams, hoverId, xray, lift])
 
   // While merging, the seams the merge would accept are lit so the choice is visible before the click.
   const targets = useMemo(() => {
@@ -99,8 +101,8 @@ export function SeamLines({ partRef }: { partRef: RefObject<Mesh | null> }) {
     const ids = new Set(from ? mergeTargets(from, seams, MERGE_TOLERANCE_MM) : [])
     const all = positionsOfSeams(seams, ids)
     if (all === null) return null
-    return lineSet(all, { width: HIGHLIGHT_WIDTH_PX, color: cssVar('--scene-warn'), renderOrder: 1 + lift, overlay: xray })
-  }, [seams, mergeFrom, xray, lift])
+    return lineSet(all, { origin, width: HIGHLIGHT_WIDTH_PX, color: cssVar('--scene-warn'), renderOrder: 1 + lift, overlay: xray })
+  }, [origin, seams, mergeFrom, xray, lift])
 
   useDisposed(base)
   useDisposed(selected)
