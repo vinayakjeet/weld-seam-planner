@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { importBuffer } from '../../../src/state/flows'
 import { AUTOSAVE_DELAY_MS, beginDemoSession, restoreSaved, startAutosave, startFresh, type PlanStorage } from '../../../src/state/autosave'
+import { pointsFromPolyline } from '../../../src/core/seams/frames'
+import { legacySeamId } from '../../../src/core/seams/seamId'
 import { savedKey, snapshotOf } from '../../../src/state/savedPlan'
 import { useStore } from '../../../src/state/store'
 import { detected, fakeClient, partInfo, readyOutcome, resetStore, seam } from '../helpers/state'
@@ -66,7 +68,7 @@ describe('startAutosave: saving', () => {
     await vi.advanceTimersByTimeAsync(1)
     expect(sets).toHaveLength(1)
     expect(sets[0]![0]).toBe(KEY)
-    expect(sets[0]![1]).toMatchObject({ version: 1, sha256: SHA, statusById: { a: 'accepted' } })
+    expect(sets[0]![1]).toMatchObject({ version: 2, sha256: SHA, statusById: { a: 'accepted' } })
     stop()
   })
 
@@ -205,7 +207,7 @@ describe('the restore offer', () => {
 
   it.each([
     ['a corrupt entry', 'garbage'],
-    ['a version 2 entry', { ...savedSnapshot(), version: 2 }],
+    ['a version 3 entry', { ...savedSnapshot(), version: 3 }],
   ])('gives a notice and no offer for %s', async (_name, entry) => {
     const stop = startAutosave(memoryStorage({ [KEY]: entry }).storage)
     await importBuffer(new ArrayBuffer(8), 'a.stl', loadClient())
@@ -265,6 +267,27 @@ describe('restoreSaved and startFresh', () => {
       offer: null,
     })
     expect(useStore.temporal.getState().pastStates).toHaveLength(0)
+    stop()
+  })
+
+  it('moves the ids of a version 1 plan to the ids detection gives the same seams now, and saves it as version 2', async () => {
+    const line = (y: number, id: string) => {
+      const { points, lengthMm } = pointsFromPolyline([[0, y, 0], [200, y, 0]], false, () => [[0, 0, 1], [0, -1, 0]])
+      return seam(id, 0.9, lengthMm, { points })
+    }
+    const now = [line(10, 'crease-aaaa0001'), line(50, 'crease-aaaa0002')]
+    const [old0, old1] = now.map((s) => legacySeamId(s))
+    const v1 = { ...savedSnapshot(), version: 1, statusById: { [old0!]: 'accepted', [old1!]: 'rejected' }, typeById: {}, procedureById: {}, legById: {} }
+    const memory = memoryStorage({ [KEY]: v1 })
+    const stop = startAutosave(memory.storage)
+    const client = loadClient({ detect: async () => detected(now) })
+    await importBuffer(new ArrayBuffer(8), 'a.stl', client)
+    expect(state().offer).toMatchObject({ version: 1 })
+    await restoreSaved(client)
+    expect(state().statusById).toEqual({ 'crease-aaaa0001': 'accepted', 'crease-aaaa0002': 'rejected' })
+    state().toggleAccepted('crease-aaaa0002')
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY_MS)
+    expect(memory.sets.at(-1)![1]).toMatchObject({ version: 2, statusById: { 'crease-aaaa0001': 'accepted' } })
     stop()
   })
 

@@ -4,7 +4,7 @@ import { registerAfterLoad, runDetect } from './flows'
 import { clampArm } from '../core/snake/arm'
 import { clearHistory } from './history'
 import { nextNumberAfter } from './portsSlice'
-import { parseSaved, savedKey, snapshotOf, type SavedPlan } from './savedPlan'
+import { migrateSavedIds, parseSaved, savedKey, snapshotOf, type SavedPlan } from './savedPlan'
 import { useStore, type AppState } from './store'
 
 export interface PlanStorage {
@@ -179,7 +179,7 @@ export async function restoreSaved(client: GeometryClient): Promise<void> {
   }
   // The offer may have been closed, or another part loaded, while detection ran.
   if (useStore.getState().offer !== offer) return
-  useStore.setState(apply(offer))
+  useStore.setState(apply(migrateSavedIds(offer, useStore.getState().seams)))
   clearHistory()
   rebase()
 }

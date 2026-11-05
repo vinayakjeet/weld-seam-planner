@@ -3,10 +3,15 @@ import { SEQUENCE_STRATEGIES } from '../core/sequence/types'
 import { procedureOverridesSchema, procedureSchema, vec3Schema } from '../core/job/schema'
 import { DEFAULT_JOB_SETTINGS } from '../core/job/plan'
 import { DEFAULT_ARM } from '../core/snake/arm'
+import type { SeamCandidate } from '../core/seams/detect'
 import type { ManualError } from '../core/seams/manual'
+import { legacySeamId } from '../core/seams/seamId'
 import type { AppState } from './store'
 
-export const SAVED_PLAN_VERSION = 1
+// Version 2 keys seams by the ids of core/seams/seamId.ts. Version 1 plans are still read and their ids are moved over
+// by migrateSavedIds once the part has been detected again.
+export const SAVED_PLAN_VERSION = 2
+const READABLE_VERSIONS = [1, SAVED_PLAN_VERSION] as const
 
 export const savedKey = (sha256: string) => `weld-plan:${sha256}`
 
@@ -45,7 +50,7 @@ const armSchema = z.object({
 })
 
 export const savedPlanSchema = z.object({
-  version: z.literal(SAVED_PLAN_VERSION),
+  version: z.union([z.literal(1), z.literal(SAVED_PLAN_VERSION)]),
   savedAt: z.iso.datetime(),
   partName: z.string(),
   sha256: z.string().min(1),
@@ -116,12 +121,12 @@ const NEXT = 'Choose Start fresh. The next change you make saves a new plan over
 
 export function parseSaved(value: unknown): ParsedSaved {
   const version = typeof value === 'object' && value !== null && 'version' in value ? (value as { version: unknown }).version : undefined
-  if (typeof version === 'number' && version !== SAVED_PLAN_VERSION) {
+  if (typeof version === 'number' && !READABLE_VERSIONS.some((v) => v === version)) {
     return {
       status: 'error',
       error: {
         what: `The saved plan for this part is version ${version}, which this app cannot read.`,
-        why: `This app reads version ${SAVED_PLAN_VERSION}; a plan saved by a different version of the app can mean something else.`,
+        why: `This app reads versions ${READABLE_VERSIONS.join(' and ')}; a plan saved by a different version of the app can mean something else.`,
         next: NEXT,
       },
     }
@@ -145,4 +150,34 @@ export function parseSaved(value: unknown): ParsedSaved {
 export function offerSummary(saved: SavedPlan): { acceptedSeams: number; proceduresInUse: number } {
   const accepted = Object.entries(saved.statusById).filter(([, status]) => status === 'accepted').map(([id]) => id)
   return { acceptedSeams: accepted.length, proceduresInUse: new Set(accepted.map((id) => saved.procedureById[id]).filter(Boolean)).size }
+}
+
+// A version 1 plan names seams by ids made from their start, middle and end points. Each seam detected now gets the id
+// version 1 would have given it (same geometry to 0.1 mm), and every id in the plan moves to the new id of that seam.
+// An id no seam matches, a drawn seam's or one whose geometry has changed since, is left as it is.
+export function migrateSavedIds(saved: SavedPlan, detected: SeamCandidate[]): SavedPlan {
+  if (saved.version === SAVED_PLAN_VERSION) return saved
+  const moved = new Map<string, string>()
+  const seen = new Map<string, number>()
+  for (const seam of detected) {
+    const base = legacySeamId(seam)
+    const n = (seen.get(base) ?? 0) + 1
+    seen.set(base, n)
+    moved.set(n === 1 ? base : `${base}-${n}`, seam.id)
+  }
+  const id = (old: string) => moved.get(old) ?? old
+  const keyed = <T>(record: Record<string, T>): Record<string, T> => Object.fromEntries(Object.entries(record).map(([key, value]) => [id(key), value]))
+  return {
+    ...saved,
+    version: SAVED_PLAN_VERSION,
+    statusById: keyed(saved.statusById),
+    typeById: keyed(saved.typeById),
+    manualSeams: saved.manualSeams.map((seam) => (seam.slot === undefined ? seam : { ...seam, slot: id(seam.slot) })),
+    supersededIds: saved.supersededIds.map(id),
+    procedureById: keyed(saved.procedureById),
+    overridesById: keyed(saved.overridesById),
+    legById: keyed(saved.legById),
+    thicknessById: keyed(saved.thicknessById),
+    order: saved.order.map((entry) => ({ ...entry, seamId: id(entry.seamId) })),
+  }
 }

@@ -154,32 +154,32 @@ describe('withReach and reachKey', () => {
 
 // Measured coverage of the 20 snake seams of tank-with-manhole from P1: [defaults, bend limit 25 degrees], checked to
 // 0.01. Five dropped by one station or so when the capsule check stopped missing edges between its samples (on
-// crease-c568d676 the arm had passed 1.2 and 2.2 mm inside its radius at the top edge of the stiffener at x 1154).
+// crease-7839a953 the arm had passed 1.2 and 2.2 mm inside its radius at the top edge of the stiffener at x 1154).
 // Four rose at bend 25 when a rung that ends in contact is retried from a chain peaked over the contact. With the exact
-// Jacobian in the finish, crease-6ff06dea lost its station at s 420, reached before only after 17 rounds of push and refit. The id comes from the geometry of the seam; the comment gives where it is.
+// Jacobian in the finish, crease-b6aa918f lost its station at s 420, reached before only after 17 rounds of push and refit. The id comes from the geometry of the seam; the comment gives where it is.
 const TANK_COVERAGE: Record<string, [number, number]> = {
-  'crease-14032c92': [0, 0.227], // roof, x 800, y 992
-  'crease-4e4e2172': [0.417, 0.619], // floor, x 800, y 8
-  'crease-531fa882': [0, 0.164], // roof, x 800, y 8
-  'crease-86bea152': [0.53, 0.619], // floor, x 800, y 992
-  'crease-04a4db05': [0, 0], // roof, x 8
-  'crease-18c63b93': [0, 0.264], // x 8, y 8
-  'crease-3f986cb7': [0, 0.264], // x 8, y 992
-  'crease-5f8520b8': [0, 0.894], // floor, x 1592
-  'crease-6ff06dea': [0.264, 0.569], // x 1592, y 8
-  'crease-9e2a1b9c': [0.894, 0.894], // roof, x 1592 (the plan expected 0)
-  'crease-b8841525': [0.325, 0.894], // floor, x 8
-  'crease-c568d676': [0.285, 0.569], // x 1592, y 992
-  'contact-22cdb17c': [0, 0], // stiffener face x 1146
-  'contact-7292973c': [0, 0], // stiffener face x 754
-  'contact-c1582f87': [0.208, 1], // stiffener face x 746
-  'contact-f3f98335': [0, 0], // stiffener face x 1154
-  'contact-002d6fbd': [0, 0],
-  'contact-17159023': [0, 0],
-  'contact-5614492b': [0, 0],
-  'contact-8e2143b5': [0, 0],
+  'crease-80112024': [0, 0.227], // roof, x 800, y 992
+  'crease-19ac1324': [0.417, 0.619], // floor, x 800, y 8
+  'crease-5c584cf4': [0, 0.164], // roof, x 800, y 8
+  'crease-f25ea394': [0.53, 0.619], // floor, x 800, y 992
+  'crease-2a7b765a': [0, 0], // roof, x 8
+  'crease-09ed1718': [0, 0.264], // x 8, y 8
+  'crease-98aeacc8': [0, 0.264], // x 8, y 992
+  'crease-aaeea8a5': [0, 0.894], // floor, x 1592
+  'crease-b6aa918f': [0.264, 0.569], // x 1592, y 8
+  'crease-144dd195': [0.894, 0.894], // roof, x 1592 (the plan expected 0)
+  'crease-101ea032': [0.325, 0.894], // floor, x 8
+  'crease-7839a953': [0.285, 0.569], // x 1592, y 992
+  'contact-25d7ac43': [0, 0], // stiffener face x 1146
+  'contact-6bc6a16b': [0, 0], // stiffener face x 754
+  'contact-546fbaba': [0.208, 1], // stiffener face x 746
+  'contact-0fad4c56': [0, 0], // stiffener face x 1154
+  'contact-1d117650': [0, 0],
+  'contact-7e0d5d6a': [0, 0],
+  'contact-b2077f02': [0, 0],
+  'contact-c3880018': [0, 0],
 }
-const ROOF_CREASES = ['crease-14032c92', 'crease-531fa882', 'crease-04a4db05', 'crease-9e2a1b9c']
+const ROOF_CREASES = ['crease-80112024', 'crease-5c584cf4', 'crease-2a7b765a', 'crease-144dd195']
 
 describe('tank-with-manhole reach from P1', () => {
   const { snake, near } = tank()
@@ -195,10 +195,10 @@ describe('tank-with-manhole reach from P1', () => {
     const rows = snake.map((seam) => `${seam.id} mid ${seamMid(seam).map(Math.round)} coverage ${measured[seam.id]!.toFixed(3)}`)
     console.log(`tank reach at defaults\n${rows.join('\n')}`)
     for (const [id, [pinned]] of Object.entries(TANK_COVERAGE)) expect(measured[id], id).toBeCloseTo(pinned, 2)
-    expect(measured['contact-c1582f87']).toBeGreaterThan(0)
+    expect(measured['contact-546fbaba']).toBeGreaterThan(0)
     // The plan expected all four roof creases at 0; the far end one is reached by an arm that dips 170 mm under the roof.
     expect(ROOF_CREASES.filter((id) => measured[id] === 0)).toHaveLength(3)
-    expect(measured['crease-9e2a1b9c']).toBeGreaterThan(0.8)
+    expect(measured['crease-144dd195']).toBeGreaterThan(0.8)
     expect(Object.values(measured).some((c) => c > 0 && c < 1)).toBe(true)
   }, 120_000)
 

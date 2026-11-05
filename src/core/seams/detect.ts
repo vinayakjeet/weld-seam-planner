@@ -13,6 +13,7 @@ import { extractCreaseEdges, type CreaseEdges, type CreaseResult } from './creas
 import { buildSeamPoints, pointsFromPolyline, type NormalsOf, type SeamPoint } from './frames'
 import { chainSegments, findIntersectionSegments } from './intersect'
 import { extractNonManifoldWedges, openBodies, type SolidTest } from './nonManifold'
+import { seamId } from './seamId'
 import { cornerThickness, probeFromBvhs, roundDecimals, seamThickness, type RayProbe } from './thickness'
 
 export interface DetectSettings {
@@ -111,7 +112,7 @@ export function detectSeams(model: MeshModel, settings: DetectSettings, context:
     found.push(...dropDuplicateSeams(touching, contactTolerance(model.bounds.diagonal)), ...intersectionSeams(model, bvhs, minLength, thicknessOf))
   }
 
-  for (const seam of found) seam.id = seamId(seam)
+  for (const seam of found) seam.id = seamId(seam, model.bounds.min)
   found.sort(
     (a, b) =>
       Number(a.hidden) - Number(b.hidden) ||
@@ -466,18 +467,4 @@ function describeChain(chain: Chain, creases: CreaseEdges, model: MeshModel, fac
     areas.push(faces.areas[model.edges.faceA[edge]!]!, faces.areas[model.edges.faceB[edge]!]!)
   }
   return { openingAngleDeg: weighted / total, medianAdjacentAreaMm2: median(areas) }
-}
-
-// Stable across runs and across settings that leave the seam unchanged: hashes the start, middle and end points
-// and the length, each rounded to 0.1 mm.
-function seamId(seam: RawSeam): string {
-  const { points } = seam
-  const pick = [points[0]!, points[points.length >> 1]!, points[points.length - 1]!]
-  const key = [...pick.flatMap(({ p }) => p), seam.lengthMm].map((x) => Math.round(x * 10)).join(',')
-  let hash = 0x811c9dc5
-  for (let i = 0; i < key.length; i++) {
-    hash ^= key.charCodeAt(i)
-    hash = Math.imul(hash, 0x01000193)
-  }
-  return `${seam.source}-${(hash >>> 0).toString(16).padStart(8, '0')}`
 }
