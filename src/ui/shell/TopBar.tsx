@@ -18,7 +18,7 @@ export function TopBar() {
         <span className="font-display text-base leading-none whitespace-nowrap">Weld Seam Planner</span>
       </div>
 
-      <div className="flex min-w-0 max-w-[140px] shrink items-center gap-2">
+      <div className="flex min-w-0 max-w-[120px] shrink items-center gap-2">
         {part ? (
           // The Import step holds the file chooser and the samples, and warns before accepted seams are discarded.
           <button
