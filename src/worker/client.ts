@@ -18,6 +18,7 @@ import type {
   UserError,
 } from './geometry.api'
 import { createRecoveringClient } from './recovery'
+import { geometryWorkerName } from './sharedMemory'
 
 export type GeometryClient = GeometryApi
 
@@ -173,7 +174,7 @@ export function watchWorker(target: EventTarget): Promise<string> {
 
 // One browser worker. When it stops answering it is terminated and onDead is called; it does not come back by itself.
 export function createGeometryClient(onDead?: () => void): GeometryClient {
-  const worker = new Worker(new URL('./geometry.worker.ts', import.meta.url), { type: 'module' })
+  const worker = new Worker(new URL('./geometry.worker.ts', import.meta.url), { type: 'module', name: geometryWorkerName() })
   return wrapGeometryApi(worker, {
     failure: watchWorker(worker),
     onFailure: () => {
