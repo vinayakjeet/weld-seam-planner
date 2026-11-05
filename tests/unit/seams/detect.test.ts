@@ -264,8 +264,13 @@ describe('classification under transforms', () => {
     expect(shown(detectSeams(buildMeshModel(moved, 1), DEFAULT_DETECT_SETTINGS)).map((s) => s.jointType)).toEqual(['fillet', 'fillet'])
   })
 
-  it.each(turns.map((t, i) => [i, t] as const))('keeps the narrow flange laps after turn %i', (_, turn) => {
+  it.each(turns.map((t, i) => [i, t] as const))('keeps the narrow flange fillets after turn %i', (_, turn) => {
     const moved = transformSoup(soupOf(narrowFlangeT()), turn)
+    expect(shown(detectSeams(buildMeshModel(moved, 1), DEFAULT_DETECT_SETTINGS)).map((s) => s.jointType)).toEqual(['fillet', 'fillet'])
+  })
+
+  it.each(turns.map((t, i) => [i, t] as const))('keeps the stepped lap laps after turn %i', (_, turn) => {
+    const moved = transformSoup(soupOf(steppedLap()), turn)
     expect(shown(detectSeams(buildMeshModel(moved, 1), DEFAULT_DETECT_SETTINGS)).map((s) => s.jointType)).toEqual(['lap', 'lap'])
   })
 })
@@ -322,18 +327,29 @@ describe('joint classification', () => {
     for (const seam of seams) expect(seam.lengthMm).toBeCloseTo(60, 1)
   })
 
-  it('reads a flange strip narrower than the web as a lap whichever face is the free one', () => {
+  // The 8 mm flange top is narrow enough to be a strip on the 10 mm web, but the block behind it is only the 10 mm
+  // flange: no plate long enough to lap the web lies there, so the joint is a T with a narrow flange.
+  it('reads a flange strip narrower than the web as a T fillet, not a lap', () => {
     const model = buildMeshModel(soupOf(narrowFlangeT()), 1)
     expect(model.bodies.count).toBe(1)
     const seams = shown(detectSeams(model, DEFAULT_DETECT_SETTINGS))
-    expect(seams.map((s) => s.jointType)).toEqual(['lap', 'lap'])
+    expect(seams.map((s) => s.jointType)).toEqual(['fillet', 'fillet'])
     for (const seam of seams) expect(seam.lengthMm).toBeCloseTo(100, 1)
   })
 
-  it('reads the narrow flange strips as laps after an arbitrary rotation and move', () => {
+  it('reads the narrow flange as fillets after an arbitrary rotation and move', () => {
     const turned = transformSoup(soupOf(narrowFlangeT()), { rotate: { axis: [1, 2, 3], angleDeg: 37 }, translate: [500, -300, 800] })
     const seams = shown(detectSeams(buildMeshModel(turned, 1), DEFAULT_DETECT_SETTINGS))
-    expect(seams.map((s) => s.jointType)).toEqual(['lap', 'lap'])
+    expect(seams.map((s) => s.jointType)).toEqual(['fillet', 'fillet'])
+  })
+
+  it('reads a 40 mm block on a plate as a fillet: it is shorter than the 50 mm minimum overlap of a 10 mm lap', () => {
+    const lower = cubeTriangles([0, 0, 0], [100, 60, 10])
+    const block = cubeTriangles([55, 0, 10], [40, 60, 10])
+    const model = buildMeshModel(soupOf([...lower, ...block]), 1)
+    expect(model.bodies.count).toBe(2)
+    const seams = shown(detectSeams(model, DEFAULT_DETECT_SETTINGS))
+    expect(seams.map((s) => [s.source, s.jointType])).toEqual([['contact', 'fillet'], ['contact', 'fillet']])
   })
 
   it('keeps a web 80 mm tall on a 10 mm plate a fillet', () => {

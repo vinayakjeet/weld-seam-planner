@@ -5,7 +5,7 @@ import type { MeshModel } from '../mesh/model'
 import type { PlateThickness } from '../process/filletRules'
 import { buildBodyBvhs, wholeBvhFor, type BodyBvh } from './bodyBvh'
 import { chainEdges, edgeEnds, type Chain } from './chain'
-import { classifyJoint, meetsSecondPlate, patchWidth, thicknessBehind, type JointType } from './classify'
+import { acrossFace, classifyJoint, isLap, meetsSecondPlate, patchWidth, thicknessBehind, type JointType } from './classify'
 import { confidence } from './confidence'
 import { contactTolerance, findContactEdges, type ContactEdges } from './contact'
 import { extractCreaseEdges, type CreaseEdges, type CreaseResult } from './crease'
@@ -314,14 +314,16 @@ function seamsFromEdges(
 interface Strip {
   stripWidthMm: number
   touchedThicknessMm: number
+  // Depth of the plate behind the strip, measured from the middle of the strip face.
+  stripLengthMm: number
   // Normal of the strip's free face, to tell which of a seam's two plates is the strip.
   stripNormal: Vec3 | null
 }
 
-const NO_STRIP: Strip = { stripWidthMm: Infinity, touchedThicknessMm: Infinity, stripNormal: null }
+const NO_STRIP: Strip = { stripWidthMm: Infinity, touchedThicknessMm: Infinity, stripLengthMm: Infinity, stripNormal: null }
 
-// The lap rule needs the width of the free face's flat patch and the thickness of the plate behind the touched
-// surface. A patch wider than a tenth of the part is a wall, not a strip, so it costs no ray and, in a single body,
+// The lap rule needs the width of the free face's flat patch, the thickness of the plate behind the touched surface
+// and the depth of the plate behind the free face. A patch wider than a tenth of the part is a wall, not a strip, so it costs no ray and, in a single body,
 // no BVH. A single body shares one BVH over the whole mesh with the thickness rays, unless the mesh is large.
 // The ray starts on the junction line itself; a ray along a face plane still registers the edge it grazes.
 const STRIP_CAP_FRACTION = 0.1
@@ -344,9 +346,19 @@ function stripProbe(model: MeshModel, faces: FaceData, bvhs: BodyBvh[], wholeBvh
     const widthMm = patchWidth(model, faces, x, mid, t, cap)
     if (widthMm > cap) return NO_STRIP
     const bvh = bvhOf(body)
-    return bvh ? { stripWidthMm: widthMm, touchedThicknessMm: thicknessBehind(bvh, mid, nY), stripNormal: faceNormal(x) } : NO_STRIP
+    const own = bvhOf(model.bodies.triangleBody[x]!)
+    const across = acrossFace(faces, x, mid, t)
+    if (!bvh || !own || !across) return NO_STRIP
+    const middle: Vec3 = [mid[0] + across[0] * (widthMm / 2), mid[1] + across[1] * (widthMm / 2), mid[2] + across[2] * (widthMm / 2)]
+    return {
+      stripWidthMm: widthMm,
+      touchedThicknessMm: thicknessBehind(bvh, mid, nY),
+      stripLengthMm: thicknessBehind(own, middle, faceNormal(x)),
+      stripNormal: faceNormal(x),
+    }
   }
   const ratio = (m: Strip) => (Number.isFinite(m.touchedThicknessMm) ? m.stripWidthMm / m.touchedThicknessMm : Infinity)
+  const lap = (m: Strip) => isLap(m.stripWidthMm, m.touchedThicknessMm, m.stripLengthMm)
   const ends = (e: number): { mid: Vec3; t: Vec3 } => {
     const a = model.edges.edgeA[e]! * 3
     const b = model.edges.edgeB[e]! * 3
@@ -356,14 +368,15 @@ function stripProbe(model: MeshModel, faces: FaceData, bvhs: BodyBvh[], wholeBvh
   }
 
   return {
-    // Either face may be the free one, so both readings are measured and the narrower strip wins.
+    // Either face may be the free one, so both readings are measured; a reading that makes a lap wins, then the
+    // narrower strip.
     ofCrease(edge) {
       const { mid, t } = ends(edge)
       const { faceA, faceB } = model.edges
       let best = NO_STRIP
       for (const [x, y] of [[faceA[edge]!, faceB[edge]!], [faceB[edge]!, faceA[edge]!]] as const) {
         const m = measure(x, faceNormal(y), model.bodies.triangleBody[y]!, mid, t)
-        if (ratio(m) < ratio(best)) best = m
+        if (Number(lap(m)) - Number(lap(best)) > 0 || (lap(m) === lap(best) && ratio(m) < ratio(best))) best = m
       }
       return best
     },

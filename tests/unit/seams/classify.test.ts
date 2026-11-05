@@ -29,6 +29,18 @@ describe('classifyJoint', () => {
     expect(classifyJoint({ ...base, source: 'contact', stripWidthMm: 10 })).toBe('lap')
   })
 
+  // AWS D1.1 asks a lap for an overlap of five times the thinner part and at least 25 mm, so the plate behind the strip
+  // must reach that far. A strip on a shorter block is the overhang of a narrow flange.
+  it('calls a strip a lap only when the plate behind it is as long as the minimum lap overlap', () => {
+    expect(classifyJoint({ ...base, stripWidthMm: 8, stripLengthMm: 10 })).toBe('fillet')
+    expect(classifyJoint({ ...base, stripWidthMm: 10, stripLengthMm: 49.9 })).toBe('fillet')
+    expect(classifyJoint({ ...base, stripWidthMm: 10, stripLengthMm: 50 })).toBe('lap')
+    expect(classifyJoint({ ...base, stripWidthMm: 3, stripLengthMm: 24.9 })).toBe('fillet')
+    expect(classifyJoint({ ...base, stripWidthMm: 3, stripLengthMm: 25 })).toBe('lap')
+    expect(classifyJoint({ ...base, stripWidthMm: 12, touchedThicknessMm: 8, stripLengthMm: 40 })).toBe('lap')
+    expect(classifyJoint({ ...base, stripWidthMm: 12, touchedThicknessMm: 8, stripLengthMm: 39.9 })).toBe('fillet')
+  })
+
   it('never calls a seam a lap when the thickness behind it is unknown', () => {
     for (const touchedThicknessMm of [Infinity, NaN, 0]) {
       expect(classifyJoint({ ...base, stripWidthMm: 5, touchedThicknessMm }), String(touchedThicknessMm)).toBe('fillet')

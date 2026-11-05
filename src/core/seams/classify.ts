@@ -25,15 +25,38 @@ export interface JointInput {
   // touched surface. Infinity (or NaN) means unknown, which can never make a lap.
   stripWidthMm: number
   touchedThicknessMm: number
+  // Depth of the plate behind the strip, from the strip face into the material. Absent or Infinity means unknown,
+  // which does not stop a lap.
+  stripLengthMm?: number
   convex: boolean
+}
+
+// AWS D1.1 asks a lap joint for an overlap of five times the thinner part and never less than 25 mm.
+const LAP_OVERLAP_RATIO = 5
+const MIN_LAP_OVERLAP_MM = 25
+
+// A strip about one plate thickness wide, on the end of a plate long enough to make the minimum lap overlap. A strip
+// on a shorter block is the overhang of a narrow flange, and the joint is a T.
+export function isLap(stripWidthMm: number, touchedThicknessMm: number, stripLengthMm = Infinity): boolean {
+  if (!(Number.isFinite(touchedThicknessMm) && touchedThicknessMm > 0 && stripWidthMm <= LAP_RATIO * touchedThicknessMm)) return false
+  return stripLengthMm >= Math.max(MIN_LAP_OVERLAP_MM, LAP_OVERLAP_RATIO * Math.min(stripWidthMm, touchedThicknessMm))
 }
 
 export function classifyJoint(input: JointInput): JointType {
   if (input.convex) return 'corner'
   if (input.source === 'intersection') return isNonPlanar(input.points.map(({ p }) => p)) ? 'saddle' : 'fillet'
-  const { stripWidthMm, touchedThicknessMm } = input
-  if (Number.isFinite(touchedThicknessMm) && touchedThicknessMm > 0 && stripWidthMm <= LAP_RATIO * touchedThicknessMm) return 'lap'
-  return 'fillet'
+  return isLap(input.stripWidthMm, input.touchedThicknessMm, input.stripLengthMm) ? 'lap' : 'fillet'
+}
+
+// The direction in the plane of `face` that runs across it away from the seam at p with tangent t, or null when the
+// tangent lies along the face normal.
+export function acrossFace(faces: FaceData, face: number, p: Vec3, t: Vec3): Vec3 | null {
+  const { normals, centroids } = faces
+  const n: Vec3 = [normals[face * 3]!, normals[face * 3 + 1]!, normals[face * 3 + 2]!]
+  const u = normalize(cross(n, t))
+  if (length(u) === 0) return null
+  const toFace: Vec3 = [centroids[face * 3]! - p[0], centroids[face * 3 + 1]! - p[1], centroids[face * 3 + 2]! - p[2]]
+  return dot(u, toFace) < 0 ? [-u[0], -u[1], -u[2]] : u
 }
 
 // How far from the seam the flat patch of `face` reaches, measured in the face's plane perpendicular to the seam
@@ -42,12 +65,10 @@ export function classifyJoint(input: JointInput): JointType {
 export function patchWidth(model: MeshModel, faces: FaceData, face: number, p: Vec3, t: Vec3, cap = Infinity): number {
   const { edges, mesh } = model
   const { indices, positions, vertexCount } = mesh
-  const { normals, centroids } = faces
+  const { normals } = faces
   const n: Vec3 = [normals[face * 3]!, normals[face * 3 + 1]!, normals[face * 3 + 2]!]
-  let u = normalize(cross(n, t))
-  if (length(u) === 0) return Infinity
-  const toFace: Vec3 = [centroids[face * 3]! - p[0], centroids[face * 3 + 1]! - p[1], centroids[face * 3 + 2]! - p[2]]
-  if (dot(u, toFace) < 0) u = [-u[0], -u[1], -u[2]]
+  const u = acrossFace(faces, face, p, t)
+  if (!u) return Infinity
 
   const cosLimit = Math.cos((COPLANAR_DEG * Math.PI) / 180)
   const seen = new Set<number>([face])
