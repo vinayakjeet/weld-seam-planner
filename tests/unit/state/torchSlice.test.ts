@@ -96,9 +96,12 @@ describe('positions and poses', () => {
   const gravity: Vec3 = [0, 0, -1]
 
   it('reads a position only for the very seam and gravity it was computed for', () => {
-    state().setPositions({ a: { seam: a, gravity, position: summary('PB') } })
+    state().setPositions({ a: { seam: a, gravity, reversed: false, position: summary('PB') } })
     expect(positionFor(state(), a)?.code).toBe('PB')
     expect(positionFor(state(), { ...a })).toBeUndefined()
+    useStore.setState({ order: [{ seamId: 'a', reversed: true, locked: false }] })
+    expect(positionFor(state(), a), 'worked out for the other direction').toBeUndefined()
+    useStore.setState({ order: [] })
     state().setGravity([-1, 0, 0])
     expect(positionFor(state(), a)).toBeUndefined()
   })

@@ -6,6 +6,7 @@ import { effectiveLegMm, legLimits } from '../../../src/core/process/filletRules
 import { DEFAULT_DETECT_SETTINGS, detectSeams, type SeamCandidate } from '../../../src/core/seams/detect'
 import { CREATED_AT, SPRAY_ID, samplePlan, specExamplePlan, type StraightSeam } from '../helpers/jobs'
 import { loadSampleModel } from '../helpers/models'
+import type { Vec3 } from '../../../src/core/math/vec3'
 
 const codes = (issues: Issue[]) => issues.map((i) => i.code)
 const only = (issues: Issue[], code: IssueCode, severity: Issue['severity'], seamId: string | null) => {
@@ -76,6 +77,17 @@ describe('procedure rules', () => {
   it('POSITION_NOT_COVERED: the seam position is not in the procedure positions', () => {
     const plan = lenient(undefined, (p) => void (p.seams[0]!.overrides = { positions: ['PA'] }))
     only(preflight(plan), 'POSITION_NOT_COVERED', 'warning', 's07')
+  })
+
+  it('POSITION_NOT_COVERED: checks the position a seam is welded in, which a reversed sequence entry turns PF into PG', () => {
+    const vertical = [{ id: 'v1', from: [0, 0, 0] as Vec3, to: [0, 0, 200] as Vec3, normals: [[1, 0, 0], [0, 1, 0]] as [Vec3, Vec3] }]
+    const plan = lenient(vertical, (p) => void (p.seams[0]!.overrides = { positions: ['PA', 'PB', 'PF'] }))
+    expect(buildJob(plan, { createdAt: CREATED_AT }).seams[0]!.position.iso6947).toBe('PF')
+    expect(codes(preflight(plan))).not.toContain('POSITION_NOT_COVERED')
+    plan.sequence = { strategy: 'manual', order: [{ seamId: 'v1', reversed: true }] }
+    expect(buildJob(plan, { createdAt: CREATED_AT }).seams[0]!.position.iso6947).toBe('PG')
+    only(preflight(plan), 'POSITION_NOT_COVERED', 'warning', 'v1')
+    expect(preflight(plan)[0]!.what).toContain('PG')
   })
 
   it('THICKNESS_OUTSIDE_WPS: a known thickness is outside the procedure range', () => {

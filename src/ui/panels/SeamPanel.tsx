@@ -109,6 +109,7 @@ function SeamTable({ filters }: { filters: ReadonlySet<RowFilter> }) {
   const toggleAccepted = useStore((s) => s.toggleAccepted)
   const positionsById = useStore((s) => s.positionsById)
   const gravity = useStore((s) => s.gravity)
+  const order = useStore((s) => s.order)
   const accessById = useStore((s) => s.accessById)
   const accessPointsById = useStore((s) => s.accessPointsById)
   const accessBusy = useStore((s) => s.accessBusy)
@@ -123,13 +124,13 @@ function SeamTable({ filters }: { filters: ReadonlySet<RowFilter> }) {
         seams,
         statusById,
         typeById,
-        (seam) => positionFor({ positionsById, gravity }, seam),
+        (seam) => positionFor({ positionsById, gravity, order }, seam),
         procedureById,
         (seam) => accessFor({ accessById, accessPointsById }, seam),
         accessBusy,
         (seam) => reachFor({ reachById, reachPointsById, reachKeyById, ports, arm }, seam),
       ),
-    [seams, statusById, typeById, positionsById, gravity, procedureById, accessById, accessPointsById, accessBusy, reachById, reachPointsById, reachKeyById, ports, arm],
+    [seams, statusById, typeById, positionsById, gravity, order, procedureById, accessById, accessPointsById, accessBusy, reachById, reachPointsById, reachKeyById, ports, arm],
   )
   const rows = useMemo(() => filterRows(allRows, filters), [allRows, filters])
   const body = useRef<HTMLDivElement>(null)

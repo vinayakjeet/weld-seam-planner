@@ -1,5 +1,6 @@
 import { DEFAULT_JOB_SETTINGS, resolveSeam, torchParamsFor } from '../core/job/plan'
 import { importJob } from '../core/job/importJob'
+import { reverseSeam } from '../core/seams/manual'
 import type { WeldJob } from '../core/job/schema'
 import type { KnownUnits } from '../core/mesh/units'
 import { DEFAULT_WELD_TOLERANCE } from '../core/mesh/weld'
@@ -18,7 +19,7 @@ import { accessFor, type AccessEntry } from './accessSlice'
 import type { SeamStatus } from './seamsSlice'
 import { plannedSeam, selectAllSeams, selectPlan } from './selectors'
 import { useStore, type AppState } from './store'
-import { positionFor, type PositionEntry } from './torchSlice'
+import { positionFor, weldsBackwards, type PositionEntry } from './torchSlice'
 
 export type FetchFn = (url: string) => Promise<Response>
 
@@ -526,7 +527,8 @@ export async function refreshPositions(client: GeometryClient): Promise<void> {
     if (Object.keys(known).some((id) => !seams.some((seam) => seam.id === id))) useStore.getState().setPositions(keep(known, {}))
     return
   }
-  const outcome = await attempt(() => client.torchPositions(todo, gravity))
+  const reversed = new Set(todo.filter((seam) => weldsBackwards(useStore.getState(), seam)).map((seam) => seam.id))
+  const outcome = await attempt(() => client.torchPositions(todo.map((seam) => (reversed.has(seam.id) ? { ...reverseSeam(seam), id: seam.id } : seam)), gravity))
   if (request !== positionsRequest) return
   if (outcome.status === 'error') {
     setNotice(outcome.error)
@@ -535,7 +537,7 @@ export async function refreshPositions(client: GeometryClient): Promise<void> {
   const fresh: Record<string, PositionEntry> = {}
   for (const seam of todo) {
     const position = outcome.positions[seam.id]
-    if (position) fresh[seam.id] = { seam, gravity, position }
+    if (position) fresh[seam.id] = { seam, gravity, reversed: reversed.has(seam.id), position }
   }
   useStore.getState().setPositions(keep(useStore.getState().positionsById, fresh))
 }
@@ -582,6 +584,7 @@ export function startTorchSync(client: GeometryClient): () => void {
     manualSeams: state.manualSeams,
     supersededIds: state.supersededIds,
     gravity: state.gravity,
+    order: state.order,
     selected: selectedSeam(state),
     // Compared as text: the angles are a new object on every read.
     torchKey: (() => {
@@ -597,7 +600,7 @@ export function startTorchSync(client: GeometryClient): () => void {
     const before = last
     // Recorded first: the scrub reset below changes the store and runs this callback again.
     last = next
-    if (next.seams !== before.seams || next.manualSeams !== before.manualSeams || next.supersededIds !== before.supersededIds || next.gravity !== before.gravity) {
+    if (next.seams !== before.seams || next.manualSeams !== before.manualSeams || next.supersededIds !== before.supersededIds || next.gravity !== before.gravity || next.order !== before.order) {
       void refreshPositions(client)
     }
     if (next.selected !== before.selected) {

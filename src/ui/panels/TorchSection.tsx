@@ -28,6 +28,7 @@ function PoseReadout() {
   const poseEntry = useStore((s) => s.posesForSelected)
   const positionsById = useStore((s) => s.positionsById)
   const gravity = useStore((s) => s.gravity)
+  const order = useStore((s) => s.order)
   const seam = useVisibleSeams().find((s) => s.id === selectedId)
 
   const poses = seam ? posesFor({ posesForSelected: poseEntry }, seam) : null
@@ -35,7 +36,7 @@ function PoseReadout() {
   if (!seam) return null
   if (!pose) return <p className="text-ink-2">Working out the torch poses.</p>
 
-  const position = positionFor({ positionsById, gravity }, seam) ?? null
+  const position = positionFor({ positionsById, gravity, order }, seam) ?? null
   return (
     <dl className="grid grid-cols-[64px_minmax(0,1fr)] gap-x-3 gap-y-1">
       <Readout label="Point">{fixed(pose.p, 1)} mm</Readout>

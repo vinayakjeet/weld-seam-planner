@@ -1,6 +1,7 @@
 import { dot, length, sub, type Vec3 } from '../math/vec3'
 import { MULTI_PASS_LEG_MM } from '../process/filletRules'
 import type { SeamCandidate } from '../seams/detect'
+import { reverseSeam } from '../seams/manual'
 import { seamPosition } from '../torch/positions'
 import { resolveSeam, type Explained, type Plan } from './plan'
 import type { JobIssue } from './schema'
@@ -152,6 +153,8 @@ export function preflight(plan: Plan): Issue[] {
   }
 
   const outlines = plan.seams.map((s) => outlineOf(s.seam))
+  // The welding position depends on the travel direction, and the sequence can weld an open seam against its points.
+  const backwards = new Set((plan.sequence?.order ?? []).filter((entry) => entry.reversed).map((entry) => entry.seamId))
   plan.seams.forEach((planned, index) => {
     const { seam } = planned
     const id = seam.id
@@ -258,7 +261,8 @@ export function preflight(plan: Plan): Issue[] {
     }
 
     if (procedure && seam.points.length > 0) {
-      const iso = seamPosition(seam.points, plan.gravity).code.replace(/\+$/, '')
+      const travelled = backwards.has(seam.id) && !seam.closed ? reverseSeam(seam).points : seam.points
+      const iso = seamPosition(travelled, plan.gravity).code.replace(/\+$/, '')
       if (!(procedure.positions as string[]).includes(iso)) {
         out('POSITION_NOT_COVERED', 'warning', {
           what: `Seam ${label} is welded in position ${iso}, which ${procedure.id} does not cover.`,

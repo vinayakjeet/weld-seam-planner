@@ -1038,6 +1038,29 @@ describe('torch flows', () => {
       expect(state().positionsById.flat!.seam).toBe(seams[0])
     })
 
+    it('gives the position the seam is welded in: an upright seam the sequence reverses is PG, not PF', async () => {
+      const seams = [flat(), upright()]
+      useStore.setState({ seams, order: [{ seamId: 'upright', reversed: true, locked: false }, { seamId: 'flat', reversed: false, locked: false }] })
+      await refreshPositions(torchClient())
+      expect(positionFor(state(), seams[1]!)?.code).toBe('PG')
+      expect(positionFor(state(), seams[0]!)?.code).toBe('PB')
+      useStore.setState({ order: [] })
+      expect(positionFor(state(), seams[1]!)).toBeUndefined()
+      await refreshPositions(torchClient())
+      expect(positionFor(state(), seams[1]!)?.code).toBe('PF')
+    })
+
+    it('works the positions out again when the sequence reverses a seam', async () => {
+      const seams = [upright()]
+      useStore.setState({ seams })
+      stop = startTorchSync(torchClient())
+      await settle()
+      expect(positionFor(state(), seams[0]!)?.code).toBe('PF')
+      useStore.setState({ order: [{ seamId: 'upright', reversed: true, locked: false }] })
+      await settle()
+      expect(positionFor(state(), seams[0]!)?.code).toBe('PG')
+    })
+
     it('includes manual seams and leaves out superseded detected ones', async () => {
       useStore.setState({ seams: [flat(), upright()], manualSeams: [seam('m', 0.8, 10, { points: flat().points })], supersededIds: ['upright'] })
       await refreshPositions(torchClient())

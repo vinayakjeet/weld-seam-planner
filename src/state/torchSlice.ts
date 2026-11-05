@@ -38,6 +38,8 @@ export function gravityText(gravity: Gravity): string {
 export interface PositionEntry {
   seam: SeamCandidate
   gravity: Gravity
+  // True when the position was worked out for the seam travelled against its points, as the sequence welds it.
+  reversed: boolean
   position: SeamPosition
 }
 
@@ -62,9 +64,16 @@ export interface TorchSlice {
 
 const sameVector = (a: Gravity, b: Gravity) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2]
 
-export function positionFor(state: Pick<AppState, 'positionsById' | 'gravity'>, seam: SeamCandidate): SeamPosition | undefined {
+// The sequence welds an open seam against its points when its entry is reversed; the position depends on that.
+export function weldsBackwards(state: Pick<AppState, 'order'>, seam: SeamCandidate): boolean {
+  return !seam.closed && state.order.some((entry) => entry.seamId === seam.id && entry.reversed)
+}
+
+export function positionFor(state: Pick<AppState, 'positionsById' | 'gravity' | 'order'>, seam: SeamCandidate): SeamPosition | undefined {
   const entry = state.positionsById[seam.id]
-  return entry && entry.seam === seam && sameVector(entry.gravity, state.gravity) ? entry.position : undefined
+  return entry && entry.seam === seam && sameVector(entry.gravity, state.gravity) && entry.reversed === weldsBackwards(state, seam)
+    ? entry.position
+    : undefined
 }
 
 export function posesFor(state: Pick<AppState, 'posesForSelected'>, seam: SeamCandidate): TorchPose[] | null {

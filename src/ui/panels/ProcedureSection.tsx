@@ -70,6 +70,7 @@ export function ProcedureSection() {
   const legById = useStore((s) => s.legById)
   const positionsById = useStore((s) => s.positionsById)
   const gravity = useStore((s) => s.gravity)
+  const order = useStore((s) => s.order)
   const primaryId = useStore((s) => s.selectedId)
   const assignProcedure = useStore((s) => s.assignProcedure)
   const setOverride = useStore((s) => s.setOverride)
@@ -95,7 +96,7 @@ export function ProcedureSection() {
   const mixedProcedure = new Set(assigned).size > 1
   const missing = missingProcedureIds(assigned, plan.procedures)
   const primary = seams.find((s) => s.id === primaryId) ?? seams[0]!
-  const iso = positionFor({ positionsById, gravity }, primary)?.code.replace(/\+$/, '') ?? null
+  const iso = positionFor({ positionsById, gravity, order }, primary)?.code.replace(/\+$/, '') ?? null
   const ordered = proceduresForPosition(plan.procedures, iso)
   const allHaveProcedure = resolved.every((r) => r.procedure !== null)
   const heat = allHaveProcedure ? heatInputReadout(resolved) : null
