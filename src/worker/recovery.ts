@@ -126,6 +126,11 @@ export function createRecoveringClient(spawn: (onDead: () => void) => GeometryCl
       return lost ?? target.reach(seams, ports, arm, onProgress)
     },
 
+    // Goes to the worker in use; a worker that was replaced has no reach running.
+    cancelReach() {
+      return current().cancelReach()
+    },
+
     async insertion(seam, s, port, arm, approachMm) {
       const target = current()
       const lost = await restoreFailure(target)

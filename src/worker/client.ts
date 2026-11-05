@@ -135,6 +135,8 @@ export function wrapGeometryApi(endpoint: Endpoint, options: ClientOptions = {})
       supervise<AccessOutcome>(options, 'checking torch access', (activity) => remote.access(seams, watching(activity, onProgress))),
     reach: (seams, ports, arm, onProgress) =>
       supervise<ReachOutcome>(options, 'measuring snake arm reach', (activity) => remote.reach(seams, ports, arm, watching(activity, onProgress))),
+    // A stop request; the reach it stops answers for itself, so this is not supervised.
+    cancelReach: () => remote.cancelReach().catch(() => undefined),
     insertion: (seam, s, port, arm, approachMm) =>
       supervise<InsertionOutcome>(options, 'working out the arm insertion', () => remote.insertion(seam, s, port, arm, approachMm)),
     preflight: (plan) => supervise<PreflightOutcome>(options, 'checking the plan', () => remote.preflight(plan)),

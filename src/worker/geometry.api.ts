@@ -31,7 +31,7 @@ import { gravityProblem, seamPosition, type Gravity, type SeamPosition } from '.
 import type { ArmParams, Port } from '../core/snake/arm'
 import { proximityFromBvh, solveArm } from '../core/snake/collision'
 import { approachGoal, insertion as insertArm, type InsertionFrame } from '../core/snake/ftl'
-import { seamReach, type SeamReach } from '../core/snake/reach'
+import { seamReachSteps, type SeamReach } from '../core/snake/reach'
 import { rotate } from '../core/math/quat'
 import { poseAt, DEFAULT_TORCH } from '../core/torch/frames'
 
@@ -102,6 +102,8 @@ export type AccessOutcome =
 export type ReachOutcome =
   | { status: 'ok'; results: Record<string, SeamReach>; ms: number }
   | { status: 'error'; error: UserError }
+  // Stopped by cancelReach; nothing of the run is returned.
+  | { status: 'cancelled' }
 
 export type InsertionOutcome = { status: 'ok'; frames: InsertionFrame[] } | { status: 'error'; error: UserError }
 
@@ -125,6 +127,8 @@ export interface GeometryApi {
   access(seams: SeamCandidate[], onProgress: Progress): Promise<AccessOutcome>
   // Snake-arm reach of every seam from the ports, keyed by seam id. Needs the loaded part: the arm is kept off its surface.
   reach(seams: SeamCandidate[], ports: Port[], arm: ArmParams, onProgress: Progress): Promise<ReachOutcome>
+  // Stops a reach that is running at its next station; it settles as cancelled.
+  cancelReach(): Promise<void>
   // The arm entering follow-the-leader through the port to the approach point of the torch pose at arc length s.
   insertion(seam: SeamCandidate, s: number, port: Port, arm: ArmParams, approachMm: number): Promise<InsertionOutcome>
   // Both read only the plan they are given, so they need no part in the worker.
@@ -193,6 +197,21 @@ function toUserError(error: unknown): UserError {
   }
 }
 
+// A long reach gives way to the worker's messages this often, so a cancel is read between stations.
+const GIVE_WAY_MS = 30
+
+// One turn of the event loop, through a message so that it is not clamped like a timer.
+function giveWay(): Promise<void> {
+  return new Promise((resolve) => {
+    const channel = new MessageChannel()
+    channel.port1.onmessage = () => {
+      channel.port1.close()
+      resolve()
+    }
+    channel.port2.postMessage(null)
+  })
+}
+
 function buildDisplay(model: MeshModel, report: Progress): DisplayData {
   const geometry = new BufferGeometry()
   geometry.setAttribute('position', new BufferAttribute(model.mesh.positions.slice(), 3))
@@ -250,6 +269,9 @@ export function createGeometryApi(): GeometryApi {
     const buffers = [display.positions.buffer, display.indices.buffer, ...display.bvh.roots]
     return transfer(outcome, buffers as Transferable[])
   }
+
+  // A running reach checks this between stations; cancelReach moves it on.
+  let reachRun = 0
 
   const snapContextFor = (model: MeshModel) => buildSnapContext(model, computeFaceData(model.mesh), () => wholeMesh(model).bvh)
 
@@ -430,14 +452,29 @@ export function createGeometryApi(): GeometryApi {
         report('reach', 0)
         const near = proximityFromBvh(wholeMesh(current).bvh)
         const results: Record<string, SeamReach> = {}
-        seams.forEach((seam, i) => {
-          results[seam.id] = seamReach(seam, ports, arm, near)
+        const run = ++reachRun
+        let gaveWay = performance.now()
+        for (let i = 0; i < seams.length; i++) {
+          const steps = seamReachSteps(seams[i]!, ports, arm, near)
+          let next = steps.next()
+          for (; !next.done; next = steps.next()) {
+            report('reach', (i + next.value) / seams.length)
+            if (performance.now() - gaveWay < GIVE_WAY_MS) continue
+            await giveWay()
+            gaveWay = performance.now()
+            if (run !== reachRun) return { status: 'cancelled' }
+          }
+          results[seams[i]!.id] = next.value
           report('reach', (i + 1) / seams.length)
-        })
+        }
         return { status: 'ok', results, ms: performance.now() - start }
       } catch (error) {
         return { status: 'error', error: toUserError(error) }
       }
+    },
+
+    async cancelReach() {
+      reachRun++
     },
 
     async insertion(seam, s, port, arm, approachMm) {

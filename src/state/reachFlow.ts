@@ -22,7 +22,7 @@ export function reachTargets(state: AppState): SeamCandidate[] {
   return seams.filter((seam) => accessFor(state, seam)?.class === 'snake')
 }
 
-// Measured one seam per worker call, so Cancel takes effect after the seam in flight instead of after the whole set.
+// Measured one seam per worker call, so each result is kept as it comes; Cancel also stops the seam in flight.
 export async function runReach(client: GeometryClient): Promise<void> {
   const state = useStore.getState()
   if (state.ports.length === 0) {
@@ -54,7 +54,7 @@ export async function runReach(client: GeometryClient): Promise<void> {
   for (let i = 0; i < targets.length; i++) {
     const seam = targets[i]!
     const outcome = await attempt(() => client.reach([seam], ports, arm, () => {}))
-    if (mine !== reachRequest) return
+    if (mine !== reachRequest || outcome.status === 'cancelled') return
     const now = useStore.getState()
     if (outcome.status === 'error') {
       now.setReachBusy(false)
@@ -78,11 +78,12 @@ export async function runReach(client: GeometryClient): Promise<void> {
   done.setInfo(`Reach measured for ${plural(targets.length, 'seam')} in ${((performance.now() - started) / 1000).toFixed(1)} s.`)
 }
 
-// Stops the run after the seam in flight. Seams already measured keep their result.
-export function cancelReach(): void {
+// Stops the run, the seam in flight at its next station. Seams already measured keep their result.
+export function cancelReach(client: GeometryClient): void {
   const state = useStore.getState()
   if (!state.reachBusy) return
   reachRequest++
+  void client.cancelReach()
   const progress = state.reachProgress
   state.setReachBusy(false)
   state.setReachProgress(null)

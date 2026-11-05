@@ -196,7 +196,7 @@ function ReachSection() {
           </div>
           <div className="flex items-center justify-between">
             <span className="num text-ink-1">{`Measured ${progress.done} of ${progress.total} ${progress.total === 1 ? 'seam' : 'seams'}`}</span>
-            <Button onClick={cancelReach}>Cancel</Button>
+            <Button onClick={() => cancelReach(getGeometryClient())}>Cancel</Button>
           </div>
         </div>
       )}

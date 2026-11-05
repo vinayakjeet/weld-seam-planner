@@ -46,6 +46,30 @@ describe('reach on the tank', () => {
     expect(outcome.results[x746.id]!.coverage).toBeGreaterThan(0)
   }, 120_000)
 
+  it('stops within a station or two of a cancel instead of finishing the seam in flight, then runs again', async () => {
+    const { api, snake } = await loadedTank()
+    const longest = [...snake].sort((a, b) => b.lengthMm - a.lengthMm).slice(0, 4)
+    const started = performance.now()
+    const running = api.reach(longest, [P1], DEFAULT_ARM, () => {})
+    await new Promise((r) => setTimeout(r, 200))
+    const asked = performance.now()
+    await api.cancelReach()
+    const outcome = await running
+    expect(outcome.status).toBe('cancelled')
+    expect(performance.now() - asked).toBeLessThan(600)
+    expect(asked - started).toBeLessThan(2000)
+    const again = await api.reach(longest.slice(0, 1), [P1], DEFAULT_ARM, () => {})
+    expect(again.status).toBe('ok')
+  }, 120_000)
+
+  it('reports progress within a seam, so one long seam keeps the watchdog fed', async () => {
+    const { api, snake } = await loadedTank()
+    const longest = [...snake].sort((a, b) => b.lengthMm - a.lengthMm)[0]!
+    const fractions: number[] = []
+    await api.reach([longest], [P1], DEFAULT_ARM, (_, fraction) => void fractions.push(fraction))
+    expect(fractions.filter((f) => f > 0 && f < 1).length).toBeGreaterThan(2)
+  }, 120_000)
+
   it('refuses to run without a port, saying what, why and what to do', async () => {
     const { api, snake } = await loadedTank()
     const outcome = await api.reach(snake, [], DEFAULT_ARM, () => {})

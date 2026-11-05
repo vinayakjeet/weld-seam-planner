@@ -122,18 +122,21 @@ describe('runReach', () => {
     expect(reachFor(state(), seams[0]!)?.coverage).toBe(0.9)
   })
 
-  it('stops after the seam in flight on cancel, keeps what was measured and goes idle', async () => {
+  it('stops the seam in flight on cancel, keeps what was measured and goes idle', async () => {
     const seams = loadSnakeSeams()
     const gates = seams.map(() => deferred<ReachOutcome>())
     let call = 0
-    const run = runReach(fakeClient({ reach: async () => gates[call++]!.promise }))
+    let stops = 0
+    const client = fakeClient({ reach: async () => gates[call++]!.promise, cancelReach: async () => void stops++ })
+    const run = runReach(client)
     await Promise.resolve()
     gates[0]!.resolve(reachAnswer([seams[0]!], 0.8))
     await new Promise((r) => setTimeout(r, 0))
-    cancelReach()
+    cancelReach(client)
+    expect(stops, 'the worker is told to stop the seam in flight').toBe(1)
     expect(state().reachBusy).toBe(false)
     expect(state().reachProgress).toBeNull()
-    gates[1]?.resolve(reachAnswer([seams[1]!], 0.3))
+    gates[1]?.resolve({ status: 'cancelled' })
     await run
     expect(call).toBe(2)
     expect(reachFor(state(), seams[0]!)?.coverage).toBe(0.8)

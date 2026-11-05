@@ -43,6 +43,7 @@ function harness() {
       torchPoses: (seam, params) => real.torchPoses(seam, params),
       access: (seams, onProgress) => real.access(seams, onProgress),
       reach: (seams, ports, arm, onProgress) => real.reach(seams, ports, arm, onProgress),
+      cancelReach: () => real.cancelReach(),
       insertion: (seam, s, port, arm, approachMm) => real.insertion(seam, s, port, arm, approachMm),
       preflight: (plan) => real.preflight(plan),
       planTiming: (plan) => real.planTiming(plan),
