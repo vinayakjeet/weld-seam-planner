@@ -121,8 +121,7 @@ describe('linkLadder', () => {
 
 describe('solveArm', () => {
   const goal = { wrist: [1300, 0, 0] as Vec3, toolZ: [1, 0, 0] as Vec3 }
-  // 60 mm tall: the 9 link chain has 50 mm of slack, which buckles about 160 mm, so a 100 mm wall plus the 50 mm radius
-  // leaves 9 mm of room and the solver does not find it (debt.md).
+  // 60 mm tall: the 9 link chain has 50 mm of slack, which buckles about 160 mm.
   const wall = boxProximity([600, -10000, -10000], [610, 60, 10000])
 
   it('solves free space in one iteration', () => {
@@ -141,6 +140,25 @@ describe('solveArm', () => {
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(armContacts(result.chain, DEFAULT_ARM, wall, RADIUS)).toEqual([])
+    for (const bend of bendAngles(result.chain, [1, 0, 0])) expect(bend).toBeLessThanOrEqual(DEFAULT_ARM.maxBendDeg + 1e-6)
+    expect(result.tipErrorMm).toBeLessThan(TIP_TOLERANCE_MM)
+    expect(result.axisErrorDeg).toBeLessThan(AXIS_TOLERANCE_DEG)
+  })
+
+  // The pushes bend the slack into an arch that peaks midway along the chord, so a wall away from the middle or taller
+  // than the arch was cleared only by luck (a 100 mm wall at x 600 was, at x 605 it was not). A chain peaked over the
+  // wall clears these; 100 mm walls near the port or the wrist are out of reach at 18 degrees per link.
+  it.each([
+    [400, 100],
+    [605, 100],
+    [605, 150],
+    [800, 100],
+  ])('goes over a wall at x %i that is %i mm tall by peaking the chain over it', (x, height) => {
+    const tall = boxProximity([x, -10000, -10000], [x + 10, height, 10000])
+    const result = solveArm(portX(), goal, DEFAULT_ARM, tall)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(armContacts(result.chain, DEFAULT_ARM, tall, RADIUS)).toEqual([])
     for (const bend of bendAngles(result.chain, [1, 0, 0])) expect(bend).toBeLessThanOrEqual(DEFAULT_ARM.maxBendDeg + 1e-6)
     expect(result.tipErrorMm).toBeLessThan(TIP_TOLERANCE_MM)
     expect(result.axisErrorDeg).toBeLessThan(AXIS_TOLERANCE_DEG)

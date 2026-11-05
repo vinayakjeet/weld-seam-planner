@@ -159,9 +159,80 @@ function pushOut(chain: ArmChain, contacts: Contact[], axis: Vec3, near: Proximi
   return { joints: out }
 }
 
+// Directions around the chord tried for the peak, besides the push direction of the contact.
+const PEAK_DIRECTIONS = 8
+
+// A start that spends all the slack of the chain in one rounded peak over the deepest contact. Pushed links buckle the
+// slack into an arch that peaks midway between the straight part and the wrist, so a wall away from the middle, or
+// just taller than the arch, stays in the way; a chain that peaks over the wall gets the most height where the wall
+// is. The rise and the fall are each half a sine squared wave, flat at both ends and at the top, and the peak goes the
+// way where its top has the most room. Null when the chain has no slack.
+export function peakedStart(port: Port, goal: WristGoal, arm: ArmParams, links: number, chain: ArmChain, contact: Contact, near: Proximity, radiusMm: number): ArmChain | null {
+  const L = arm.linkLengthMm
+  const { joints } = chain
+  const p0 = joints[1]!
+  const q = sub(goal.wrist, scale(normalize(goal.toolZ), L))
+  const chord = sub(q, p0)
+  const span = length(chord)
+  const need = (links - 1) * L
+  if (links < 2 || span < 1e-6 || span >= need) return null
+  const dir = scale(chord, 1 / span)
+  const t = Math.min(Math.max(dot(sub(contact.sample, p0), dir) / span, 0.1), 0.9)
+
+  const bump = (f: number) => (f <= t ? Math.sin((Math.PI * f) / (2 * t)) ** 2 : Math.sin((Math.PI * (1 - f)) / (2 * (1 - t))) ** 2)
+  const path = (up: Vec3, h: number): Vec3[] => Array.from({ length: 513 }, (_, i) => add(add(p0, scale(dir, (i / 512) * span)), scale(up, h * bump(i / 512))))
+  const pathLength = (points: Vec3[]) => points.reduce((total, p, i) => (i === 0 ? 0 : total + length(sub(p, points[i - 1]!))), 0)
+  const across = (v: Vec3): Vec3 | null => {
+    const w = sub(v, scale(dir, dot(v, dir)))
+    return length(w) < 1e-6 ? null : normalize(w)
+  }
+  // The height is the same whichever way the peak goes, so it is found once.
+  const side = across(Math.abs(dir[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0])!
+  let lo = 0
+  let hi = need
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2
+    if (pathLength(path(side, mid)) < need) lo = mid
+    else hi = mid
+  }
+  const height = (lo + hi) / 2
+
+  const along = normalize(sub(joints[contact.link + 1] ?? q, joints[contact.link]!))
+  const pushed = across(escapeDirection(contact, length(along) > 0 ? along : dir, near, radiusMm))
+  const side2 = cross(dir, side)
+  const choices = [...(pushed ? [pushed] : []), ...Array.from({ length: PEAK_DIRECTIONS }, (_, k) => {
+    const a = (2 * Math.PI * k) / PEAK_DIRECTIONS
+    return add(scale(side, Math.cos(a)), scale(side2, Math.sin(a)))
+  })]
+  const top = add(p0, scale(dir, t * span))
+  const room = (up: Vec3) => near(add(top, scale(up, height)), height)?.distanceMm ?? height
+  let up = choices[0]!
+  let best = room(up)
+  for (const choice of choices.slice(1)) {
+    const r = room(choice)
+    if (r > best + 1e-6) {
+      up = choice
+      best = r
+    }
+  }
+
+  const dense = path(up, height)
+  const out: Vec3[] = [port.position, p0]
+  let cursor = 0
+  for (let k = 2; k <= links; k++) {
+    const from = out[k - 1]!
+    while (cursor < dense.length - 1 && length(sub(dense[cursor]!, from)) < L) cursor++
+    const toward = sub(dense[cursor]!, from)
+    out.push(length(toward) > 0 ? add(from, scale(normalize(toward), L)) : dense[cursor]!)
+  }
+  out.push(goal.wrist)
+  return { joints: out }
+}
+
 // Wrist target solved with FABRIK, then pushed clear of the part: up to PUSH_ITERATIONS rounds of FABRIK from the
 // current chain and a push of every link in contact, for each active link count of the ladder. The first rung is the
 // start chain's own link count when a start is given, so a warm start from the neighbouring station is tried first.
+// A rung whose pushes end in contact is tried once more from a chain peaked over its deepest contact.
 export function solveArm(port: Port, goal: WristGoal, arm: ArmParams, near: Proximity, start?: ArmChain): ArmSolution {
   if (arm.diameterMm > port.diameterMm) return { ok: false, reason: 'port-too-small', chain: null, iterations: 0 }
 
@@ -180,35 +251,48 @@ export function solveArm(port: Port, goal: WristGoal, arm: ArmParams, near: Prox
 
   let iterations = 0
   let last: ArmSolution = { ok: false, reason: 'no-convergence', chain: null, iterations: 0 }
-  for (const { links, warm } of rungs) {
-    let chain = warm ? start : undefined
+  // Rounds of FABRIK and push from one chain; the deepest contact of the last round is kept for a peaked retry.
+  const rounds = (links: number, from: ArmChain | undefined): { solution: ArmSolution | null; deepest: Contact | null; bad: boolean } => {
+    let chain = from
     let bestDepth = Infinity
     let stale = 0
+    let deepest: Contact | null = null
     for (let round = 0; round < PUSH_ITERATIONS; round++) {
       iterations++
       const solved = fabrik(port, goal, arm, links, chain)
       const current = solved.chain
-      if (current === null) return { ok: false, reason: solved.ok ? 'no-convergence' : solved.reason, chain: null, iterations }
+      if (current === null) return { solution: { ok: false, reason: solved.ok ? 'no-convergence' : solved.reason, chain: null, iterations }, deepest: null, bad: true }
 
       // A miss of more than a link is the bend limit, not the part: pushing joints away from the surface cannot fix it.
       if (!solved.ok && solved.tipErrorMm > arm.linkLengthMm) {
         last = { ok: false, reason: 'no-convergence', chain: current, iterations }
-        break
+        return { solution: null, deepest: null, bad: false }
       }
       const contacts = armContacts(current, arm, near, radius)
       if (contacts.length === 0) {
-        if (solved.ok) return { ok: true, chain: current, tipErrorMm: solved.tipErrorMm, axisErrorDeg: solved.axisErrorDeg, iterations }
+        if (solved.ok) return { solution: { ok: true, chain: current, tipErrorMm: solved.tipErrorMm, axisErrorDeg: solved.axisErrorDeg, iterations }, deepest: null, bad: false }
         last = { ok: false, reason: 'no-convergence', chain: current, iterations }
-        break
+        return { solution: null, deepest: null, bad: false }
       }
       last = { ok: false, reason: 'collision', chain: current, iterations }
-      const deepest = Math.max(...contacts.map((c) => c.depthMm))
-      if (deepest < bestDepth - 0.5) {
-        bestDepth = deepest
+      deepest = contacts.reduce((a, b) => (b.depthMm > a.depthMm ? b : a))
+      if (deepest.depthMm < bestDepth - 0.5) {
+        bestDepth = deepest.depthMm
         stale = 0
       } else if (++stale >= PUSH_STALE_ROUNDS) break
       chain = pushOut(current, contacts, axis, near, radius)
     }
+    return { solution: null, deepest, bad: false }
+  }
+
+  for (const { links, warm } of rungs) {
+    const first = rounds(links, warm ? start : undefined)
+    if (first.bad || first.solution) return first.solution!
+    if (!first.deepest || !last.chain) continue
+    const peaked = peakedStart(port, goal, arm, links, last.chain, first.deepest, near, radius)
+    if (!peaked) continue
+    const second = rounds(links, peaked)
+    if (second.bad || second.solution) return second.solution!
   }
   return { ...last, iterations }
 }
