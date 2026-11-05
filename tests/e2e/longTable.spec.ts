@@ -78,10 +78,11 @@ test('a long sequence list draws only the rows in view, follows a row moved by k
   await body.evaluate((el) => {
     el.scrollTop = 0
   })
-  const first = rows.first()
-  const dragged = (await first.getAttribute('data-seam-id'))!
+  // The list draws the rows for the new scroll position on the scroll event, so wait for the top row before taking it.
+  await expect(rows.first()).toHaveAttribute('aria-rowindex', '2')
+  const dragged = (await rows.first().getAttribute('data-seam-id'))!
   const transfer = await page.evaluateHandle(() => new DataTransfer())
-  await first.dispatchEvent('dragstart', { dataTransfer: transfer })
+  await table.locator(`[data-seam-id="${dragged}"]`).dispatchEvent('dragstart', { dataTransfer: transfer })
   await body.evaluate((el) => {
     el.scrollTop = el.scrollHeight
   })
