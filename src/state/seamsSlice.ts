@@ -181,7 +181,7 @@ export const createSeamsSlice: StateCreator<AppState, [], [], SeamsSlice> = (set
     set((state) => {
       const statusById = { ...state.statusById }
       let changed = false
-      for (const seam of visibleSeams(selectAllSeams(state), state.showCorners)) {
+      for (const seam of visibleSeams(selectAllSeams(state), state.showCorners, state.statusById)) {
         if (seam.confidence >= minConfidence && statusById[seam.id] !== 'accepted') {
           statusById[seam.id] = 'accepted'
           changed = true
@@ -329,7 +329,7 @@ export const createSeamsSlice: StateCreator<AppState, [], [], SeamsSlice> = (set
   setShowCorners: (showCorners) =>
     set((state) => {
       if (state.showCorners === showCorners) return state
-      const hiddenNow = (id: string | null) => !showCorners && state.seams.some((s) => s.id === id && s.hidden)
+      const hiddenNow = (id: string | null) => !showCorners && id !== null && state.statusById[id] !== 'accepted' && state.seams.some((s) => s.id === id && s.hidden)
       return {
         showCorners,
         selectedId: hiddenNow(state.selectedId) ? null : state.selectedId,
@@ -352,7 +352,7 @@ export const createSeamsSlice: StateCreator<AppState, [], [], SeamsSlice> = (set
         const selectedId = state.selectedId === id ? (selectedIds[selectedIds.length - 1] ?? null) : state.selectedId
         return { selectedId, selectedIds, rangeAnchor: selectedId }
       }
-      const order = visibleSeams(selectAllSeams(state), state.showCorners).map((seam) => seam.id)
+      const order = visibleSeams(selectAllSeams(state), state.showCorners, state.statusById).map((seam) => seam.id)
       const from = state.rangeAnchor === null ? -1 : order.indexOf(state.rangeAnchor)
       const to = order.indexOf(id)
       if (from < 0 || to < 0) return only(id)

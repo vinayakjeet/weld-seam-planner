@@ -58,6 +58,22 @@ describe('visibleSeams', () => {
     const all = [seam('a'), seam('b')]
     expect(visibleSeams(all, false)).toBe(all)
   })
+
+  it('keeps an accepted corner while corners are switched off, since it is part of the plan', () => {
+    expect(visibleSeams(seams, false, { c: 'accepted' }).map((s) => s.id)).toEqual(['a', 'c', 'b'])
+    expect(visibleSeams(seams, false, { c: 'rejected' }).map((s) => s.id)).toEqual(['a', 'b'])
+  })
+})
+
+describe('selectPlan with an accepted corner', () => {
+  beforeEach(() => resetStore())
+
+  it('keeps the corner in the plan when corners are switched off again', () => {
+    useStore.setState({ part: partInfo(), seams: [seam('a'), corner('k', 0.9, 200)], showCorners: true })
+    useStore.getState().setStatus(['a', 'k'], 'accepted')
+    useStore.getState().setShowCorners(false)
+    expect(selectPlan(useStore.getState()).seams.map((p) => p.seam.id).sort()).toEqual(['a', 'k'])
+  })
 })
 
 describe('selectStats with corner candidates', () => {
@@ -72,9 +88,9 @@ describe('selectStats with corner candidates', () => {
     expect(stats).toMatchObject({ candidates: 1, accepted: 1, acceptedLengthMm: 100 })
   })
 
-  it('does not count an accepted corner while it is hidden, and does not call it hidden by the angle', () => {
+  it('counts an accepted corner while corners are hidden, because it stays in the plan, and does not call it hidden by the angle', () => {
     const stats = selectStats({ part: null, seams, statusById: { c: 'accepted' }, showCorners: false })
-    expect(stats).toMatchObject({ accepted: 0, acceptedLengthMm: 0, hiddenAccepted: 0 })
+    expect(stats).toMatchObject({ accepted: 1, acceptedLengthMm: 100, hiddenAccepted: 0 })
   })
 })
 
@@ -117,9 +133,9 @@ describe('selectPlan', () => {
     })
   }
 
-  it('holds only accepted, visible, non-superseded seams in table order', () => {
+  it('holds only accepted, non-superseded seams in table order, an accepted corner with corners on or off', () => {
     load()
-    expect(selectPlan(useStore.getState()).seams.map((p) => p.seam.id)).toEqual(['a', 'c', 'm'])
+    expect(selectPlan(useStore.getState()).seams.map((p) => p.seam.id)).toEqual(['a', 'h', 'c', 'm'])
     useStore.setState({ showCorners: true })
     expect(selectPlan(useStore.getState()).seams.map((p) => p.seam.id)).toEqual(['a', 'h', 'c', 'm'])
   })
@@ -133,7 +149,8 @@ describe('selectPlan', () => {
       overridesById: { a: { travelSpeedMmS: 4 } },
       legById: { a: 4.5 },
     })
-    const [first, second] = selectPlan(useStore.getState()).seams
+    const [first, , second] = selectPlan(useStore.getState()).seams
+    expect(second!.seam.id).toBe('c')
     expect(first!.seam.jointType).toBe('lap')
     expect(first!.seam.thicknessMm).toEqual([9, null])
     expect(first).toMatchObject({ procedureId: 'WPS-GTAW', overrides: { travelSpeedMmS: 4 }, legMm: 4.5, access: null })

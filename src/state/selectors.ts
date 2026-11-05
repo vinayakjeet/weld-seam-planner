@@ -44,8 +44,9 @@ export function selectAllSeams(state: Pick<AppState, 'seams' | 'manualSeams' | '
 }
 
 // Corner candidates are detected but stay out of the list, the counts and accept all until the user shows them.
-export function visibleSeams(seams: SeamCandidate[], showCorners: boolean): SeamCandidate[] {
-  return showCorners || !seams.some((seam) => seam.hidden) ? seams : seams.filter((seam) => !seam.hidden)
+// An accepted corner stays visible with corners switched off: it is in the plan, and a plan seam is never out of view.
+export function visibleSeams(seams: SeamCandidate[], showCorners: boolean, statusById: AppState['statusById'] = {}): SeamCandidate[] {
+  return showCorners || !seams.some((seam) => seam.hidden) ? seams : seams.filter((seam) => !seam.hidden || statusById[seam.id] === 'accepted')
 }
 
 // Counts only the visible seams in the current detection result. Accepted ids that the current settings no longer
@@ -60,8 +61,8 @@ export function selectStats(
   const present = new Set<string>(superseded)
   for (const seam of selectAllSeams({ seams: state.seams, manualSeams: state.manualSeams ?? [], supersededIds: superseded })) {
     present.add(seam.id)
-    if (seam.hidden && !state.showCorners) continue
     const status = state.statusById[seam.id]
+    if (seam.hidden && !state.showCorners && status !== 'accepted') continue
     if (status === 'accepted') {
       accepted++
       acceptedLengthMm += seam.lengthMm
@@ -151,7 +152,7 @@ export function selectPlan(state: AppState): Plan {
     state.detectSettings.creaseAngleDeg, state.jobSettings, state.weldTolerance,
   ]
   if (cachedPlan && cachedPlan.deps.every((d, i) => d === deps[i])) return cachedPlan.plan
-  const seams = visibleSeams(selectAllSeams(state), state.showCorners)
+  const seams = visibleSeams(selectAllSeams(state), state.showCorners, state.statusById)
     .filter((seam) => state.statusById[seam.id] === 'accepted')
     .map((seam) => plannedSeam(state, seam))
   const plan: Plan = {
