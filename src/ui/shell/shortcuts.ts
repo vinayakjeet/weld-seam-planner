@@ -8,6 +8,9 @@ export type Shortcut =
   | 'remove'
   | 'play'
   | 'xray'
+  | 'accept'
+  | 'reject'
+  | 'export'
   // Keys of the draw tool; they only do something while a tool is armed.
   | 'finish'
   | 'cancel'
@@ -39,6 +42,8 @@ function isTextEntry(target: KeyEventLike['target']): boolean {
 
 const LETTER_KEYS: Record<string, Shortcut | undefined> = { f: 'fit', d: 'draw', s: 'split', r: 'reverse', x: 'xray' }
 
+// Shift+A rejects. A capital A with caps lock on arrives without the shift flag and still accepts.
+
 // Enter on a focused button or link activates it; taking the key would leave the button dead.
 function isActivatable(target: KeyEventLike['target']): boolean {
   const tag = target?.tagName?.toUpperCase()
@@ -50,11 +55,13 @@ export function shortcutFor(event: KeyEventLike): Shortcut | null {
   const key = event.key.toLowerCase()
   const modifier = event.ctrlKey || event.metaKey
   if (key === 'z' && modifier) return event.shiftKey ? 'redo' : 'undo'
+  if (key === 'e' && modifier) return event.shiftKey ? null : 'export'
   // Ctrl+R reloads and Ctrl+D bookmarks, so the tool keys never take a modifier. Shift is allowed for caps lock.
   if (modifier) return null
   // A digit jumps to that step; the question mark opens the sheet. Both are read before the generic shift rule.
   if (/^[1-6]$/.test(key)) return `step${key}` as StepShortcut
   if (key === '?') return 'help'
+  if (key === 'a') return event.shiftKey ? 'reject' : 'accept'
   const letter = LETTER_KEYS[key]
   if (letter) return letter
   if (key === 'delete') return event.shiftKey ? null : 'remove'
@@ -82,7 +89,7 @@ export interface ShortcutHelpRow {
   // Alternative ways to press it, written as a person reads them: "Ctrl+Z", "Space", "?".
   keys: string[]
   label: string
-  group: 'View' | 'Steps' | 'Tools' | 'Playback' | 'History'
+  group: 'View' | 'Steps' | 'Tools' | 'Playback' | 'File' | 'History'
 }
 
 // The only source for the sheet. The step rows are named from the stepper where the sheet is drawn.
@@ -96,6 +103,8 @@ export const SHORTCUT_HELP: ReadonlyArray<ShortcutHelpRow> = [
   { id: 'step4', keys: ['4'], label: 'Go to step 4', group: 'Steps' },
   { id: 'step5', keys: ['5'], label: 'Go to step 5', group: 'Steps' },
   { id: 'step6', keys: ['6'], label: 'Go to step 6', group: 'Steps' },
+  { id: 'accept', keys: ['A'], label: 'Accept the selected seams', group: 'Tools' },
+  { id: 'reject', keys: ['Shift+A'], label: 'Reject the selected seams', group: 'Tools' },
   { id: 'draw', keys: ['D'], label: 'Draw a seam', group: 'Tools' },
   { id: 'split', keys: ['S'], label: 'Split the selected seam', group: 'Tools' },
   { id: 'reverse', keys: ['R'], label: 'Reverse the selected seam', group: 'Tools' },
@@ -104,6 +113,7 @@ export const SHORTCUT_HELP: ReadonlyArray<ShortcutHelpRow> = [
   { id: 'undoPoint', keys: ['Backspace'], label: 'Remove the last point', group: 'Tools' },
   { id: 'cancel', keys: ['Escape'], label: 'Cancel the tool', group: 'Tools' },
   { id: 'play', keys: ['Space'], label: 'Play or pause the timeline', group: 'Playback' },
+  { id: 'export', keys: ['Ctrl+E', 'Cmd+E'], label: 'Export the job file', group: 'File' },
   { id: 'undo', keys: ['Ctrl+Z', 'Cmd+Z'], label: 'Undo', group: 'History' },
   { id: 'redo', keys: ['Ctrl+Shift+Z', 'Cmd+Shift+Z'], label: 'Redo', group: 'History' },
 ]

@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { chooseTool, redoEdit, removeSelected, reverseSelected, toolEvent, undoEdit } from '../../state/flows'
+import { acceptSelected, chooseTool, exportPlan, redoEdit, rejectSelected, removeSelected, reverseSelected, toolEvent, undoEdit } from '../../state/flows'
 import { STEPS, useStore } from '../../state/store'
 import { getGeometryClient } from '../../worker/client'
 import { shortcutFor, shortcutGate, stepForShortcut, type StepShortcut } from './shortcuts'
@@ -42,13 +42,17 @@ export function useShortcuts(fit: () => void): void {
         toggle()
         return
       }
-      if (!toolKey && !part && shortcut !== 'fit' && shortcut !== 'undo' && shortcut !== 'redo') return
+      // Export is let through without a part: it tells the user why there is nothing to write.
+      if (!toolKey && !part && shortcut !== 'fit' && shortcut !== 'undo' && shortcut !== 'redo' && shortcut !== 'export') return
       event.preventDefault()
       const client = getGeometryClient()
       if (shortcut === 'fit') fit()
       else if (shortcut === 'undo') undoEdit()
       else if (shortcut === 'redo') redoEdit()
       else if (shortcut === 'draw' || shortcut === 'split') void chooseTool(shortcut, client)
+      else if (shortcut === 'accept') acceptSelected()
+      else if (shortcut === 'reject') rejectSelected()
+      else if (shortcut === 'export') void exportPlan(client)
       else if (shortcut === 'xray') useStore.getState().toggleXray()
       else if (shortcut === 'reverse') reverseSelected()
       else if (shortcut === 'remove') removeSelected()

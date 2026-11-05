@@ -2,7 +2,7 @@ import { STEPS, useStore } from '../../state/store'
 import { Dialog } from '../kit/Dialog'
 import { SHORTCUT_HELP, type ShortcutHelpRow } from './shortcuts'
 
-const GROUPS: ShortcutHelpRow['group'][] = ['View', 'Steps', 'Tools', 'Playback', 'History']
+const GROUPS: ShortcutHelpRow['group'][] = ['View', 'Steps', 'Tools', 'Playback', 'File', 'History']
 
 function labelOf(row: ShortcutHelpRow): string {
   if (!row.id.startsWith('step')) return row.label

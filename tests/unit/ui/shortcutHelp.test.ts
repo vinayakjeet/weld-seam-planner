@@ -22,7 +22,7 @@ function eventFor(chord: string): KeyEventLike {
 
 const ALL: Shortcut[] = [
   'fit', 'undo', 'redo', 'draw', 'split', 'reverse', 'remove', 'play', 'xray', 'finish', 'cancel', 'undoPoint',
-  'help', 'step1', 'step2', 'step3', 'step4', 'step5', 'step6',
+  'help', 'accept', 'reject', 'export', 'step1', 'step2', 'step3', 'step4', 'step5', 'step6',
 ]
 
 describe('SHORTCUT_HELP', () => {
@@ -37,8 +37,8 @@ describe('SHORTCUT_HELP', () => {
     }
   })
 
-  it('groups the rows under View, Steps, Tools, Playback and History, with a label each', () => {
-    expect(new Set(SHORTCUT_HELP.map((row) => row.group))).toEqual(new Set(['View', 'Steps', 'Tools', 'Playback', 'History']))
+  it('groups the rows under View, Steps, Tools, Playback, File and History, with a label each', () => {
+    expect(new Set(SHORTCUT_HELP.map((row) => row.group))).toEqual(new Set(['View', 'Steps', 'Tools', 'Playback', 'File', 'History']))
     for (const row of SHORTCUT_HELP) expect(row.label.trim().length, row.id).toBeGreaterThan(0)
   })
 
@@ -86,6 +86,31 @@ describe('help and step keys', () => {
 
   it('still works with a slider focused', () => {
     expect(shortcutFor(key('3', {}, { tagName: 'INPUT', type: 'range' }))).toBe('step3')
+  })
+})
+
+describe('accept, reject and export keys', () => {
+  it('maps A to accept and Shift+A to reject', () => {
+    expect(shortcutFor(key('a'))).toBe('accept')
+    expect(shortcutFor(key('A', { shiftKey: true }))).toBe('reject')
+  })
+
+  it('reads a capital A without Shift (caps lock) as accept', () => {
+    expect(shortcutFor(key('A'))).toBe('accept')
+  })
+
+  it('maps Ctrl+E and Cmd+E to export, and leaves the Shift and Alt forms alone', () => {
+    expect(shortcutFor(key('e', { ctrlKey: true }))).toBe('export')
+    expect(shortcutFor(key('e', { metaKey: true }))).toBe('export')
+    expect(shortcutFor(key('e', { ctrlKey: true, shiftKey: true }))).toBeNull()
+    expect(shortcutFor(key('e', { ctrlKey: true, altKey: true }))).toBeNull()
+    expect(shortcutFor(key('e'))).toBeNull()
+  })
+
+  it('does nothing in a text field', () => {
+    const target = { tagName: 'INPUT', type: 'text' }
+    expect(shortcutFor(key('a', {}, target))).toBeNull()
+    expect(shortcutFor(key('e', { ctrlKey: true }, target))).toBeNull()
   })
 })
 

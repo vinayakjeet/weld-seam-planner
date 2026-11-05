@@ -20,6 +20,8 @@ const refusals = [
   needSeamSelected('reverse'),
   needSeamSelected('delete'),
   needSeamSelected('trim'),
+  needSeamSelected('accept'),
+  needSeamSelected('reject'),
   fewPoints(0),
   fewPoints(1),
   missedSeam(),

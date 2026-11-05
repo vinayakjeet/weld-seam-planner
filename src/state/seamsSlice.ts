@@ -38,6 +38,8 @@ export interface SeamsSlice {
   detectBusy: boolean
   toggleAccepted: (id: string) => void
   acceptAbove: (minConfidence: number) => void
+  // The same status for several seams, as one history entry; unknown ids are skipped.
+  setStatus: (ids: string[], status: SeamStatus) => void
   // null, or the detected type, removes the override.
   setType: (id: string, type: JointType | null) => void
   // The same type for several seams, as one history entry.
@@ -180,6 +182,19 @@ export const createSeamsSlice: StateCreator<AppState, [], [], SeamsSlice> = (set
           statusById[seam.id] = 'accepted'
           changed = true
         }
+      }
+      return changed ? { statusById } : state
+    }),
+
+  setStatus: (ids, status) =>
+    set((state) => {
+      const known = new Set(selectAllSeams(state).map((s) => s.id))
+      const statusById = { ...state.statusById }
+      let changed = false
+      for (const id of ids) {
+        if (!known.has(id) || statusById[id] === status) continue
+        statusById[id] = status
+        changed = true
       }
       return changed ? { statusById } : state
     }),

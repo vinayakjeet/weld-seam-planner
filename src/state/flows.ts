@@ -14,6 +14,7 @@ import { jobFilename, rapidFilename, summaryText } from '../ui/shell/exportText'
 import { needSeamSelected, parseTrimInput, type NeedsSeam } from '../ui/panels/manualText'
 import { initialTool, reduceTool, type ToolEffect, type ToolEvent, type ToolName } from '../ui/tools/toolMachine'
 import { accessFor, type AccessEntry } from './accessSlice'
+import type { SeamStatus } from './seamsSlice'
 import { plannedSeam, selectAllSeams, selectPlan } from './selectors'
 import { useStore, type AppState } from './store'
 import { positionFor, type PositionEntry } from './torchSlice'
@@ -401,6 +402,23 @@ function editSelected(action: NeedsSeam, run: (id: string) => ManualError | null
   const error = run(id)
   if (error) setNotice(error)
 }
+
+// A and Shift+A act on the whole selection, not only the primary seam.
+function setSelectionStatus(action: 'accept' | 'reject', status: SeamStatus): void {
+  setNotice(null)
+  const state = useStore.getState()
+  const present = new Set(selectAllSeams(state).map((seam) => seam.id))
+  const ids = state.selectedIds.filter((id) => present.has(id))
+  if (ids.length === 0) {
+    setNotice(needSeamSelected(action))
+    return
+  }
+  state.setStatus(ids, status)
+}
+
+export const acceptSelected = () => setSelectionStatus('accept', 'accepted')
+
+export const rejectSelected = () => setSelectionStatus('reject', 'rejected')
 
 export const reverseSelected = () => editSelected('reverse', (id) => useStore.getState().reverse(id))
 

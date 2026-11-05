@@ -1,7 +1,7 @@
 import type { ManualError } from '../../core/seams/manual'
 import type { ToolState } from '../tools/toolMachine'
 
-export type NeedsSeam = 'split' | 'merge' | 'reverse' | 'delete' | 'trim'
+export type NeedsSeam = 'split' | 'merge' | 'reverse' | 'delete' | 'trim' | 'accept' | 'reject'
 
 const NOTHING_DONE: Record<NeedsSeam, string> = {
   split: 'Nothing was split.',
@@ -9,6 +9,8 @@ const NOTHING_DONE: Record<NeedsSeam, string> = {
   reverse: 'Nothing was reversed.',
   delete: 'Nothing was deleted.',
   trim: 'Nothing was trimmed.',
+  accept: 'Nothing was accepted.',
+  reject: 'Nothing was rejected.',
 }
 
 export function needSeamSelected(action: NeedsSeam): ManualError {

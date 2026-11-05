@@ -76,6 +76,30 @@ describe('accepting seams', () => {
   })
 })
 
+describe('status for a selection', () => {
+  it('accepts every listed seam in one undo step', () => {
+    state().setStatus(['a', 'b'], 'accepted')
+    expect(state().statusById).toEqual({ a: 'accepted', b: 'accepted' })
+    expect(temporal().pastStates).toHaveLength(1)
+    temporal().undo()
+    expect(state().statusById).toEqual({})
+  })
+
+  it('rejects the listed seams, replacing an earlier accept', () => {
+    state().setStatus(['a'], 'accepted')
+    state().setStatus(['a', 'c'], 'rejected')
+    expect(state().statusById).toEqual({ a: 'rejected', c: 'rejected' })
+  })
+
+  it('skips unknown ids and adds no history entry when nothing changes', () => {
+    state().setStatus(['ghost'], 'accepted')
+    state().setStatus([], 'accepted')
+    state().setStatus(['a'], 'accepted')
+    state().setStatus(['a'], 'accepted')
+    expect(temporal().pastStates).toHaveLength(1)
+  })
+})
+
 describe('joint type for a selection', () => {
   it('sets the type of every listed seam in one undo step', () => {
     state().setTypes(['a', 'b'], 'lap')

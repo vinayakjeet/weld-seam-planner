@@ -6,6 +6,7 @@ import type { SeamCandidate } from '../../../src/core/seams/detect'
 import {
   changeGravity,
   chooseTool,
+  acceptSelected,
   chooseUnits,
   DETECT_DEBOUNCE_MS,
   dismissNotice,
@@ -25,6 +26,7 @@ import {
   refreshPoses,
   refreshPositions,
   removeSelected,
+  rejectSelected,
   reverseSelected,
   runDetect,
   scheduleDetect,
@@ -809,6 +811,40 @@ describe('manual tool flows', () => {
       expect(state().notice?.what).toBeTruthy()
       expect(state().tool).toEqual({ tool: 'merge', from: 'a' })
       expect(ids()).toEqual(['a', 'b', 'c'])
+    })
+  })
+
+  describe('accept and reject the selection', () => {
+    it('accepts every selected seam as one undo step', () => {
+      state().select('a')
+      state().select('b', 'toggle')
+      acceptSelected()
+      expect(state().statusById).toEqual({ a: 'accepted', b: 'accepted' })
+      undoEdit()
+      expect(state().statusById).toEqual({})
+    })
+
+    it('rejects the selection, also when it was accepted before', () => {
+      state().select('a')
+      acceptSelected()
+      rejectSelected()
+      expect(state().statusById).toEqual({ a: 'rejected' })
+    })
+
+    it('says what is missing when nothing is selected', () => {
+      for (const act of [acceptSelected, rejectSelected]) {
+        dismissNotice()
+        act()
+        expect(`${state().notice?.what} ${state().notice?.why}`).toMatch(/none is selected/)
+        expect(state().statusById).toEqual({})
+      }
+    })
+
+    it('leaves out a selected seam that no longer exists', () => {
+      state().select('a')
+      state().select('ghost', 'toggle')
+      acceptSelected()
+      expect(state().statusById).toEqual({ a: 'accepted' })
     })
   })
 
