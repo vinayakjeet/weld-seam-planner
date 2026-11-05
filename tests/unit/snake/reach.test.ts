@@ -155,7 +155,8 @@ describe('withReach and reachKey', () => {
 // Measured coverage of the 20 snake seams of tank-with-manhole from P1: [defaults, bend limit 25 degrees], checked to
 // 0.01. Five dropped by one station or so when the capsule check stopped missing edges between its samples (on
 // crease-c568d676 the arm had passed 1.2 and 2.2 mm inside its radius at the top edge of the stiffener at x 1154).
-// Four rose at bend 25 when a rung that ends in contact is retried from a chain peaked over the contact. The id comes from the geometry of the seam; the comment gives where it is.
+// Four rose at bend 25 when a rung that ends in contact is retried from a chain peaked over the contact. With the exact
+// Jacobian in the finish, crease-6ff06dea lost its station at s 420, reached before only after 17 rounds of push and refit. The id comes from the geometry of the seam; the comment gives where it is.
 const TANK_COVERAGE: Record<string, [number, number]> = {
   'crease-14032c92': [0, 0.227], // roof, x 800, y 992
   'crease-4e4e2172': [0.417, 0.619], // floor, x 800, y 8
@@ -165,7 +166,7 @@ const TANK_COVERAGE: Record<string, [number, number]> = {
   'crease-18c63b93': [0, 0.264], // x 8, y 8
   'crease-3f986cb7': [0, 0.264], // x 8, y 992
   'crease-5f8520b8': [0, 0.894], // floor, x 1592
-  'crease-6ff06dea': [0.285, 0.569], // x 1592, y 8
+  'crease-6ff06dea': [0.264, 0.569], // x 1592, y 8
   'crease-9e2a1b9c': [0.894, 0.894], // roof, x 1592 (the plan expected 0)
   'crease-b8841525': [0.325, 0.894], // floor, x 8
   'crease-c568d676': [0.285, 0.569], // x 1592, y 992

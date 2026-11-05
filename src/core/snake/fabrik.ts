@@ -165,70 +165,139 @@ function solveSmall(a: number[][], b: number[]): number[] {
 // bend angles (a 2 vector per joint in the plane across the previous link, plus the depth of the straight part), the
 // residual being the tip error and the axis misalignment as a length. Every trial is projected back onto the bend
 // cones and the depth range, so each accepted chain still obeys the limits, and link lengths hold by construction.
+// The chain as the finish sees it: x = [depth, bx1, by1, bx2, by2, ...], the depth of the straight part and a bend
+// per link as a 2 vector in the plane across the link before it. The residual is the tip error and the axis
+// misalignment as a length.
+export interface ChainModel {
+  port: Vec3
+  // Unit port axis.
+  axis: Vec3
+  linkMm: number
+  links: number
+  wrist: Vec3
+  // Unit tool z.
+  toolZ: Vec3
+}
+
+// Parallel transport of the in-plane basis (a, b) when the heading turns from u to next, by Rodrigues' formula.
+function turnBasis(from: Vec3, to: Vec3, a: Vec3, b: Vec3): [Vec3, Vec3] {
+  const kx = from[1] * to[2] - from[2] * to[1]
+  const ky = from[2] * to[0] - from[0] * to[2]
+  const kz = from[0] * to[1] - from[1] * to[0]
+  const sin = Math.hypot(kx, ky, kz)
+  if (sin < 1e-15) return [a, b]
+  const cos = from[0] * to[0] + from[1] * to[1] + from[2] * to[2]
+  const nx = kx / sin
+  const ny = ky / sin
+  const nz = kz / sin
+  const turn = (v: Vec3): Vec3 => {
+    const along = (nx * v[0] + ny * v[1] + nz * v[2]) * (1 - cos)
+    return [
+      v[0] * cos + (ny * v[2] - nz * v[1]) * sin + nx * along,
+      v[1] * cos + (nz * v[0] - nx * v[2]) * sin + ny * along,
+      v[2] * cos + (nx * v[1] - ny * v[0]) * sin + nz * along,
+    ]
+  }
+  return [turn(a), turn(b)]
+}
+
+// The frame after each link (a, b across it, u along it), so the bends of a chain read the same everywhere.
+function chainFrames(model: ChainModel, x: number[]): Array<{ a: Vec3; b: Vec3; u: Vec3 }> {
+  const out: Array<{ a: Vec3; b: Vec3; u: Vec3 }> = []
+  let u = model.axis
+  let a = anyPerpendicular(model.axis)
+  let b = cross(model.axis, a)
+  for (let k = 0; k < model.links; k++) {
+    const bx = x[1 + 2 * k]!
+    const by = x[2 + 2 * k]!
+    const theta = Math.hypot(bx, by)
+    let next = u
+    if (theta >= 1e-12) {
+      const c = Math.cos(theta)
+      const f = Math.sin(theta) / theta
+      next = [u[0] * c + (a[0] * bx + b[0] * by) * f, u[1] * c + (a[1] * bx + b[1] * by) * f, u[2] * c + (a[2] * bx + b[2] * by) * f]
+      const norm = Math.hypot(next[0], next[1], next[2])
+      next = [next[0] / norm, next[1] / norm, next[2] / norm]
+      ;[a, b] = turnBasis(u, next, a, b)
+    }
+    out.push({ a, b, u: next })
+    u = next
+  }
+  return out
+}
+
+export function chainDirections(model: ChainModel, x: number[]): Vec3[] {
+  return chainFrames(model, x).map((f) => f.u)
+}
+
+export function chainResidual(model: ChainModel, x: number[]): number[] {
+  const u = chainDirections(model, x)
+  let tip = add(model.port, scale(model.axis, x[0]!))
+  for (const v of u) tip = add(tip, scale(v, model.linkMm))
+  const e = sub(tip, model.wrist)
+  const o = scale(sub(u[model.links - 1]!, model.toolZ), model.linkMm)
+  return [e[0], e[1], e[2], o[0], o[1], o[2]]
+}
+
+// The exact derivative of chainResidual. Link k turns its frame by the rotation vector rho = (-by, bx, 0) in the frame
+// before it, so a change of its bend turns the rest of the chain rigidly about the start of the link by the world
+// rotation F_k J_r(rho) d rho, with F_k the frame after the link and J_r the right Jacobian of the rotation group.
+// The tip moves by that rotation crossed with the arm from the link start to the tip, the last link by it crossed with
+// the last link. One pass over the chain, where differences cost a pass per bend.
+export function chainJacobian(model: ChainModel, x: number[]): number[][] {
+  const n = model.links
+  const L = model.linkMm
+  const frames = chainFrames(model, x)
+  const starts: Vec3[] = []
+  let p = add(model.port, scale(model.axis, x[0]!))
+  for (const { u } of frames) {
+    starts.push(p)
+    p = add(p, scale(u, L))
+  }
+  const tip = p
+  const last = frames[n - 1]!.u
+  const jac: number[][] = Array.from({ length: 6 }, () => new Array<number>(2 * n + 1).fill(0))
+  for (let i = 0; i < 3; i++) jac[i]![0] = model.axis[i]!
+  for (let k = 0; k < n; k++) {
+    const bx = x[1 + 2 * k]!
+    const by = x[2 + 2 * k]!
+    const rho: Vec3 = [-by, bx, 0]
+    const theta = Math.hypot(bx, by)
+    const c1 = theta < 1e-6 ? 0.5 - (theta * theta) / 24 : (1 - Math.cos(theta)) / (theta * theta)
+    const c2 = theta < 1e-6 ? 1 / 6 - (theta * theta) / 120 : (theta - Math.sin(theta)) / (theta * theta * theta)
+    const rightJacobian = (d: Vec3): Vec3 => {
+      const once = cross(rho, d)
+      const twice = cross(rho, once)
+      return [d[0] - c1 * once[0] + c2 * twice[0], d[1] - c1 * once[1] + c2 * twice[1], d[2] - c1 * once[2] + c2 * twice[2]]
+    }
+    const { a, b, u } = frames[k]!
+    const arm = sub(tip, starts[k]!)
+    ;([[0, 1, 0], [-1, 0, 0]] as Vec3[]).forEach((d, side) => {
+      const local = rightJacobian(d)
+      const omega: Vec3 = [
+        a[0] * local[0] + b[0] * local[1] + u[0] * local[2],
+        a[1] * local[0] + b[1] * local[1] + u[1] * local[2],
+        a[2] * local[0] + b[2] * local[1] + u[2] * local[2],
+      ]
+      const dTip = cross(omega, arm)
+      const dLast = cross(omega, last)
+      for (let i = 0; i < 3; i++) {
+        jac[i]![1 + 2 * k + side] = dTip[i]!
+        jac[3 + i]![1 + 2 * k + side] = dLast[i]! * L
+      }
+    })
+  }
+  return jac
+}
+
 function polish(joints: Vec3[], port: Port, axis: Vec3, goal: WristGoal, toolZ: Vec3, arm: ArmParams, n: number): Vec3[] {
   const L = arm.linkLengthMm
   const maxRad = (arm.maxBendDeg * Math.PI) / 180
   const e1 = anyPerpendicular(axis)
   const e2 = cross(axis, e1)
-
-  // Parallel transport of the in-plane basis (a, b) when the heading turns from u to next, by Rodrigues' formula.
-  const turnBasis = (from: Vec3, to: Vec3, a: Vec3, b: Vec3): [Vec3, Vec3] => {
-    const kx = from[1] * to[2] - from[2] * to[1]
-    const ky = from[2] * to[0] - from[0] * to[2]
-    const kz = from[0] * to[1] - from[1] * to[0]
-    const sin = Math.hypot(kx, ky, kz)
-    if (sin < 1e-15) return [a, b]
-    const cos = from[0] * to[0] + from[1] * to[1] + from[2] * to[2]
-    const nx = kx / sin
-    const ny = ky / sin
-    const nz = kz / sin
-    const turn = (v: Vec3): Vec3 => {
-      const along = (nx * v[0] + ny * v[1] + nz * v[2]) * (1 - cos)
-      return [
-        v[0] * cos + (ny * v[2] - nz * v[1]) * sin + nx * along,
-        v[1] * cos + (nz * v[0] - nx * v[2]) * sin + ny * along,
-        v[2] * cos + (nx * v[1] - ny * v[0]) * sin + nz * along,
-      ]
-    }
-    return [turn(a), turn(b)]
-  }
-
-  // x = [depth, bx1, by1, bx2, by2, ...]; returns the link directions.
-  const directions = (x: number[]): Vec3[] => {
-    const out: Vec3[] = []
-    let u = axis
-    let a = e1
-    let b = e2
-    for (let k = 0; k < n; k++) {
-      const bx = x[1 + 2 * k]!
-      const by = x[2 + 2 * k]!
-      const theta = Math.hypot(bx, by)
-      let next = u
-      if (theta >= 1e-12) {
-        const c = Math.cos(theta)
-        const f = Math.sin(theta) / theta
-        next = [
-          u[0] * c + (a[0] * bx + b[0] * by) * f,
-          u[1] * c + (a[1] * bx + b[1] * by) * f,
-          u[2] * c + (a[2] * bx + b[2] * by) * f,
-        ]
-        const norm = Math.hypot(next[0], next[1], next[2])
-        next = [next[0] / norm, next[1] / norm, next[2] / norm]
-        ;[a, b] = turnBasis(u, next, a, b)
-      }
-      out.push(next)
-      u = next
-    }
-    return out
-  }
-  const residual = (x: number[]): number[] => {
-    const u = directions(x)
-    let tip = add(port.position, scale(axis, x[0]!))
-    for (const v of u) tip = add(tip, scale(v, L))
-    const e = sub(tip, goal.wrist)
-    const o = scale(sub(u[n - 1]!, toolZ), L)
-    return [e[0], e[1], e[2], o[0], o[1], o[2]]
-  }
+  const model: ChainModel = { port: port.position, axis, linkMm: L, links: n, wrist: goal.wrist, toolZ }
+  const directions = (x: number[]): Vec3[] => chainDirections(model, x)
+  const residual = (x: number[]): number[] => chainResidual(model, x)
   const project = (x: number[]): number[] => {
     const out = [...x]
     out[0] = Math.min(Math.max(out[0]!, 0), arm.insertionMm)
@@ -268,14 +337,7 @@ function polish(joints: Vec3[], port: Port, axis: Vec3, goal: WristGoal, toolZ: 
   let slow = 0
   for (let iteration = 0; iteration < POLISH_ITERATIONS && slow < 4; iteration++) {
     if (length([r[0]!, r[1]!, r[2]!]) < TIP_TOLERANCE_MM / 2 && Math.hypot(r[3]!, r[4]!, r[5]!) / L < ((AXIS_TOLERANCE_DEG / 2) * Math.PI) / 180) break
-    const jac: number[][] = Array.from({ length: 6 }, () => new Array<number>(size).fill(0))
-    for (let j = 0; j < size; j++) {
-      const h = j === 0 ? 1e-3 : 1e-6
-      const bumped = [...x]
-      bumped[j] = bumped[j]! + h
-      const rb = residual(bumped)
-      for (let i = 0; i < 6; i++) jac[i]![j] = (rb[i]! - r[i]!) / h
-    }
+    const jac = chainJacobian(model, x)
     // A joint on its limit may slide along the cone edge or come back in, but not push out: drop the outward direction.
     const gradient = Array.from({ length: size }, (_, j) => jac.reduce((sum, row, i) => sum + row[j]! * r[i]!, 0))
     for (let k = 0; k < n; k++) {
