@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { revealScrollTop, rowWindow } from '../../../src/ui/panels/rowWindow'
+import { revealScrollTop, rowWindow, windowParts } from '../../../src/ui/panels/rowWindow'
 
 const H = 28
 
@@ -68,5 +68,47 @@ describe('revealScrollTop', () => {
 
   it('moves a row that is cut off at the bottom edge fully into view', () => {
     expect(revealScrollTop({ index: 20, scrollTop: 280, viewportHeight: 280 + 10, rowHeight: H })).toBe(21 * H - 290)
+  })
+})
+
+describe('windowParts', () => {
+  const window = (start: number, end: number, count = 1000) => ({ start, end, before: start * H, after: (count - end) * H, windowed: true })
+
+  it('is the window and its two spacers when nothing else must stay drawn', () => {
+    expect(windowParts(window(95, 115), [], 1000, H)).toEqual([
+      { gap: 95 * H },
+      { start: 95, end: 115 },
+      { gap: 885 * H },
+    ])
+  })
+
+  it('keeps a row above or below the window drawn in its place, between spacers', () => {
+    expect(windowParts(window(95, 115), [3, 900], 1000, H)).toEqual([
+      { gap: 3 * H },
+      { start: 3, end: 4 },
+      { gap: 91 * H },
+      { start: 95, end: 115 },
+      { gap: 785 * H },
+      { start: 900, end: 901 },
+      { gap: 99 * H },
+    ])
+  })
+
+  it('merges a kept row that touches the window and ignores one inside it or out of range', () => {
+    expect(windowParts(window(95, 115), [94, 100, -1, 1000], 1000, H)).toEqual([
+      { gap: 94 * H },
+      { start: 94, end: 115 },
+      { gap: 885 * H },
+    ])
+  })
+
+  it('draws every row of a list that is not windowed', () => {
+    expect(windowParts({ start: 0, end: 56, before: 0, after: 0, windowed: false }, [3], 56, H)).toEqual([{ start: 0, end: 56 }])
+  })
+
+  it('always adds up to the height of the whole list', () => {
+    const parts = windowParts(window(400, 430), [0, 12, 999], 1000, H)
+    const height = parts.reduce((sum, part) => sum + ('gap' in part ? part.gap : (part.end - part.start) * H), 0)
+    expect(height).toBe(1000 * H)
   })
 })

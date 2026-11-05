@@ -46,3 +46,29 @@ export function revealScrollTop(input: { index: number; scrollTop: number; viewp
   if (bottom > scrollTop + viewportHeight) return bottom - viewportHeight
   return null
 }
+
+export type WindowPart = { gap: number } | { start: number; end: number }
+
+// The rows to draw and the spacers between them, top to bottom. Rows in keep stay drawn in their place even out of the
+// window: a dragged row has to exist until the drag ends, and a row moved by key has to exist to take the focus.
+export function windowParts(window: RowWindow, keep: readonly number[], count: number, rowHeight: number): WindowPart[] {
+  if (!window.windowed) return [{ start: window.start, end: window.end }]
+  const ranges: Array<[number, number]> = [[window.start, window.end]]
+  for (const k of keep) if (Number.isInteger(k) && k >= 0 && k < count) ranges.push([k, k + 1])
+  ranges.sort((a, b) => a[0] - b[0])
+  const merged: Array<[number, number]> = []
+  for (const [a, b] of ranges) {
+    const last = merged[merged.length - 1]
+    if (last && a <= last[1]) last[1] = Math.max(last[1], b)
+    else merged.push([a, b])
+  }
+  const parts: WindowPart[] = []
+  let at = 0
+  for (const [start, end] of merged) {
+    if (start > at) parts.push({ gap: (start - at) * rowHeight })
+    if (end > start) parts.push({ start, end })
+    at = end
+  }
+  if (count > at) parts.push({ gap: (count - at) * rowHeight })
+  return parts
+}

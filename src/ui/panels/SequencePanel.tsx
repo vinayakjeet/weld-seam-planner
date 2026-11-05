@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { SequenceStrategy } from '../../core/sequence/types'
 import { runOptimise } from '../../state/sequenceFlow'
 import { selectPlan, selectSequenceOrder } from '../../state/selectors'
@@ -10,7 +10,8 @@ import { cleaningField, cycleField } from '../shell/summary'
 import { NumberField } from '../kit/NumberField'
 import { cleaningEveryText, parseCleaningEvery, parseCleaningTime } from './cleaningFields'
 import { NO_ACCEPTED_TEXT } from './NoAcceptedSeams'
-import { sequenceRows } from './sequenceRows'
+import { revealScrollTop, ROW_HEIGHT, rowWindow, windowParts } from './rowWindow'
+import { sequenceRows, type SequenceRow } from './sequenceRows'
 
 type Choice = Exclude<SequenceStrategy, 'manual'>
 
@@ -180,19 +181,130 @@ function SequenceList() {
   const rows = useMemo(() => sequenceRows(order, new Map(seams.map((s) => [s.id, s]))), [order, seams])
   const [dragFrom, setDragFrom] = useState<number | null>(null)
   const [over, setOver] = useState<number | null>(null)
+  // A row moved with Alt and an arrow, which takes the focus once it is drawn.
+  const [refocus, setRefocus] = useState<string | null>(null)
   const body = useRef<HTMLDivElement>(null)
-  const refocus = useRef<string | null>(null)
+  const [scrollTop, setScrollTop] = useState(0)
+  const [viewportHeight, setViewportHeight] = useState(0)
+  const slice = rowWindow({ count: rows.length, scrollTop, viewportHeight, rowHeight: ROW_HEIGHT })
+  const refocusIndex = refocus === null ? -1 : rows.findIndex((row) => row.id === refocus)
+  // The dragged row stays drawn while the list scrolls under the drag, or the browser would end the drag.
+  const parts = windowParts(slice, [dragFrom ?? -1, refocusIndex], rows.length, ROW_HEIGHT)
+  const empty = rows.length === 0
 
-  // A row moved with the keyboard keeps the focus, which the browser may drop when it moves the element.
+  useLayoutEffect(() => {
+    const el = body.current
+    if (!el) return
+    setViewportHeight(el.clientHeight)
+    const observer = new ResizeObserver(() => setViewportHeight(el.clientHeight))
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [empty])
+
+  // A row moved with the keyboard keeps the focus, which the browser may drop when it moves the element. In a long
+  // list the row may have moved past the edge of the box, so the list is scrolled to it first.
   useEffect(() => {
-    if (refocus.current === null) return
-    body.current?.querySelector<HTMLElement>(`[data-seam-id="${CSS.escape(refocus.current)}"]`)?.focus()
-    refocus.current = null
-  }, [rows])
+    const el = body.current
+    if (refocus === null || !el) return
+    if (refocusIndex !== -1) {
+      const to = revealScrollTop({ index: refocusIndex, scrollTop: el.scrollTop, viewportHeight: el.clientHeight, rowHeight: ROW_HEIGHT })
+      if (to !== null) {
+        el.scrollTop = to
+        // The scroll event comes a frame later; the window follows now, before the row is let go.
+        setScrollTop(el.scrollTop)
+      }
+    }
+    el.querySelector<HTMLElement>(`[data-seam-id="${CSS.escape(refocus)}"]`)?.focus({ preventScroll: true })
+    setRefocus(null)
+  }, [refocus, refocusIndex])
 
   const move = (from: number, to: number) => {
     setNotice(reorder(from, to))
   }
+
+  const renderRow = (row: SequenceRow, i: number) => (
+      <div
+        key={row.id}
+        role="row"
+        aria-rowindex={slice.windowed ? i + 2 : undefined}
+        tabIndex={0}
+        draggable={!row.locked}
+        aria-selected={selectedIds.includes(row.id)}
+        data-seam-id={row.id}
+        data-locked={row.locked}
+        onClick={(e) => select(row.id, e.ctrlKey || e.metaKey ? 'toggle' : e.shiftKey ? 'range' : 'replace')}
+        onKeyDown={(e) => {
+          if (e.target !== e.currentTarget) return
+          if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+            e.preventDefault()
+            setRefocus(row.id)
+            move(i, e.key === 'ArrowUp' ? i - 1 : i + 1)
+          } else if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            select(row.id)
+          }
+        }}
+        onDragStart={(e) => {
+          setDragFrom(i)
+          e.dataTransfer.effectAllowed = 'move'
+          e.dataTransfer.setData('text/plain', row.id)
+        }}
+        onDragOver={(e) => {
+          if (dragFrom === null) return
+          e.preventDefault()
+          e.dataTransfer.dropEffect = 'move'
+          setOver(i)
+        }}
+        onDrop={(e) => {
+          e.preventDefault()
+          if (dragFrom !== null && dragFrom !== i) move(dragFrom, i)
+          setDragFrom(null)
+          setOver(null)
+        }}
+        onDragEnd={() => {
+          setDragFrom(null)
+          setOver(null)
+        }}
+        onMouseEnter={() => hover(row.id)}
+        onMouseLeave={() => hover(null)}
+        className={`${GRID} h-7 select-none border-b border-line/50 outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-brand ${
+          over === i && dragFrom !== null && dragFrom !== i ? 'border-t-2 border-t-brand' : ''
+        } ${row.locked ? 'cursor-pointer' : 'cursor-grab'} ${
+          selectedId === row.id ? 'bg-brand/25 text-ink-0' : selectedIds.includes(row.id) ? 'bg-brand/15 text-ink-0' : hoverId === row.id ? 'bg-surface-2 text-ink-1' : 'text-ink-1'
+        }`}
+      >
+        <span role="cell" aria-hidden className={row.locked ? 'text-ink-2/40' : 'text-ink-2'} title={row.locked ? 'Locked seams cannot be dragged' : 'Drag to reorder'}>
+          <Grip />
+        </span>
+        <span role="cell" className="num text-ink-0">
+          {row.n}
+        </span>
+        <span role="cell" className="truncate text-ink-0">
+          {row.label}
+        </span>
+        <span role="cell" className="num text-right">
+          {row.length}
+        </span>
+        <span role="cell" className="truncate">
+          {row.direction}
+        </span>
+        <span role="cell">
+          <button
+            type="button"
+            aria-label={`${row.locked ? 'Unlock' : 'Lock'} seam ${row.label}`}
+            aria-pressed={row.locked}
+            title={row.locked ? 'Locked: keeps its place when you optimise' : 'Lock this seam in its place'}
+            onClick={(e) => {
+              e.stopPropagation()
+              toggleLock(row.id)
+            }}
+            className={`grid size-5 place-items-center rounded-sm outline-none focus-visible:ring-1 focus-visible:ring-brand ${row.locked ? 'text-brand' : 'text-ink-2 hover:text-ink-0'}`}
+          >
+            <Padlock locked={row.locked} />
+          </button>
+        </span>
+      </div>
+  )
 
   if (rows.length === 0) {
     // The no accepted seams message and its button sit above the panel, in SeamPanel.
@@ -200,7 +312,7 @@ function SequenceList() {
   }
 
   return (
-    <div role="table" aria-label="Sequence" className="flex min-h-0 flex-1 flex-col">
+    <div role="table" aria-label="Sequence" aria-rowcount={slice.windowed ? rows.length + 1 : undefined} className="flex min-h-0 flex-1 flex-col">
       <div role="row" className={`${GRID} h-7 shrink-0 border-b border-line text-[11px] text-ink-2`}>
         <span role="columnheader" aria-label="Drag handle" />
         <span role="columnheader" title="Place in the sequence">
@@ -215,89 +327,13 @@ function SequenceList() {
         </span>
         <span role="columnheader" aria-label="Lock" />
       </div>
-      <div ref={body} className="min-h-0 flex-1 overflow-y-auto">
-        {rows.map((row, i) => (
-          <div
-            key={row.id}
-            role="row"
-            tabIndex={0}
-            draggable={!row.locked}
-            aria-selected={selectedIds.includes(row.id)}
-            data-seam-id={row.id}
-            data-locked={row.locked}
-            onClick={(e) => select(row.id, e.ctrlKey || e.metaKey ? 'toggle' : e.shiftKey ? 'range' : 'replace')}
-            onKeyDown={(e) => {
-              if (e.target !== e.currentTarget) return
-              if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
-                e.preventDefault()
-                refocus.current = row.id
-                move(i, e.key === 'ArrowUp' ? i - 1 : i + 1)
-              } else if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault()
-                select(row.id)
-              }
-            }}
-            onDragStart={(e) => {
-              setDragFrom(i)
-              e.dataTransfer.effectAllowed = 'move'
-              e.dataTransfer.setData('text/plain', row.id)
-            }}
-            onDragOver={(e) => {
-              if (dragFrom === null) return
-              e.preventDefault()
-              e.dataTransfer.dropEffect = 'move'
-              setOver(i)
-            }}
-            onDrop={(e) => {
-              e.preventDefault()
-              if (dragFrom !== null && dragFrom !== i) move(dragFrom, i)
-              setDragFrom(null)
-              setOver(null)
-            }}
-            onDragEnd={() => {
-              setDragFrom(null)
-              setOver(null)
-            }}
-            onMouseEnter={() => hover(row.id)}
-            onMouseLeave={() => hover(null)}
-            className={`${GRID} h-7 select-none border-b border-line/50 outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-brand ${
-              over === i && dragFrom !== null && dragFrom !== i ? 'border-t-2 border-t-brand' : ''
-            } ${row.locked ? 'cursor-pointer' : 'cursor-grab'} ${
-              selectedId === row.id ? 'bg-brand/25 text-ink-0' : selectedIds.includes(row.id) ? 'bg-brand/15 text-ink-0' : hoverId === row.id ? 'bg-surface-2 text-ink-1' : 'text-ink-1'
-            }`}
-          >
-            <span role="cell" aria-hidden className={row.locked ? 'text-ink-2/40' : 'text-ink-2'} title={row.locked ? 'Locked seams cannot be dragged' : 'Drag to reorder'}>
-              <Grip />
-            </span>
-            <span role="cell" className="num text-ink-0">
-              {row.n}
-            </span>
-            <span role="cell" className="truncate text-ink-0">
-              {row.label}
-            </span>
-            <span role="cell" className="num text-right">
-              {row.length}
-            </span>
-            <span role="cell" className="truncate">
-              {row.direction}
-            </span>
-            <span role="cell">
-              <button
-                type="button"
-                aria-label={`${row.locked ? 'Unlock' : 'Lock'} seam ${row.label}`}
-                aria-pressed={row.locked}
-                title={row.locked ? 'Locked: keeps its place when you optimise' : 'Lock this seam in its place'}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  toggleLock(row.id)
-                }}
-                className={`grid size-5 place-items-center rounded-sm outline-none focus-visible:ring-1 focus-visible:ring-brand ${row.locked ? 'text-brand' : 'text-ink-2 hover:text-ink-0'}`}
-              >
-                <Padlock locked={row.locked} />
-              </button>
-            </span>
-          </div>
-        ))}
+      <div ref={body} onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)} className="min-h-0 flex-1 overflow-y-auto">
+        {/* One flat list, so a row keeps its element (and the focus) when a spacer appears above it. */}
+        {parts.flatMap((part, k) =>
+          'gap' in part
+            ? [<div key={`gap-${k}`} aria-hidden style={{ height: part.gap }} />]
+            : rows.slice(part.start, part.end).map((row, j) => renderRow(row, part.start + j)),
+        )}
       </div>
     </div>
   )
