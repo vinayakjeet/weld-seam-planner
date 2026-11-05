@@ -119,7 +119,24 @@ const SPAN_FRACTIONS = [0.25, 0.5, 0.75]
 // rule. The width of face i is the depth of material just under it, along it, away from the edge. The thickness behind
 // face j is the median of three rays across the span of face j: at the edge itself a ray would run into the other
 // plate of an L, and one ray may meet a hole, a gusset or another body. depthMm is how far under a face the width ray runs.
-export function meetsSecondPlate(point: Pick<SeamPoint, 'p' | 't' | 'n1' | 'n2'>, probe: RayProbe, depthMm: number): boolean {
+export function meetsSecondPlate(point: CornerPoint, probe: RayProbe, depthMm: number): boolean {
+  const faces = cornerFaces(point, probe, depthMm)
+  if (!faces) return false
+  const endFace = (i: number) => faces[i]!.widthMm <= LAP_RATIO * faces[1 - i]!.thicknessMm
+  return !endFace(0) && !endFace(1)
+}
+
+type CornerPoint = Pick<SeamPoint, 'p' | 't' | 'n1' | 'n2'>
+
+export interface CornerFace {
+  // Depth of material just under the face, along it, away from the edge.
+  widthMm: number
+  // Median of three rays through the plate behind the face, across its span.
+  thicknessMm: number
+}
+
+// The two faces of a convex edge, in the order of n1 and n2, or null when a face has no width to measure.
+export function cornerFaces(point: CornerPoint, probe: RayProbe, depthMm: number): [CornerFace, CornerFace] | null {
   const { p, t, n1, n2 } = point
   const away = (normal: Vec3, other: Vec3): Vec3 => {
     const u = normalize(cross(t, normal))
@@ -130,15 +147,16 @@ export function meetsSecondPlate(point: Pick<SeamPoint, 'p' | 't' | 'n1' | 'n2'>
     p[1] + u[1] * along - normal[1] * depthMm,
     p[2] + u[2] * along - normal[2] * depthMm,
   ]
-  const faces = [n1, n2].map((normal, k) => {
+  const spans = [n1, n2].map((normal, k) => {
     const u = away(normal, k === 0 ? n2 : n1)
-    return { normal, u, width: length(u) === 0 ? Infinity : probe(at(normal, u, depthMm), u) + depthMm }
+    return { normal, u, widthMm: length(u) === 0 ? Infinity : probe(at(normal, u, depthMm), u) + depthMm }
   })
-  if (!faces.every((f) => Number.isFinite(f.width))) return false
-  const thickness = ({ normal, u, width }: (typeof faces)[number]) =>
-    SPAN_FRACTIONS.map((f) => probe(at(normal, u, f * width), scale(normal, -1)) + depthMm).sort((a, b) => a - b)[1]!
-  const endFace = (i: number) => faces[i]!.width <= LAP_RATIO * thickness(faces[1 - i]!)
-  return !endFace(0) && !endFace(1)
+  if (!spans.every((f) => Number.isFinite(f.widthMm))) return null
+  const [a, b] = spans.map(({ normal, u, widthMm }) => ({
+    widthMm,
+    thicknessMm: SPAN_FRACTIONS.map((f) => probe(at(normal, u, f * widthMm), scale(normal, -1)) + depthMm).sort((x, y) => x - y)[1]!,
+  }))
+  return [a!, b!]
 }
 
 function isNonPlanar(points: Vec3[]): boolean {

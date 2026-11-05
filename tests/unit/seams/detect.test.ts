@@ -558,12 +558,15 @@ describe('plate thickness per seam', () => {
     }
   })
 
-  it('measures a thickness behind each face of the heel of an L', () => {
-    const corners = detectSeams(buildMeshModel(soupOf(mergedL()), 1), DEFAULT_DETECT_SETTINGS).filter((s) => s.hidden)
-    expect(corners).toHaveLength(1)
-    for (const c of corners) {
-      expect(c.jointType).toBe('corner')
-      expect(c.thicknessMm.every((v) => v !== null)).toBe(true)
-    }
+  // Next to the edge a ray behind either face of a corner runs through the other plate and reads its extent (100 on
+  // the L, 80 on the bracket, 1000 or 1600 on the tank), so each plate is measured across the span of its face.
+  it('measures the plate thickness behind each face of a corner, not the extent of the other plate', () => {
+    const [heel] = detectSeams(buildMeshModel(soupOf(mergedL()), 1), DEFAULT_DETECT_SETTINGS).filter((s) => s.hidden)
+    expect(heel!.thicknessMm).toEqual([10, 10])
+    const [bracket] = detectAll('l-bracket-gussets').filter((s) => s.hidden)
+    expect(bracket!.thicknessMm).toEqual([8, 8])
+    const shell = detectAll('tank-with-manhole').filter((s) => s.hidden)
+    expect(shell).toHaveLength(12)
+    for (const c of shell) expect(c.thicknessMm, c.label).toEqual([8, 8])
   })
 })

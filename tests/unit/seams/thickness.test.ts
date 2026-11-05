@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Vec3 } from '../../../src/core/math/vec3'
 import { pointsFromPolyline } from '../../../src/core/seams/frames'
-import { probeFromBvhs, seamThickness, type RayProbe } from '../../../src/core/seams/thickness'
+import { cornerThickness, probeFromBvhs, seamThickness, type RayProbe } from '../../../src/core/seams/thickness'
 import { buildBodyBvhs } from '../../../src/core/seams/bodyBvh'
 import { buildMeshModel } from '../../../src/core/mesh/model'
 import { cubeTriangles, soupOf } from '../helpers/shapes'
@@ -113,13 +113,41 @@ describe('seamThickness', () => {
     expect(seamThickness(points, () => Infinity)).toEqual([null, null])
   })
 
-  it('steps away from the seam for a convex corner as well', () => {
-    // Solid x in [-100, 0], z in [-10, 0]; the seam is the top edge along y, plate normals +z and +x.
-    const boxes: Box[] = [{ min: [-100, -10, -10], max: [0, 300, 0] }]
-    const { points } = pointsFromPolyline([[0, 0, 0], [0, 200, 0]], false, () => [[0, 0, 1], [1, 0, 0]])
-    const [a, b] = seamThickness(points, exitProbe(boxes), 1, true)
-    expect(a).toBeCloseTo(10, 2)
-    expect(b).toBeCloseTo(100, 2)
+})
+
+// Distance along a ray to where it leaves a union of boxes, stepping from box to box.
+function unionProbe(boxes: Box[]): RayProbe {
+  const single = boxes.map((b) => exitProbe([b]))
+  return (origin, dir) => {
+    let travelled = 0
+    for (let step = 0; step < 16; step++) {
+      const at: Vec3 = [origin[0] + dir[0] * travelled, origin[1] + dir[1] * travelled, origin[2] + dir[2] * travelled]
+      const exits = single.map((probe) => probe(at, dir)).filter((d) => Number.isFinite(d) && d > 1e-9)
+      if (exits.length === 0) return step === 0 ? Infinity : travelled
+      travelled += Math.max(...exits)
+    }
+    return travelled
+  }
+}
+
+describe('cornerThickness', () => {
+  // The seam is the edge along y at x 0, z 0, plate normals +z and +x.
+  const { points } = pointsFromPolyline([[0, 0, 0], [0, 200, 0]], false, () => [[0, 0, 1], [1, 0, 0]])
+  const flat: Box = { min: [-100, -10, -10], max: [0, 300, 0] }
+  const upright: Box = { min: [-10, -10, -100], max: [0, 300, 0] }
+
+  it('measures each plate of an L as 10, not the 100 mm of the other plate behind the edge', () => {
+    expect(cornerThickness(points, unionProbe([flat, upright]), 0.05)).toEqual([10, 10])
+    expect(cornerThickness(points, unionProbe([upright, flat]), 0.05)).toEqual([10, 10])
+  })
+
+  it('reads the plate extent behind the end face of a lone plate, which is why such edges are not corners', () => {
+    expect(cornerThickness(points, unionProbe([flat]), 0.05)).toEqual([10, 100])
+  })
+
+  it('gives nulls for an empty seam and for a probe that always misses', () => {
+    expect(cornerThickness([], unionProbe([flat]), 0.05)).toEqual([null, null])
+    expect(cornerThickness(points, () => Infinity, 0.05)).toEqual([null, null])
   })
 })
 

@@ -12,7 +12,7 @@ import { extractCreaseEdges, type CreaseEdges, type CreaseResult } from './creas
 import { buildSeamPoints, pointsFromPolyline, type NormalsOf, type SeamPoint } from './frames'
 import { chainSegments, findIntersectionSegments } from './intersect'
 import { extractNonManifoldWedges } from './nonManifold'
-import { probeFromBvhs, roundDecimals, seamThickness, type RayProbe } from './thickness'
+import { cornerThickness, probeFromBvhs, roundDecimals, seamThickness, type RayProbe } from './thickness'
 
 export interface DetectSettings {
   creaseAngleDeg: number
@@ -75,10 +75,12 @@ export function detectSeams(model: MeshModel, settings: DetectSettings, context:
     }
     return probe
   }
+  const depthMm = Math.min(MAX_CORNER_DEPTH_MM, CORNER_DEPTH_FRACTION * model.bounds.diagonal)
   const thicknessOf: ThicknessOf = (points, jointType, strip) => {
     const ray = rayProbe()
     if (!ray) return [null, null]
-    const pair = seamThickness(points, ray, 1, jointType === 'corner')
+    if (jointType === 'corner') return cornerThickness(points, ray, depthMm)
+    const pair = seamThickness(points, ray)
     const mid = points[points.length >> 1]
     // A lap's strip face is its end face, so its plate thickness is the width of that face, not a ray through it.
     if (jointType === 'lap' && strip.stripNormal && mid && Number.isFinite(strip.stripWidthMm)) {
@@ -98,7 +100,7 @@ export function detectSeams(model: MeshModel, settings: DetectSettings, context:
     },
   })
   if (model.mesh.triangleCount <= (context.maxCornerTriangles ?? LARGE_PART_TRIANGLES)) {
-    found.push(...cornerSeams(model, faces, creases, contact, minLength, rayProbe, thicknessOf))
+    found.push(...cornerSeams(model, faces, creases, contact, minLength, rayProbe, depthMm, thicknessOf))
   }
   found.push(...nonManifoldSeams(model, faces, settings, minLength, thicknessOf))
 
@@ -123,8 +125,8 @@ export function detectSeams(model: MeshModel, settings: DetectSettings, context:
   })
 }
 
-// Under-face depth of the width ray in the second plate check: deep enough to clear float noise on a part far from
-// the origin, shallow against the thinnest sheet.
+// Under-face depth of the rays across a corner face: deep enough to clear float noise on a part far from the origin,
+// shallow against the thinnest sheet.
 const CORNER_DEPTH_FRACTION = 1e-4
 const MAX_CORNER_DEPTH_MM = 0.05
 
@@ -138,6 +140,7 @@ function cornerSeams(
   contact: ContactEdges | null,
   minLength: number,
   rayProbe: () => RayProbe | null,
+  depthMm: number,
   thicknessOf: ThicknessOf,
 ): RawSeam[] {
   // A convex edge that is a contact seam is already listed as one, so it is not a corner as well.
@@ -146,7 +149,6 @@ function cornerSeams(
   if (outside.length === 0) return []
   const probe = rayProbe()
   if (!probe) return []
-  const depthMm = Math.min(MAX_CORNER_DEPTH_MM, CORNER_DEPTH_FRACTION * model.bounds.diagonal)
   const corners: CreaseEdges = {
     edgeIds: outside,
     dihedralDeg: creases.convex.dihedralDeg.filter((_, i) => !taken.has(creases.convex.edgeIds[i]!)),
