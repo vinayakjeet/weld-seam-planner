@@ -264,7 +264,13 @@ export const createSeamsSlice: StateCreator<AppState, [], [], SeamsSlice> = (set
   reverse: (id) => {
     const seam = locate(get(), id)
     if (!seam) return unknownSeam(id)
-    set((state) => replaceSeams(state, [seam], [reverseSeam(seam)]))
+    const reversed = reverseSeam(seam)
+    set((state) => {
+      const next = replaceSeams(state, [seam], [reversed])
+      // The plates swap sides with n1 and n2, so an entered thickness pair swaps with them.
+      const entered = next.thicknessById?.[reversed.id]
+      return entered ? { ...next, thicknessById: { ...next.thicknessById, [reversed.id]: [entered[1], entered[0]] } } : next
+    })
     return null
   },
 

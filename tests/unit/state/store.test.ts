@@ -354,6 +354,14 @@ describe('manual seam operations', () => {
     expect(state().mergeSeamIds('a', 'b')).toBeNull()
   })
 
+  it('swaps an entered plate thickness with the plates when a seam is reversed', () => {
+    useStore.setState({ thicknessById: { a: [6, 12] } })
+    state().reverse('a')
+    expect(state().thicknessById['a~r']).toEqual([12, 6])
+    state().reverse('a~r')
+    expect(state().thicknessById.a).toEqual([6, 12])
+  })
+
   it('reverses twice back to the original geometry, still one visible seam', () => {
     state().reverse('a')
     state().reverse('a~r')
