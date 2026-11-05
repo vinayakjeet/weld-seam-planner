@@ -13,7 +13,7 @@ test('loading a sample and exporting makes requests to the app origin only, and 
   await page.getByRole('button', { name: /Procedures/ }).click()
   await selectAllRows(page)
   await page.getByLabel('Welding procedure').selectOption({ value: 'WPS-GMAW-SPRAY-FW6' })
-  await page.getByRole('button', { name: /Validate and Export/ }).click()
+  await page.getByRole('navigation', { name: 'Workflow steps' }).getByRole('button', { name: /Export/ }).click()
   await expect(page.getByText('No errors. Export is ready.')).toBeVisible()
   const { json } = await downloadJson(page, () => page.getByRole('button', { name: 'Export', exact: true }).click())
   expect((json as { seams: unknown[] }).seams).toHaveLength(expectedSeams(cell))

@@ -1,8 +1,8 @@
 import { useEffect } from 'react'
 import { chooseTool, redoEdit, removeSelected, reverseSelected, toolEvent, undoEdit } from '../../state/flows'
-import { useStore } from '../../state/store'
+import { STEPS, useStore } from '../../state/store'
 import { getGeometryClient } from '../../worker/client'
-import { shortcutFor } from './shortcuts'
+import { shortcutFor, shortcutGate, stepForShortcut, type StepShortcut } from './shortcuts'
 
 export function useShortcuts(fit: () => void): void {
   useEffect(() => {
@@ -17,7 +17,19 @@ export function useShortcuts(fit: () => void): void {
         target: event.target as HTMLElement | null,
       })
       if (!shortcut) return
-      const { part, tool } = useStore.getState()
+      const { part, tool, helpOpen } = useStore.getState()
+      // With the sheet open only its own key works, and Escape is left to the dialog that closes it.
+      if (!shortcutGate(shortcut, helpOpen)) return
+      if (shortcut === 'help') {
+        event.preventDefault()
+        useStore.getState().setHelpOpen(!helpOpen)
+        return
+      }
+      if (shortcut.startsWith('step')) {
+        event.preventDefault()
+        useStore.getState().setActiveStep(stepForShortcut(shortcut as StepShortcut, STEPS))
+        return
+      }
       // Enter, Escape and Backspace only mean something to an armed tool; otherwise they belong to the page.
       const toolKey = shortcut === 'finish' || shortcut === 'cancel' || shortcut === 'undoPoint'
       if (toolKey && tool.tool === 'select') return
@@ -40,7 +52,7 @@ export function useShortcuts(fit: () => void): void {
       else if (shortcut === 'xray') useStore.getState().toggleXray()
       else if (shortcut === 'reverse') reverseSelected()
       else if (shortcut === 'remove') removeSelected()
-      else void toolEvent({ type: shortcut }, client)
+      else void toolEvent({ type: shortcut as 'finish' | 'cancel' | 'undoPoint' }, client)
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)

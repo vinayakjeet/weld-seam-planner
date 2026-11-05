@@ -21,7 +21,7 @@ export const STEPS = [
   { id: 'procedures', label: 'Procedures' },
   { id: 'access', label: 'Access' },
   { id: 'sequence', label: 'Sequence' },
-  { id: 'export', label: 'Validate and Export' },
+  { id: 'export', label: 'Export' },
 ] as const
 
 export type StepId = (typeof STEPS)[number]['id']

@@ -697,7 +697,7 @@ async function exportableJob(client: GeometryClient, now: () => string): Promise
     setNotice({
       what: `Export is blocked by ${plural(errors, 'error')}.`,
       why: 'A job file with errors could send a robot to weld the wrong thing, so the file is only written when pre-flight has none.',
-      next: 'Open Validate and Export, fix the errors in the list, then export again.',
+      next: 'Open the Export step, fix the errors in the list, then export again.',
     })
     return null
   }

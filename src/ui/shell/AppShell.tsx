@@ -3,6 +3,7 @@ import { TooltipProvider } from '../kit/Tooltip'
 import { Inspector } from '../panels/Inspector'
 import { SeamPanel } from '../panels/SeamPanel'
 import { RestoreDialog } from './RestoreDialog'
+import { ShortcutSheet } from './ShortcutSheet'
 import { StatusBar } from './StatusBar'
 import { Timeline } from './Timeline'
 import { TopBar } from './TopBar'
@@ -48,6 +49,7 @@ export function AppShell() {
         <Timeline />
         <StatusBar />
         <RestoreDialog />
+        <ShortcutSheet />
       </div>
     </TooltipProvider>
   )

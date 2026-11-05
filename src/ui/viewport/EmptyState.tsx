@@ -1,8 +1,9 @@
 import { createElement, useRef, useState, type DragEvent } from 'react'
 import { importFile, importSample } from '../../state/flows'
-import { useStore } from '../../state/store'
+import { STEPS, useStore } from '../../state/store'
 import { getGeometryClient } from '../../worker/client'
 import { Button } from '../kit/Button'
+import { firstRunHint } from '../shell/firstRunHint'
 import { iconForSample } from './SampleIcons'
 import { useSampleManifest } from './useSampleManifest'
 
@@ -49,6 +50,7 @@ export function EmptyState() {
       >
         <h1 className="font-display text-2xl font-semibold text-ink-0">Drop an STL file or pick a sample</h1>
         <p className="mt-1.5 text-ink-1">Files are read in your browser and never uploaded.</p>
+        <p className="mt-1 text-ink-2">{firstRunHint(STEPS)}</p>
 
         {acceptedCount > 0 && (
           <p className="mt-4 border border-warn/50 bg-warn/10 px-3 py-2 text-warn">

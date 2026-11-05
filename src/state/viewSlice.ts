@@ -10,6 +10,9 @@ export interface ViewSlice {
   // The part drawn see-through, with the seams drawn on top of it.
   xray: boolean
   toggleXray: () => void
+  // The keyboard shortcut sheet.
+  helpOpen: boolean
+  setHelpOpen: (open: boolean) => void
 }
 
 export const createViewSlice: StateCreator<AppState, [], [], ViewSlice> = (set) => ({
@@ -17,4 +20,6 @@ export const createViewSlice: StateCreator<AppState, [], [], ViewSlice> = (set) 
   setColourBy: (colourBy) => set((state) => (state.colourBy === colourBy ? state : { colourBy })),
   xray: false,
   toggleXray: () => set((state) => ({ xray: !state.xray })),
+  helpOpen: false,
+  setHelpOpen: (helpOpen) => set((state) => (state.helpOpen === helpOpen ? state : { helpOpen })),
 })

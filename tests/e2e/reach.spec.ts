@@ -61,7 +61,7 @@ test('places a port, measures reach, plays the insertion and exports a job and a
   expect(at).toBeGreaterThan(0)
   expect(at).toBeLessThan(max)
 
-  await page.getByRole('button', { name: /Validate and Export/ }).click()
+  await page.getByRole('navigation', { name: 'Workflow steps' }).getByRole('button', { name: /Export/ }).click()
   await expect(page.getByText('No errors. Export is ready.')).toBeVisible()
   const exportButton = page.getByRole('button', { name: 'Export', exact: true })
   const { json } = await downloadJson(page, () => exportButton.click())

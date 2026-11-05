@@ -12,6 +12,10 @@ export type Shortcut =
   | 'finish'
   | 'cancel'
   | 'undoPoint'
+  | 'help'
+  | StepShortcut
+
+export type StepShortcut = 'step1' | 'step2' | 'step3' | 'step4' | 'step5' | 'step6'
 
 export interface KeyEventLike {
   key: string
@@ -48,6 +52,9 @@ export function shortcutFor(event: KeyEventLike): Shortcut | null {
   if (key === 'z' && modifier) return event.shiftKey ? 'redo' : 'undo'
   // Ctrl+R reloads and Ctrl+D bookmarks, so the tool keys never take a modifier. Shift is allowed for caps lock.
   if (modifier) return null
+  // A digit jumps to that step; the question mark opens the sheet. Both are read before the generic shift rule.
+  if (/^[1-6]$/.test(key)) return `step${key}` as StepShortcut
+  if (key === '?') return 'help'
   const letter = LETTER_KEYS[key]
   if (letter) return letter
   if (key === 'delete') return event.shiftKey ? null : 'remove'
@@ -59,3 +66,44 @@ export function shortcutFor(event: KeyEventLike): Shortcut | null {
   if (key === 'backspace') return 'undoPoint'
   return null
 }
+
+// The step a number key opens, by position in the stepper (the same step a click on that button opens).
+export function stepForShortcut<T extends { id: string }>(id: StepShortcut, steps: ReadonlyArray<T>): T['id'] {
+  return steps[Number(id.slice(4)) - 1]!.id
+}
+
+// While the shortcut sheet is open, only the key that closes it still works.
+export function shortcutGate(id: Shortcut, sheetOpen: boolean): boolean {
+  return !sheetOpen || id === 'help'
+}
+
+export interface ShortcutHelpRow {
+  id: Shortcut
+  // Alternative ways to press it, written as a person reads them: "Ctrl+Z", "Space", "?".
+  keys: string[]
+  label: string
+  group: 'View' | 'Steps' | 'Tools' | 'Playback' | 'History'
+}
+
+// The only source for the sheet. The step rows are named from the stepper where the sheet is drawn.
+export const SHORTCUT_HELP: ReadonlyArray<ShortcutHelpRow> = [
+  { id: 'fit', keys: ['F'], label: 'Fit view', group: 'View' },
+  { id: 'xray', keys: ['X'], label: 'Toggle x-ray', group: 'View' },
+  { id: 'help', keys: ['?'], label: 'Show or hide this list', group: 'View' },
+  { id: 'step1', keys: ['1'], label: 'Go to step 1', group: 'Steps' },
+  { id: 'step2', keys: ['2'], label: 'Go to step 2', group: 'Steps' },
+  { id: 'step3', keys: ['3'], label: 'Go to step 3', group: 'Steps' },
+  { id: 'step4', keys: ['4'], label: 'Go to step 4', group: 'Steps' },
+  { id: 'step5', keys: ['5'], label: 'Go to step 5', group: 'Steps' },
+  { id: 'step6', keys: ['6'], label: 'Go to step 6', group: 'Steps' },
+  { id: 'draw', keys: ['D'], label: 'Draw a seam', group: 'Tools' },
+  { id: 'split', keys: ['S'], label: 'Split the selected seam', group: 'Tools' },
+  { id: 'reverse', keys: ['R'], label: 'Reverse the selected seam', group: 'Tools' },
+  { id: 'remove', keys: ['Delete'], label: 'Delete the selected drawn seam', group: 'Tools' },
+  { id: 'finish', keys: ['Enter'], label: 'Finish the drawing', group: 'Tools' },
+  { id: 'undoPoint', keys: ['Backspace'], label: 'Remove the last point', group: 'Tools' },
+  { id: 'cancel', keys: ['Escape'], label: 'Cancel the tool', group: 'Tools' },
+  { id: 'play', keys: ['Space'], label: 'Play or pause the timeline', group: 'Playback' },
+  { id: 'undo', keys: ['Ctrl+Z', 'Cmd+Z'], label: 'Undo', group: 'History' },
+  { id: 'redo', keys: ['Ctrl+Shift+Z', 'Cmd+Shift+Z'], label: 'Redo', group: 'History' },
+]

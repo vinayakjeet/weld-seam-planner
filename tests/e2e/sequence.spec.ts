@@ -39,7 +39,7 @@ test('optimises, plays and exports a balanced-heat sequence on double-bottom-cel
   expect(played).toBeGreaterThan(0)
   expect(played).toBeLessThan(total)
 
-  await page.getByRole('button', { name: /Validate and Export/ }).click()
+  await page.getByRole('navigation', { name: 'Workflow steps' }).getByRole('button', { name: /Export/ }).click()
   await expect(page.getByText('No errors. Export is ready.')).toBeVisible()
   const exportButton = page.getByRole('button', { name: 'Export', exact: true })
   await expect(exportButton).toBeEnabled()

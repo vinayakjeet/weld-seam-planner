@@ -18,7 +18,7 @@ function useExportState() {
 function whyDisabled({ hasPart, checking, errors }: ReturnType<typeof useExportState>): string {
   if (!hasPart) return 'Export unlocks after a part is loaded and its seams pass pre-flight.'
   if (checking) return 'Checking the plan before export.'
-  return `Export is blocked by ${errors} ${errors === 1 ? 'error' : 'errors'}. Open Validate and Export to see them.`
+  return `Export is blocked by ${errors} ${errors === 1 ? 'error' : 'errors'}. Open the Export step to see them.`
 }
 
 // Export is a split button: the main part downloads the job, the chevron holds the actions that stay available with errors.

@@ -28,7 +28,7 @@ test('exports a validated job from double-bottom-cell', async ({ page }) => {
   const wpsCells = page.getByRole('table', { name: 'Seams' }).getByRole('cell', { name: SPRAY })
   await expect(wpsCells).toHaveCount(SEAMS)
 
-  await page.getByRole('button', { name: /Validate and Export/ }).click()
+  await page.getByRole('navigation', { name: 'Workflow steps' }).getByRole('button', { name: /Export/ }).click()
   await expect(page.getByText('No errors. Export is ready.')).toBeVisible()
   const exportButton = page.getByRole('button', { name: 'Export', exact: true })
   await expect(exportButton).toBeEnabled()
