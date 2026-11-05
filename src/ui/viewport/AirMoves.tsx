@@ -22,6 +22,9 @@ export function AirMoves() {
   const active = useStore((s) => s.activeStep === 'sequence')
   const plan = useStore(selectPlan)
   const order = useStore(selectSequenceOrder)
+  // The dashes take the text colour, which changes with the theme. Reading it here makes the lines follow it.
+  useStore((s) => s.theme)
+  const colour = cssVar('--text-1')
   const lines = useMemo(() => {
     if (!active || plan.seams.length === 0) return null
     const byId = new Map(plan.seams.map((p) => [p.seam.id, p.seam]))
@@ -44,8 +47,8 @@ export function AirMoves() {
     const { min, max } = plan.part.bbox
     const diagonal = Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2])
     const dash = Math.max(1, diagonal / 120)
-    return lineSet(positions, { width: WIDTH_PX, color: cssVar('--text-1'), renderOrder: 4, overlay: true, opacity: 0.85, dashed: { dashSize: dash, gapSize: dash } })
-  }, [active, plan, order])
+    return lineSet(positions, { width: WIDTH_PX, color: colour, renderOrder: 4, overlay: true, opacity: 0.85, dashed: { dashSize: dash, gapSize: dash } })
+  }, [active, plan, order, colour])
   useDisposed(lines)
   return lines ? <primitive object={lines} /> : null
 }

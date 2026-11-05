@@ -33,6 +33,8 @@ export function Scene() {
   const controls = useRef<CameraControls>(null)
   const partMesh = useRef<Mesh>(null)
   const part = useStore((s) => s.part)
+  // Read so that the scene draws again, and reads the colour tokens again, when the theme changes.
+  useStore((s) => s.theme)
   const invalidate = useThree((state) => state.invalidate)
   const size = useThree((state) => state.size)
   const margin = gizmoMargin(size.width, size.height)
@@ -108,7 +110,7 @@ export function Scene() {
         <GizmoViewcube
           faces={Z_UP_FACES}
           color={cssVar('--bg-2')}
-          hoverColor={cssVar('--brand-primary')}
+          hoverColor={cssVar('--scene-select')}
           textColor={cssVar('--text-0')}
           strokeColor={cssVar('--line')}
           opacity={1}

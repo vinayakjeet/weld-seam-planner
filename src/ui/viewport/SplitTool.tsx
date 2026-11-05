@@ -49,5 +49,5 @@ export function SplitTool() {
     const sample = seam && picked !== null ? seam.points[picked] : undefined
     return sample ? [sample.p] : []
   }, [seam, picked])
-  return <PointMarkers positions={marker} shape="ring" color={cssVar('--warn')} size={22} />
+  return <PointMarkers positions={marker} shape="ring" color={cssVar('--scene-warn')} size={22} />
 }

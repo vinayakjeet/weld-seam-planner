@@ -17,12 +17,28 @@ export function contrast(hexA: string, hexB: string): number {
 
 export const TOKENS_FILE = fileURLToPath(new URL('../../../src/styles/tokens.css', import.meta.url))
 
-export function readTokens(file = TOKENS_FILE): Record<string, string> {
+export type ThemeName = 'dark' | 'light'
+
+const LIGHT_BLOCK = /:root\[data-theme='light'\]\s*\{([^}]*)\}/
+
+function declarations(block: string): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const m of block.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) out[m[1]!] = m[2]!.trim()
+  return out
+}
+
+// The dark theme is the :root block; the light theme is that block with the :root[data-theme='light'] overrides on top.
+export function readTokens(file = TOKENS_FILE, theme: ThemeName = 'dark'): Record<string, string> {
   const css = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
-  const root = css.slice(css.indexOf(':root'))
-  const tokens: Record<string, string> = {}
-  for (const m of root.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) tokens[m[1]!] = m[2]!.trim()
-  return tokens
+  const light = LIGHT_BLOCK.exec(css)
+  const dark = declarations(css.slice(css.indexOf(':root'), light ? light.index : undefined))
+  return theme === 'light' ? { ...dark, ...declarations(light?.[1] ?? '') } : dark
+}
+
+// Only the names the light theme overrides.
+export function readLightOverrides(file = TOKENS_FILE): Record<string, string> {
+  const css = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '')
+  return declarations(LIGHT_BLOCK.exec(css)?.[1] ?? '')
 }
 
 // Follows var() references until a literal value is reached.

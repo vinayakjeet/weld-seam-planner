@@ -37,7 +37,7 @@ function readPalette(): SeamPalette {
   return {
     candidate: rgb('--seam-candidate'),
     accepted: rgb('--seam-accepted'),
-    rejected: rgb('--err'),
+    rejected: rgb('--scene-reject'),
     access: { standard: rgb('--access-standard'), slim: rgb('--access-slim'), snake: rgb('--access-snake'), blocked: rgb('--access-blocked') },
     reach: { ok: rgb('--reach-ok'), miss: rgb('--reach-miss') },
   }
@@ -86,7 +86,7 @@ export function SeamLines({ partRef }: { partRef: RefObject<Mesh | null> }) {
   )
   const selected = useMemo(() => {
     const positions = positionsOfSeams(seams, new Set(selectedIds))
-    return positions ? lineSet(positions, { width: HIGHLIGHT_WIDTH_PX, color: cssVar('--brand-primary'), renderOrder: 1 + lift, overlay: xray }) : null
+    return positions ? lineSet(positions, { width: HIGHLIGHT_WIDTH_PX, color: cssVar('--scene-select'), renderOrder: 1 + lift, overlay: xray }) : null
   }, [seams, selectedIds, xray, lift])
   const hovered = useMemo(() => {
     const seam = hoverId === null ? undefined : seams.find((s) => s.id === hoverId)
@@ -99,7 +99,7 @@ export function SeamLines({ partRef }: { partRef: RefObject<Mesh | null> }) {
     const ids = new Set(from ? mergeTargets(from, seams, MERGE_TOLERANCE_MM) : [])
     const all = positionsOfSeams(seams, ids)
     if (all === null) return null
-    return lineSet(all, { width: HIGHLIGHT_WIDTH_PX, color: cssVar('--warn'), renderOrder: 1 + lift, overlay: xray })
+    return lineSet(all, { width: HIGHLIGHT_WIDTH_PX, color: cssVar('--scene-warn'), renderOrder: 1 + lift, overlay: xray })
   }, [seams, mergeFrom, xray, lift])
 
   useDisposed(base)

@@ -41,7 +41,10 @@ export function TorchMesh({ pose, name }: { pose: { p: Vec3; q: Quat }; name: st
   const scale = useTorchScale()
   const placed = useMemo(() => placeTorch(pose, scale), [pose, scale])
   const orientation = useMemo(() => new Quaternion(...pose.q).multiply(Y_TO_Z), [pose])
-  const colors = useMemo(() => ({ body: cssVar('--text-1'), nozzle: cssVar('--brand-accent'), wire: cssVar('--ok') }), [])
+  // The body takes the text colour, which changes with the theme; the other two are signal colours and do not.
+  useStore((s) => s.theme)
+  const body = cssVar('--text-1')
+  const colors = useMemo(() => ({ body, nozzle: cssVar('--brand-accent'), wire: cssVar('--signal-ok') }), [body])
   if (!placed) return null
   return (
     <group name={name}>

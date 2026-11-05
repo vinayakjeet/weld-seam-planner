@@ -6,6 +6,21 @@ const state = () => useStore.getState()
 
 beforeEach(resetStore)
 
+describe('theme', () => {
+  it('starts dark and takes the chosen theme', () => {
+    expect(state().theme).toBe('dark')
+    state().setTheme('light')
+    expect(state().theme).toBe('light')
+  })
+
+  it('is not undo history and adds no entry when set to the same theme', () => {
+    const past = useStore.temporal.getState().pastStates.length
+    state().setTheme('light')
+    state().setTheme('light')
+    expect(useStore.temporal.getState().pastStates.length).toBe(past)
+  })
+})
+
 describe('view slice', () => {
   it('starts with solid parts and seams coloured by status', () => {
     expect([state().xray, state().colourBy]).toEqual([false, 'status'])

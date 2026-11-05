@@ -70,7 +70,7 @@ export function PortMarkers() {
   const ports = useStore((s) => s.ports)
   const selectedId = useStore((s) => s.selectedPortId)
   const active = useStore((s) => s.activeStep === 'access')
-  const colors = useMemo(() => ({ selected: cssVar('--brand-secondary'), other: cssVar('--brand-primary') }), [])
+  const colors = useMemo(() => ({ selected: cssVar('--brand-secondary'), other: cssVar('--scene-select') }), [])
   if (ports.length === 0) return null
   return (
     <>
