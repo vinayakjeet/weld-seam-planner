@@ -37,6 +37,13 @@ export function formatCycle(seconds: number): string {
   return h > 0 ? `${h}:${two(m)}:${two(s)}` : `${m}:${two(s)}`
 }
 
+// The torch cleaning stops inside the cycle time, for the Sequence panel; null when there are none or the answer is from
+// before cleaning was modelled.
+export function cleaningField(timing: PlanTiming | null): string | null {
+  if (!timing || !(timing.cleanings > 0)) return null
+  return `${timing.cleanings} ${timing.cleanings === 1 ? 'stop' : 'stops'}, ${formatCycle(timing.cleaningS)}`
+}
+
 // The status bar's cycle time: the answer for the current plan, or the previous answer marked stale while a new one is
 // on its way. Before any answer it reads 0:00.
 export function cycleField(timing: PlanTiming | null, current: boolean): { value: string; stale: boolean } {

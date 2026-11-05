@@ -73,6 +73,17 @@ describe('importJob', () => {
     expect(importJob(job, SHA).status).toBe('ok')
   })
 
+  it('reads a job written before cleaning was modelled as no cleaning', () => {
+    const job = JSON.parse(JSON.stringify(specJob()))
+    delete job.settings.cleanEveryS
+    delete job.settings.cleanTimeS
+    delete job.summary.torchCleanings
+    delete job.summary.cleaningTimeS
+    const r = importJob(job, SHA)
+    if (r.status !== 'ok') throw new Error(r.error.what)
+    expect(r.plan.settings).toMatchObject({ cleanEveryS: 0, cleanTimeS: 30 })
+  })
+
   it('accepts the job as a string or as an object', () => {
     expect(importJob(JSON.stringify(specJob()), SHA).status).toBe('ok')
     expect(importJob(specJob(), SHA).status).toBe('ok')

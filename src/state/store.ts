@@ -93,6 +93,7 @@ export const useStore = create<AppState>()(
         order: state.order,
         ports: state.ports,
         arm: state.arm,
+        jobSettings: state.jobSettings,
       }),
       equality: (past, current) =>
         past.statusById === current.statusById &&
@@ -107,7 +108,8 @@ export const useStore = create<AppState>()(
         past.strategy === current.strategy &&
         past.order === current.order &&
         past.ports === current.ports &&
-        past.arm === current.arm,
+        past.arm === current.arm &&
+        past.jobSettings === current.jobSettings,
       limit: HISTORY_LIMIT,
     },
   ),

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { SEQUENCE_STRATEGIES } from '../core/sequence/types'
 import { procedureOverridesSchema, procedureSchema, vec3Schema } from '../core/job/schema'
+import { DEFAULT_JOB_SETTINGS } from '../core/job/plan'
 import { DEFAULT_ARM } from '../core/snake/arm'
 import type { ManualError } from '../core/seams/manual'
 import type { AppState } from './store'
@@ -68,7 +69,14 @@ export const savedPlanSchema = z.object({
   arm: armSchema.default(DEFAULT_ARM),
   gravity: vec3Schema,
   detectSettings: z.object({ creaseAngleDeg: z.number() }),
-  jobSettings: z.object({ poseSpacingMm: z.number().positive(), airSpeedMmS: z.number().positive(), approachMm: z.number().min(0) }),
+  // Entries written before torch cleaning was modelled have neither cleaning field and read as no cleaning.
+  jobSettings: z.object({
+    poseSpacingMm: z.number().positive(),
+    airSpeedMmS: z.number().positive(),
+    approachMm: z.number().min(0),
+    cleanEveryS: z.number().min(0).default(DEFAULT_JOB_SETTINGS.cleanEveryS),
+    cleanTimeS: z.number().min(0).default(DEFAULT_JOB_SETTINGS.cleanTimeS),
+  }),
 })
 
 export type SavedPlan = z.output<typeof savedPlanSchema>

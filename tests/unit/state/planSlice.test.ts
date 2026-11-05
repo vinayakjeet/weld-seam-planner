@@ -383,15 +383,55 @@ describe('applyImportedPlan', () => {
 
 describe('job settings', () => {
   it('starts at the defaults and reaches the plan', () => {
-    expect(state().jobSettings).toEqual({ poseSpacingMm: 5, airSpeedMmS: 250, approachMm: 50 })
+    expect(state().jobSettings).toEqual({ poseSpacingMm: 5, airSpeedMmS: 250, approachMm: 50, cleanEveryS: 0, cleanTimeS: 30 })
     expect(selectPlan(state()).settings).toMatchObject({ poseSpacingMm: 5, airSpeedMmS: 250, approachMm: 50 })
   })
 
-  it('gives a new plan object when a setting changes, and is not undo history', () => {
+  it('gives a new plan object when a setting changes', () => {
     const before = selectPlan(state())
-    useStore.setState({ jobSettings: { poseSpacingMm: 8, airSpeedMmS: 250, approachMm: 50 } })
+    useStore.setState({ jobSettings: { poseSpacingMm: 8, airSpeedMmS: 250, approachMm: 50, cleanEveryS: 0, cleanTimeS: 30 } })
     expect(selectPlan(state())).not.toBe(before)
     expect(selectPlan(state()).settings.poseSpacingMm).toBe(8)
+  })
+})
+
+describe('torch cleaning setting', () => {
+  it('sets the interval and the stop time, reaches the plan and undoes in one step', () => {
+    expect(state().setCleaning({ cleanEveryS: 1800, cleanTimeS: 45 })).toBeNull()
+    expect(state().jobSettings).toMatchObject({ cleanEveryS: 1800, cleanTimeS: 45 })
+    expect(selectPlan(state()).settings).toMatchObject({ cleanEveryS: 1800, cleanTimeS: 45 })
+    expect(temporal().pastStates).toHaveLength(1)
+    temporal().undo()
+    expect(state().jobSettings).toMatchObject({ cleanEveryS: 0, cleanTimeS: 30 })
+    temporal().redo()
+    expect(state().jobSettings.cleanEveryS).toBe(1800)
+  })
+
+  it('changes only the field that is given and keeps the other settings', () => {
+    state().setCleaning({ cleanEveryS: 600 })
+    expect(state().jobSettings).toEqual({ poseSpacingMm: 5, airSpeedMmS: 250, approachMm: 50, cleanEveryS: 600, cleanTimeS: 30 })
+  })
+
+  it('adds no history entry when nothing changes', () => {
+    state().setCleaning({ cleanEveryS: 0, cleanTimeS: 30 })
+    state().setCleaning({})
     expect(temporal().pastStates).toHaveLength(0)
+  })
+
+  it('refuses a negative, infinite or absurd value, and says what to enter', () => {
+    for (const patch of [{ cleanEveryS: -1 }, { cleanTimeS: Number.NaN }, { cleanEveryS: Infinity }, { cleanTimeS: -5 }, { cleanEveryS: 1e7 }, { cleanTimeS: 1e5 }]) {
+      const problem = state().setCleaning(patch)
+      expect(text(problem), JSON.stringify(patch)).toMatch(/cleaning/i)
+      expect(problem!.next.length).toBeGreaterThan(10)
+    }
+    expect(state().jobSettings).toMatchObject({ cleanEveryS: 0, cleanTimeS: 30 })
+    expect(temporal().pastStates).toHaveLength(0)
+  })
+
+  it('comes from an imported plan', () => {
+    state().setCleaning({ cleanEveryS: 900, cleanTimeS: 20 })
+    const plan = { ...selectPlan(state()), settings: { ...selectPlan(state()).settings, cleanEveryS: 1200, cleanTimeS: 40 } }
+    state().applyImportedPlan(plan)
+    expect(state().jobSettings).toMatchObject({ cleanEveryS: 1200, cleanTimeS: 40 })
   })
 })

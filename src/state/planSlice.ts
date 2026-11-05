@@ -19,8 +19,11 @@ export interface PlanSlice {
   overridesById: Record<string, ProcedureOverrides>
   legById: Record<string, number>
   thicknessById: Record<string, PlateThickness>
-  // Set by importing a plan; there is no editor for them yet. Not history. Back to the defaults when another part loads.
-  jobSettings: Pick<JobSettings, 'poseSpacingMm' | 'airSpeedMmS' | 'approachMm'>
+  // Set by importing a plan; only the torch cleaning has an editor. Back to the defaults when another part loads.
+  jobSettings: Pick<JobSettings, 'poseSpacingMm' | 'airSpeedMmS' | 'approachMm' | 'cleanEveryS' | 'cleanTimeS'>
+  // Torch cleaning: the arc time between stops and the length of a stop, in seconds. One undo step; a value outside
+  // 0 to 24 hours between stops or 0 to 1 hour per stop is refused with what to enter instead.
+  setCleaning: (patch: Partial<Pick<JobSettings, 'cleanEveryS' | 'cleanTimeS'>>) => Explained | null
   // The last pre-flight answer and the plan it was computed for. The answer is current only while issuesFor is the plan
   // selectPlan returns now. Not history.
   issues: Issue[]
@@ -46,6 +49,10 @@ export interface PlanSlice {
   // Detection has to have run with the file's crease angle first: the seams it superseded come from state.seams.
   applyImportedPlan: (plan: Plan) => void
 }
+
+// Bounds of the cleaning setting: a day of arc time between stops, an hour for one stop.
+export const MAX_CLEAN_EVERY_S = 86_400
+export const MAX_CLEAN_TIME_S = 3_600
 
 type Plain = Record<string, unknown>
 
@@ -113,11 +120,36 @@ export const createPlanSlice: StateCreator<AppState, [], [], PlanSlice> = (set, 
   overridesById: {},
   legById: {},
   thicknessById: {},
-  jobSettings: { poseSpacingMm: DEFAULT_JOB_SETTINGS.poseSpacingMm, airSpeedMmS: DEFAULT_JOB_SETTINGS.airSpeedMmS, approachMm: DEFAULT_JOB_SETTINGS.approachMm },
+  jobSettings: {
+    poseSpacingMm: DEFAULT_JOB_SETTINGS.poseSpacingMm,
+    airSpeedMmS: DEFAULT_JOB_SETTINGS.airSpeedMmS,
+    approachMm: DEFAULT_JOB_SETTINGS.approachMm,
+    cleanEveryS: DEFAULT_JOB_SETTINGS.cleanEveryS,
+    cleanTimeS: DEFAULT_JOB_SETTINGS.cleanTimeS,
+  },
   issues: [],
   issuesFor: null,
   timing: null,
   timingFor: null,
+
+  setCleaning: (patch) => {
+    const limits = { cleanEveryS: MAX_CLEAN_EVERY_S, cleanTimeS: MAX_CLEAN_TIME_S }
+    for (const key of ['cleanEveryS', 'cleanTimeS'] as const) {
+      const value = patch[key]
+      if (value !== undefined && !(Number.isFinite(value) && value >= 0 && value <= limits[key])) {
+        return {
+          what: 'The torch cleaning setting was not changed.',
+          why: `${key === 'cleanEveryS' ? 'The time between cleanings' : 'The cleaning time'} must be a number from 0 to ${limits[key]} seconds, and ${Number.isFinite(value) ? value : 'that value'} is not.`,
+          next: key === 'cleanEveryS' ? 'Enter the minutes of arc time between cleanings, or 0 for none.' : 'Enter the seconds one cleaning stop takes.',
+        }
+      }
+    }
+    set((state) => {
+      const next = { ...state.jobSettings, ...patch }
+      return next.cleanEveryS === state.jobSettings.cleanEveryS && next.cleanTimeS === state.jobSettings.cleanTimeS ? state : { jobSettings: next }
+    })
+    return null
+  },
 
   setIssues: (plan, issues) => set({ issues, issuesFor: plan }),
 
@@ -300,7 +332,13 @@ export const createPlanSlice: StateCreator<AppState, [], [], PlanSlice> = (set, 
         supersededIds: state.seams.filter((s) => restoredIds.has(s.id)).map((s) => s.id),
         nextDrawnId,
         gravity: plan.gravity,
-        jobSettings: { poseSpacingMm: plan.settings.poseSpacingMm, airSpeedMmS: plan.settings.airSpeedMmS, approachMm: plan.settings.approachMm },
+        jobSettings: {
+          poseSpacingMm: plan.settings.poseSpacingMm,
+          airSpeedMmS: plan.settings.airSpeedMmS,
+          approachMm: plan.settings.approachMm,
+          cleanEveryS: plan.settings.cleanEveryS,
+          cleanTimeS: plan.settings.cleanTimeS,
+        },
         detectSettings: { ...state.detectSettings, creaseAngleDeg: plan.settings.creaseAngleDeg },
         selectedId: null,
         selectedIds: [],

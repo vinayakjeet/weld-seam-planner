@@ -197,15 +197,26 @@ function airMoves(plan: Plan, built: BuiltSeam[]): Move[] {
   return enters.map((enter, i) => ({ from: ids[i]!, to: ids[i + 1]!, lengthMm: airMoveMm(leaves[i]!, enter, home, lead) }))
 }
 
-// Cycle time is arc time, the strike and stop time of every seam, and the air moves at air speed. The summary of the
-// exported job and the live figure of the status bar both come from this.
+// How many times the torch is cleaned: once each time a full interval of arc time has passed with welding still to do,
+// so never after the last weld. An interval of 0 means no cleaning. The stops are not part of the playback, which runs
+// on arc and air time, as the strike and stop times of the seams are not.
+export function cleaningsFor(arcTimeS: number, everyS: number): number {
+  if (!(everyS > 0) || !(arcTimeS > 0)) return 0
+  return Math.max(0, Math.ceil(arcTimeS / everyS) - 1)
+}
+
+// Cycle time is arc time, the strike and stop time of every seam, the air moves at air speed and the torch cleaning
+// stops (the n_clean t_clean term of the spec). The summary of the exported job and the live figure of the status bar
+// both come from this.
 export function timingOf(plan: Plan, built: BuiltSeam[]): PlanTiming {
   const moves = airMoves(plan, built).map((m) => ({ ...m, timeS: m.lengthMm / plan.settings.airSpeedMmS }))
   const seams = built.map((b) => ({ seamId: b.seam.id, arcTimeS: b.arcTimeS, overheadS: b.startS }))
   const arcTimeS = seams.reduce((total, s) => total + s.arcTimeS, 0)
   const airTimeS = moves.reduce((total, m) => total + m.timeS, 0)
   const overheadS = seams.reduce((total, s) => total + s.overheadS, 0)
-  return { seams, moves, arcTimeS, airTimeS, cycleTimeS: arcTimeS + airTimeS + overheadS }
+  const cleanings = cleaningsFor(arcTimeS, plan.settings.cleanEveryS)
+  const cleaningS = cleanings * plan.settings.cleanTimeS
+  return { seams, moves, arcTimeS, airTimeS, cleanings, cleaningS, cycleTimeS: arcTimeS + airTimeS + overheadS + cleaningS }
 }
 
 // Seams in table order, every one forward.
@@ -274,6 +285,8 @@ export function buildJob(plan: Plan, options: { createdAt: string }, issues: Job
       poseSpacingMm: settings.poseSpacingMm,
       airSpeedMmS: settings.airSpeedMmS,
       approachMm: settings.approachMm,
+      cleanEveryS: settings.cleanEveryS,
+      cleanTimeS: settings.cleanTimeS,
     },
     procedures: plan.procedures.filter((p) => referenced.has(p.id)),
     seams: built.map((b) => b.seam),
@@ -288,7 +301,9 @@ export function buildJob(plan: Plan, options: { createdAt: string }, issues: Job
       weldLengthMm: r3(sum((b) => b.seam.lengthMm)),
       arcTimeS: r1(timing.arcTimeS),
       airTimeS: r1(timing.airTimeS),
-      cycleTimeS: r1(r1(timing.arcTimeS) + r1(timing.airTimeS) + timing.seams.reduce((total, s) => total + s.overheadS, 0)),
+      cycleTimeS: r1(r1(timing.arcTimeS) + r1(timing.airTimeS) + timing.seams.reduce((total, s) => total + s.overheadS, 0) + timing.cleaningS),
+      torchCleanings: timing.cleanings,
+      cleaningTimeS: r1(timing.cleaningS),
       wireKg: r3(sum((b) => b.wireKg)),
       gasL: r1(sum((b) => b.gasL)),
     },

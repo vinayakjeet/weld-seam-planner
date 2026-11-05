@@ -3,7 +3,7 @@ import { importBuffer } from '../../../src/state/flows'
 import { selectStats } from '../../../src/state/selectors'
 import { useStore } from '../../../src/state/store'
 import { seamRows } from '../../../src/ui/panels/seamRows'
-import { cycleField, formatCycle, partChip, statusFields } from '../../../src/ui/shell/summary'
+import { cleaningField, cycleField, formatCycle, partChip, statusFields } from '../../../src/ui/shell/summary'
 import { detected, fakeClient, partInfo, readyOutcome, resetStore, seam } from '../helpers/state'
 
 const fields = () => {
@@ -99,8 +99,23 @@ describe('formatCycle', () => {
   })
 })
 
+describe('cleaningField', () => {
+  const base = { seams: [], moves: [], arcTimeS: 600, airTimeS: 60, cycleTimeS: 750 }
+
+  it('is empty with no timing, no cleaning, or an answer from before cleaning was modelled', () => {
+    expect(cleaningField(null)).toBeNull()
+    expect(cleaningField({ ...base, cleanings: 0, cleaningS: 0 })).toBeNull()
+    expect(cleaningField(base as never)).toBeNull()
+  })
+
+  it('names the stops and their total time', () => {
+    expect(cleaningField({ ...base, cleanings: 2, cleaningS: 60 })).toBe('2 stops, 1:00')
+    expect(cleaningField({ ...base, cleanings: 1, cleaningS: 30 })).toBe('1 stop, 0:30')
+  })
+})
+
 describe('cycleField', () => {
-  const timing = { seams: [], moves: [], arcTimeS: 60, airTimeS: 15, cycleTimeS: 75 }
+  const timing = { seams: [], moves: [], arcTimeS: 60, airTimeS: 15, cleanings: 0, cleaningS: 0, cycleTimeS: 75 }
 
   it('shows the timing of the current plan as it is', () => {
     expect(cycleField(timing, true)).toEqual({ value: '1:15', stale: false })

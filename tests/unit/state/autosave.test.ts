@@ -39,7 +39,7 @@ const savedSnapshot = (savedAt = '2026-11-04T10:15:00.000Z') => {
     nextPortNumber: 3,
     gravity: [0, 1, 0],
     detectSettings: { creaseAngleDeg: 25 },
-    jobSettings: { poseSpacingMm: 9, airSpeedMmS: 200, approachMm: 60 },
+    jobSettings: { poseSpacingMm: 9, airSpeedMmS: 200, approachMm: 60, cleanEveryS: 0, cleanTimeS: 30 },
   })
   const snapshot = JSON.parse(JSON.stringify(snapshotOf(state(), savedAt)))
   resetStore()
@@ -261,7 +261,7 @@ describe('restoreSaved and startFresh', () => {
       nextPortNumber: 3,
       gravity: [0, 1, 0],
       detectSettings: { creaseAngleDeg: 25 },
-      jobSettings: { poseSpacingMm: 9, airSpeedMmS: 200, approachMm: 60 },
+      jobSettings: { poseSpacingMm: 9, airSpeedMmS: 200, approachMm: 60, cleanEveryS: 0, cleanTimeS: 30 },
       offer: null,
     })
     expect(useStore.temporal.getState().pastStates).toHaveLength(0)

@@ -6,6 +6,9 @@ export interface PlanTiming {
   moves: { from: string; to: string; lengthMm: number; timeS: number }[]
   arcTimeS: number
   airTimeS: number
+  // Torch cleaning stops and their total time, as n_clean and n_clean times t_clean of the cycle time.
+  cleanings: number
+  cleaningS: number
   cycleTimeS: number
 }
 

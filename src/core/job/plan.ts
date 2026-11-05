@@ -20,6 +20,9 @@ export interface JobSettings {
   airSpeedMmS: number
   approachMm: number
   creaseAngleDeg: number
+  // Torch cleaning: one stop of cleanTimeS after every cleanEveryS of arc time. 0 means the torch is not cleaned.
+  cleanEveryS: number
+  cleanTimeS: number
 }
 
 export const DEFAULT_JOB_SETTINGS: JobSettings = {
@@ -27,6 +30,8 @@ export const DEFAULT_JOB_SETTINGS: JobSettings = {
   airSpeedMmS: 250,
   approachMm: 50,
   creaseAngleDeg: DEFAULT_DETECT_SETTINGS.creaseAngleDeg,
+  cleanEveryS: 0,
+  cleanTimeS: 30,
 }
 
 // What the worker reports about the loaded part, plus its hash. core cannot import the worker's PartInfo.

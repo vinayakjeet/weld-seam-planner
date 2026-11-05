@@ -276,7 +276,14 @@ export const jobSchema = z
       })
       .meta({ description: 'Source file name, SHA-256, source units and scale, triangle and body counts, bounding box.' }),
     settings: z
-      .looseObject({ creaseAngleDeg: num, poseSpacingMm: positiveNum, airSpeedMmS: positiveNum, approachMm: nonNegative })
+      .looseObject({
+        creaseAngleDeg: num,
+        poseSpacingMm: positiveNum,
+        airSpeedMmS: positiveNum,
+        approachMm: nonNegative,
+        cleanEveryS: nonNegative.optional().meta({ description: 'Arc time between torch cleaning stops in seconds, 0 for none. Absent in files written before cleaning was modelled.' }),
+        cleanTimeS: nonNegative.optional().meta({ description: 'Duration of one torch cleaning stop in seconds.' }),
+      })
       .meta({ description: 'Detection and export settings used, so the file is reproducible.' }),
     procedures: z.array(procedureSchema).meta({ description: 'Reusable weld procedures referenced by seams.' }),
     seams: z.array(seamSchema).meta({ description: 'Every accepted seam, in no particular order.' }),
@@ -299,7 +306,9 @@ export const jobSchema = z
         weldLengthMm: nonNegative,
         arcTimeS: nonNegative,
         airTimeS: nonNegative,
-        cycleTimeS: nonNegative,
+        cycleTimeS: nonNegative.meta({ description: 'Arc time, air time, arc start and end times and torch cleaning stops.' }),
+        torchCleanings: z.int().min(0).optional().meta({ description: 'Number of torch cleaning stops in the cycle time.' }),
+        cleaningTimeS: nonNegative.optional().meta({ description: 'Total time of the torch cleaning stops, included in cycleTimeS.' }),
         wireKg: nonNegative,
         gasL: nonNegative,
       })

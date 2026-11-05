@@ -6,7 +6,9 @@ import { useStore } from '../../state/store'
 import { useVisibleSeams } from '../../state/useVisibleSeams'
 import { getGeometryClient } from '../../worker/client'
 import { Button } from '../kit/Button'
-import { cycleField } from '../shell/summary'
+import { cleaningField, cycleField } from '../shell/summary'
+import { NumberField } from '../kit/NumberField'
+import { cleaningEveryText, parseCleaningEvery, parseCleaningTime } from './cleaningFields'
 import { NO_ACCEPTED_TEXT } from './NoAcceptedSeams'
 import { sequenceRows } from './sequenceRows'
 
@@ -47,6 +49,36 @@ function Padlock({ locked }: { locked: boolean }) {
       <rect x="2.5" y="5.5" width="7" height="5" rx="1" className={locked ? 'fill-current' : ''} />
       <path d={locked ? 'M4 5.5V4a2 2 0 0 1 4 0v1.5' : 'M4 5.5V4a2 2 0 0 1 3.7-1'} />
     </svg>
+  )
+}
+
+// The cleaning term of the cycle time: a stop of some seconds each time a stretch of arc time has passed.
+function CleaningFields() {
+  const everyS = useStore((s) => s.jobSettings.cleanEveryS)
+  const timeS = useStore((s) => s.jobSettings.cleanTimeS)
+  const setCleaning = useStore((s) => s.setCleaning)
+  return (
+    <fieldset aria-label="Torch cleaning" className="flex flex-col gap-1">
+      <NumberField
+        label="Clean the torch every"
+        unit="min"
+        value={cleaningEveryText(everyS)}
+        hint={<span className="pl-0 text-[11px] text-ink-2">Minutes of arc time between cleanings; 0 for none.</span>}
+        onCommit={(text) => {
+          const parsed = parseCleaningEvery(text)
+          return 'error' in parsed ? parsed.error : setCleaning({ cleanEveryS: parsed.seconds })
+        }}
+      />
+      <NumberField
+        label="Cleaning stop"
+        unit="s"
+        value={String(Number(timeS.toFixed(1)))}
+        onCommit={(text) => {
+          const parsed = parseCleaningTime(text)
+          return 'error' in parsed ? parsed.error : setCleaning({ cleanTimeS: parsed.seconds })
+        }}
+      />
+    </fieldset>
   )
 }
 
@@ -105,6 +137,7 @@ function Controls() {
         </div>
       )}
       {reason === null && <p className="text-ink-2">Current order: {STRATEGY_NAMES[used]}. Drag a row, or press Alt and an arrow key, to set it by hand.</p>}
+      <CleaningFields />
       <Summary />
     </div>
   )
@@ -116,10 +149,17 @@ function Summary() {
   if (!timing || timing.seams.length === 0) return null
   const air = timing.moves.reduce((total, m) => total + m.lengthMm, 0)
   const field = cycleField(timing, current)
+  const cleaning = cleaningField(timing)
   return (
     <dl className={`grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 ${field.stale ? 'opacity-60' : ''}`}>
       <dt className="text-ink-2">Air travel</dt>
       <dd className="num text-ink-0">{Math.round(air).toLocaleString('en-US')} mm</dd>
+      {cleaning && (
+        <>
+          <dt className="text-ink-2">Torch cleaning</dt>
+          <dd className="num text-ink-0">{cleaning}</dd>
+        </>
+      )}
       <dt className="text-ink-2">Cycle time</dt>
       <dd className="num text-ink-0">{field.value}</dd>
     </dl>

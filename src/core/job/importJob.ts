@@ -1,6 +1,6 @@
 import { reconcileOrder } from '../sequence/order'
 import { DEFAULT_ARM } from '../snake/arm'
-import { resolveSeam, type Explained, type Plan, type PlannedSeam } from './plan'
+import { DEFAULT_JOB_SETTINGS, resolveSeam, type Explained, type Plan, type PlannedSeam } from './plan'
 import { jobSchema } from './schema'
 
 type Outcome = { status: 'ok'; plan: Plan } | { status: 'error'; error: Explained }
@@ -92,7 +92,7 @@ export function importJob(input: string | unknown, expectedSha256: string): Outc
       bbox: { min: job.part.boundingBox.min, max: job.part.boundingBox.max },
     },
     gravity: job.frames.gravity,
-    settings: { ...job.settings },
+    settings: { ...job.settings, cleanEveryS: job.settings.cleanEveryS ?? DEFAULT_JOB_SETTINGS.cleanEveryS, cleanTimeS: job.settings.cleanTimeS ?? DEFAULT_JOB_SETTINGS.cleanTimeS },
     procedures: job.procedures,
     seams: job.seams.map(
       (seam): PlannedSeam => ({

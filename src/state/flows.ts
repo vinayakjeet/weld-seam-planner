@@ -142,6 +142,8 @@ async function applyLoad(outcome: LoadOutcome, fileName: string, client: Geometr
       poseSpacingMm: DEFAULT_JOB_SETTINGS.poseSpacingMm,
       airSpeedMmS: DEFAULT_JOB_SETTINGS.airSpeedMmS,
       approachMm: DEFAULT_JOB_SETTINGS.approachMm,
+      cleanEveryS: DEFAULT_JOB_SETTINGS.cleanEveryS,
+      cleanTimeS: DEFAULT_JOB_SETTINGS.cleanTimeS,
     },
     detectBusy: false,
     activeStep: 'seams',

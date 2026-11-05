@@ -1465,7 +1465,7 @@ describe('importPlan', () => {
     const { plan, job, file } = planFile()
     loadPlanPart(plan)
     await importPlan(file, fakeClient({ detect: async () => detected(plan.seams.map((p) => p.seam)) }))
-    expect(state().jobSettings).toEqual({ poseSpacingMm: 8, airSpeedMmS: 300, approachMm: 70 })
+    expect(state().jobSettings).toEqual({ poseSpacingMm: 8, airSpeedMmS: 300, approachMm: 70, cleanEveryS: 0, cleanTimeS: 30 })
     expect(JSON.stringify(buildJob(selectPlan(state()), { createdAt: CREATED_AT }, []))).toBe(JSON.stringify(job))
   })
 

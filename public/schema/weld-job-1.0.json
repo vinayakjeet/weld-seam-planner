@@ -292,6 +292,16 @@
         "approachMm": {
           "type": "number",
           "minimum": 0
+        },
+        "cleanEveryS": {
+          "description": "Arc time between torch cleaning stops in seconds, 0 for none. Absent in files written before cleaning was modelled.",
+          "type": "number",
+          "minimum": 0
+        },
+        "cleanTimeS": {
+          "description": "Duration of one torch cleaning stop in seconds.",
+          "type": "number",
+          "minimum": 0
         }
       },
       "required": [
@@ -1746,6 +1756,18 @@
           "minimum": 0
         },
         "cycleTimeS": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Arc time, air time, arc start and end times and torch cleaning stops."
+        },
+        "torchCleanings": {
+          "description": "Number of torch cleaning stops in the cycle time.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "cleaningTimeS": {
+          "description": "Total time of the torch cleaning stops, included in cycleTimeS.",
           "type": "number",
           "minimum": 0
         },

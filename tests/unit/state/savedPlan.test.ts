@@ -22,7 +22,7 @@ function editedState() {
     thicknessById: { 'drawn-1': [10, 12] },
     gravity: [1, 0, 0],
     detectSettings: { creaseAngleDeg: 33 },
-    jobSettings: { poseSpacingMm: 8, airSpeedMmS: 300, approachMm: 70 },
+    jobSettings: { poseSpacingMm: 8, airSpeedMmS: 300, approachMm: 70, cleanEveryS: 1500, cleanTimeS: 25 },
   })
   return useStore.getState()
 }
@@ -147,6 +147,17 @@ describe('the sequence in a saved plan', () => {
     const parsed = parseSaved(older)
     expect(parsed.status).toBe('ok')
     if (parsed.status === 'ok') expect(parsed.saved).toMatchObject({ strategy: 'table-order', order: [] })
+  })
+
+  it('keeps the cleaning setting, and reads an entry saved before it existed as no cleaning', () => {
+    const snapshot = JSON.parse(JSON.stringify(snapshotOf(editedState(), NOW)))
+    const parsed = parseSaved(snapshot)
+    if (parsed.status === 'ok') expect(parsed.saved.jobSettings).toMatchObject({ cleanEveryS: 1500, cleanTimeS: 25 })
+    delete snapshot.jobSettings.cleanEveryS
+    delete snapshot.jobSettings.cleanTimeS
+    const older = parseSaved(snapshot)
+    expect(older.status).toBe('ok')
+    if (older.status === 'ok') expect(older.saved.jobSettings).toMatchObject({ poseSpacingMm: 8, cleanEveryS: 0, cleanTimeS: 30 })
   })
 
   it('refuses an order entry with a missing seam id', () => {
