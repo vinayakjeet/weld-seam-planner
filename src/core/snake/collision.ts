@@ -27,21 +27,45 @@ export interface Contact {
   depthMm: number
 }
 
-// Samples along every link, both ends included and at most one radius apart. A surface between two samples can come
-// closer than the radius, by up to 6.7 mm at the default 50 mm (see debt.md).
+// A stretch of a link this short is not split again: an edge can hide at most half of it, a quarter millimetre.
+const MIN_STRETCH_MM = 0.5
+
+// Samples along every link, both ends included and at most one radius apart, then a stretch between two clear samples
+// is split until it is proven clear: the distance to the part changes no faster than the position along the link, so
+// a stretch of length L whose ends are d0 and d1 from the part comes no closer than (d0 + d1 - L) / 2. Without the
+// split a sharp edge midway between two samples could come 13% of the radius closer than the radius unseen.
 export function armContacts(chain: ArmChain, arm: ArmParams, near: Proximity, radiusMm: number = capsuleRadius(arm)): Contact[] {
   const out: Contact[] = []
   const { joints } = chain
+  // Distances are looked up to twice the radius; anything farther counts as twice the radius, which is still a bound.
+  const reach = 2 * radiusMm
+  const probe = (link: number, p: Vec3): number => {
+    const hit = near(p, reach)
+    if (!hit) return reach
+    if (hit.distanceMm < radiusMm) out.push({ link, sample: p, surface: hit.point, depthMm: radiusMm - hit.distanceMm })
+    return hit.distanceMm
+  }
+  const split = (link: number, a: Vec3, da: number, b: Vec3, db: number): void => {
+    const span = length(sub(b, a))
+    if (da < radiusMm || db < radiusMm || (da + db - span) / 2 >= radiusMm || span <= MIN_STRETCH_MM) return
+    const mid: Vec3 = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2]
+    const dm = probe(link, mid)
+    if (dm < radiusMm) return
+    split(link, a, da, mid, dm)
+    split(link, mid, dm, b, db)
+  }
   for (let link = 0; link < joints.length - 1; link++) {
     const from = joints[link]!
     const to = joints[link + 1]!
     const span = length(sub(to, from))
     const steps = span < 1e-9 ? 0 : Math.ceil(span / radiusMm)
+    let previous: { p: Vec3; d: number } | null = null
     for (let i = 0; i <= steps; i++) {
       const t = steps === 0 ? 0 : i / steps
       const sample: Vec3 = [from[0] + (to[0] - from[0]) * t, from[1] + (to[1] - from[1]) * t, from[2] + (to[2] - from[2]) * t]
-      const hit = near(sample, radiusMm)
-      if (hit && hit.distanceMm < radiusMm) out.push({ link, sample, surface: hit.point, depthMm: radiusMm - hit.distanceMm })
+      const d = probe(link, sample)
+      if (previous) split(link, previous.p, previous.d, sample, d)
+      previous = { p: sample, d }
     }
   }
   return out

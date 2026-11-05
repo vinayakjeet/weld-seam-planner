@@ -42,6 +42,34 @@ describe('armContacts', () => {
     expect(new Set(contacts.filter((c) => c.link >= 1).map((c) => c.link))).toEqual(new Set([1, 2, 3, 4]))
   })
 
+  // Link 1 runs x 0 to 150 with samples at 0, 50, 100 and 150. A knife edge 44 mm above x 25 is 50.6 mm from the
+  // nearest sample but only 44 mm from the link.
+  it('finds a sharp edge that comes inside the radius between two samples', () => {
+    const edge: Vec3 = [25, 0, 44]
+    const knife: Proximity = (p, maxMm) => {
+      const d = Math.hypot(p[0] - edge[0], p[1] - edge[1], p[2] - edge[2])
+      return d <= maxMm ? { point: edge, distanceMm: d } : null
+    }
+    expect(Math.hypot(25, 44)).toBeGreaterThan(RADIUS)
+    const contacts = armContacts(straightAlongX(0), DEFAULT_ARM, knife)
+    expect(contacts.length).toBeGreaterThan(0)
+    const deepest = Math.max(...contacts.map((c) => c.depthMm))
+    expect(deepest).toBeGreaterThan(RADIUS - 44 - 0.25)
+    expect(deepest).toBeLessThanOrEqual(RADIUS - 44 + 1e-9)
+    for (const c of contacts) expect(c.link).toBe(1)
+  })
+
+  it('misses nothing by more than a quarter of a millimetre along a link, wherever the edge sits', () => {
+    for (let x = 0; x <= 600; x += 7.3) {
+      const edge: Vec3 = [x, 0, RADIUS - 0.3]
+      const knife: Proximity = (p, maxMm) => {
+        const d = Math.hypot(p[0] - edge[0], p[1] - edge[1], p[2] - edge[2])
+        return d <= maxMm ? { point: edge, distanceMm: d } : null
+      }
+      expect(armContacts(straightAlongX(0), DEFAULT_ARM, knife).length, `edge at x ${x}`).toBeGreaterThan(0)
+    }
+  })
+
   it('takes the radius from the argument when given: contact, not clearance', () => {
     expect(armContacts(straightAlongX(45), DEFAULT_ARM, plane, 40)).toEqual([])
     expect(armContacts(straightAlongX(45), DEFAULT_ARM, plane, 50).length).toBeGreaterThan(0)

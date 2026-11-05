@@ -153,20 +153,21 @@ describe('withReach and reachKey', () => {
 
 
 // Measured coverage of the 20 snake seams of tank-with-manhole from P1: [defaults, bend limit 25 degrees], checked to
-// 0.01. The id comes from the geometry of the seam; the comment gives where it is.
+// 0.01. Five dropped by one station or so when the capsule check stopped missing edges between its samples (on
+// crease-c568d676 the arm had passed 1.2 and 2.2 mm inside its radius at the top edge of the stiffener at x 1154). The id comes from the geometry of the seam; the comment gives where it is.
 const TANK_COVERAGE: Record<string, [number, number]> = {
-  'crease-14032c92': [0, 0.253], // roof, x 800, y 992
+  'crease-14032c92': [0, 0.227], // roof, x 800, y 992
   'crease-4e4e2172': [0.417, 0.593], // floor, x 800, y 8
-  'crease-531fa882': [0, 0.177], // roof, x 800, y 8
-  'crease-86bea152': [0.53, 0.593], // floor, x 800, y 992
+  'crease-531fa882': [0, 0.164], // roof, x 800, y 8
+  'crease-86bea152': [0.53, 0.581], // floor, x 800, y 992
   'crease-04a4db05': [0, 0], // roof, x 8
   'crease-18c63b93': [0, 0.264], // x 8, y 8
   'crease-3f986cb7': [0, 0.264], // x 8, y 992
   'crease-5f8520b8': [0, 0.874], // floor, x 1592
-  'crease-6ff06dea': [0.285, 0.549], // x 1592, y 8
+  'crease-6ff06dea': [0.285, 0.528], // x 1592, y 8
   'crease-9e2a1b9c': [0.894, 0.894], // roof, x 1592 (the plan expected 0)
   'crease-b8841525': [0.325, 0.894], // floor, x 8
-  'crease-c568d676': [0.305, 0.569], // x 1592, y 992
+  'crease-c568d676': [0.285, 0.569], // x 1592, y 992
   'contact-22cdb17c': [0, 0], // stiffener face x 1146
   'contact-7292973c': [0, 0], // stiffener face x 754
   'contact-c1582f87': [0.208, 1], // stiffener face x 746
