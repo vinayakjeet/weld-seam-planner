@@ -30,7 +30,7 @@ export function useCanvasPointer(active: boolean, handlers: PointerHandlers): vo
       const rect = element.getBoundingClientRect()
       const x = event.clientX - rect.left
       const y = event.clientY - rect.top
-      return { x, y, rect, onGizmo: overGizmo(x, y, rect.width) }
+      return { x, y, rect, onGizmo: overGizmo(x, y, rect.width, rect.height) }
     }
     const onMove = (event: PointerEvent) => {
       if (event.buttons !== 0) return

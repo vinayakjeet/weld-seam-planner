@@ -19,6 +19,9 @@ export function Viewport() {
     <main aria-label="3D viewport" className={`relative min-w-0 flex-1 bg-viewport ${aiming ? 'cursor-crosshair' : overSeam ? 'cursor-pointer' : ''}`}>
       <Canvas
         frameloop="demand"
+        // No tone mapping, so the lit faces show the part colour and the seam colours as the tokens give them.
+        flat
+        gl={{ antialias: true }}
         camera={{ position: [350, -450, 300], up: [0, 0, 1], near: 1, far: 100000, fov: 40 }}
       >
         <Scene />

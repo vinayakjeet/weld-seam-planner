@@ -10,8 +10,9 @@ import type { ManualError } from './manual'
 
 export interface DrawClick {
   p: Vec3
-  // Triangle the click landed on.
-  face: number
+  // How far this click may snap, in mm, when it differs from the radius given for the whole line. The viewport sets it from
+  // a pixel radius at the depth of the click, so it follows the zoom.
+  snapRadiusMm?: number
 }
 
 export interface SnapContext {
@@ -82,6 +83,12 @@ function nearestFeature(ctx: SnapContext, p: Vec3, radius: number): Snap | null 
     }
   }
   return best
+}
+
+// Where a click at p lands: the nearest point on a feature edge within the radius, or null. The first click of a drawn seam
+// is placed by this, so a preview built on it shows the point the seam will start from.
+export function snapPoint(ctx: SnapContext, p: Vec3, radiusMm: number): Vec3 | null {
+  return radiusMm > 0 ? (nearestFeature(ctx, p, radiusMm)?.point ?? null) : null
 }
 
 // Plate normals beside an edge. A boundary edge has one plate, so its normal stands in for both.
@@ -184,7 +191,10 @@ export function snapPolyline(clicks: DrawClick[], ctx: SnapContext, snapRadiusMm
     }
   }
 
-  const snaps = clicks.map((c) => (snapRadiusMm > 0 ? nearestFeature(ctx, c.p, snapRadiusMm) : null))
+  const snaps = clicks.map((c) => {
+    const radius = c.snapRadiusMm ?? snapRadiusMm
+    return radius > 0 ? nearestFeature(ctx, c.p, radius) : null
+  })
   const polyline: Vec3[] = [snaps[0]?.point ?? clicks[0]!.p]
   const segmentNormals: Array<[Vec3, Vec3]> = []
   const approximate: boolean[] = []
@@ -215,10 +225,12 @@ export function snapPolyline(clicks: DrawClick[], ctx: SnapContext, snapRadiusMm
     // plate normal of the interior sample beside it, because a snapped end sits on an edge between two plates.
     const samples = Math.min(MAX_PROJECTION_SAMPLES, Math.max(2, Math.ceil(straight / PROJECTION_SPACING_MM)))
     const along = (k: number) => add(start, scale(sub(end, start), k / samples))
+    let face = ctx.surface().closestPointToPoint(new Vector3(...start))?.faceIndex ?? 0
     const hits = Array.from({ length: samples }, (_, k) => {
       if (k === 0) return null
       const hit = ctx.surface().closestPointToPoint(new Vector3(...along(k)))
-      return { p: hit ? ([hit.point.x, hit.point.y, hit.point.z] as Vec3) : along(k), face: hit?.faceIndex ?? clicks[i]!.face }
+      face = hit?.faceIndex ?? face
+      return { p: hit ? ([hit.point.x, hit.point.y, hit.point.z] as Vec3) : along(k), face }
     })
     for (let k = 1; k <= samples; k++) {
       const n = faceNormal(ctx, hits[Math.min(k, samples - 1)]!.face)

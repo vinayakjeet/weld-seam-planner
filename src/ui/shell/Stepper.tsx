@@ -28,7 +28,8 @@ export function Stepper() {
                 >
                   {i + 1}
                 </span>
-                {step.label}
+                {/* Below the width that fits every name, only the open step is named; the others keep their name for screen readers. */}
+                <span className={active ? undefined : 'sr-only @min-[680px]:not-sr-only'}>{step.label}</span>
               </button>
             </li>
           )

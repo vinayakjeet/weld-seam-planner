@@ -17,7 +17,8 @@ import { pointerClaimed } from './pickGuard'
 import { chooseSeamHit, type SeamLineHit } from './pickSeam'
 import { buildSeamSegments, seamSegmentPositions, type Rgb, type SeamPalette } from './seamSegments'
 
-const BASE_WIDTH_PX = 3
+// The coloured core. The halo adds 1.5 px on each side, so the seam colour is what the eye reads.
+const BASE_WIDTH_PX = 4
 const DIM_OPACITY = 0.3
 const HIGHLIGHT_WIDTH_PX = 5
 // How far from a seam, in screen pixels, the cursor still counts as on it.
@@ -132,7 +133,7 @@ export function SeamLines({ partRef }: { partRef: RefObject<Mesh | null> }) {
       const rect = element.getBoundingClientRect()
       const x = clientX - rect.left
       const y = clientY - rect.top
-      if (overGizmo(x, y, rect.width)) return null
+      if (overGizmo(x, y, rect.width, rect.height)) return null
       pointer.set((x / rect.width) * 2 - 1, -(y / rect.height) * 2 + 1)
       raycaster.setFromCamera(pointer, camera)
       const raw = raycaster.intersectObject(base, false).slice(0, MAX_CANDIDATES)

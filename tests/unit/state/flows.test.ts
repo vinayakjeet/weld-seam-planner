@@ -644,7 +644,7 @@ describe('multi-selection after seams go away', () => {
 })
 
 describe('drawSeam', () => {
-  const clicks = [{ p: [0, 0, 0] as [number, number, number], face: 0 }, { p: [50, 0, 0] as [number, number, number], face: 0 }]
+  const clicks = [{ p: [0, 0, 0] as [number, number, number] }, { p: [50, 0, 0] as [number, number, number] }]
 
   it('adds the snapped seam as an accepted drawn seam and passes the radius to the worker', async () => {
     let radius = 0
@@ -686,7 +686,7 @@ describe('manual tool flows', () => {
   }
   const ids = () => selectAllSeams(state()).map((s) => s.id)
   const none = fakeClient()
-  const click = (x: number) => ({ type: 'click', target: { kind: 'surface', point: { p: [x, 0, 0] as [number, number, number], face: -1 } } }) as const
+  const click = (x: number) => ({ type: 'click', target: { kind: 'surface', point: { p: [x, 0, 0] as [number, number, number] } } }) as const
   const drawn = fakeClient({ snapDraw: async () => ({ status: 'ok', seam: lineSeam('drawn', 0, 50) }) })
 
   beforeEach(() => {
@@ -718,7 +718,7 @@ describe('manual tool flows', () => {
       await chooseTool('draw', client)
       for (const x of [0, 20, 50]) await toolEvent(click(x), client)
       await toolEvent({ type: 'finish' }, client)
-      expect(sent).toEqual([0, 20, 50].map((x) => ({ p: [x, 0, 0], face: -1 })))
+      expect(sent).toEqual([0, 20, 50].map((x) => ({ p: [x, 0, 0] })))
     })
 
     it('shows the worker refusal, keeps the points so they can be corrected, and adds nothing', async () => {

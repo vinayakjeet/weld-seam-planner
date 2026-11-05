@@ -38,6 +38,7 @@ function harness() {
       },
       detect: (settings, onProgress) => real.detect(settings, onProgress),
       snapDraw: (clicks, radius) => real.snapDraw(clicks, radius),
+      snapPreview: (point, radius) => real.snapPreview(point, radius),
       torchPositions: (seams, gravity) => real.torchPositions(seams, gravity),
       torchPoses: (seam, params) => real.torchPoses(seam, params),
       access: (seams, onProgress) => real.access(seams, onProgress),
@@ -99,7 +100,7 @@ describe('recovering client', () => {
   it('restores the part before a drawn seam is snapped, too', async () => {
     const { client, spawned } = harness()
     await client.loadStl(readSample('t-joint-merged'), 'a.stl', noop)
-    const clicks = [[-99.5, 5.3, 10.2], [99.5, 5.2, 9.8]].map((p) => ({ p: p as [number, number, number], face: 0 }))
+    const clicks = [[-99.5, 5.3, 10.2], [99.5, 5.2, 9.8]].map((p) => ({ p: p as [number, number, number] }))
 
     spawned[0]!.die('boom')
     expect((await client.snapDraw(clicks, 3)).status).toBe('error')

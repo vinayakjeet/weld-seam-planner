@@ -38,3 +38,22 @@ test('with the font files blocked the app still lays out and falls back to a ser
   expect(consoleErrors.every((message) => message.startsWith('Failed to load resource'))).toBe(true)
   consoleErrors.length = 0
 })
+
+for (const width of [1280, 1400]) {
+  test(`the logo is 20 px of drawing tall, centred on the title, and the top bar fits at ${width} px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 })
+    await page.goto('/')
+    const logo = page.getByRole('img', { name: 'Armatrix' })
+    await expect(logo).toBeVisible()
+    const mark = (await logo.boundingBox())!
+    const title = (await page.getByText('Weld Seam Planner', { exact: true }).boundingBox())!
+    expect(mark.height).toBeCloseTo(20, 0)
+    // The artwork is cropped to its drawing, so the box height is the drawn height and the aspect is the wordmark's, about 10 to 1.
+    expect(mark.width / mark.height).toBeGreaterThan(9)
+    expect(Math.abs(mark.y + mark.height / 2 - (title.y + title.height / 2))).toBeLessThanOrEqual(3)
+    const header = (await page.locator('header').boundingBox())!
+    const exportButton = (await page.getByRole('button', { name: 'Export', exact: true }).boundingBox())!
+    expect(exportButton.x + exportButton.width).toBeLessThanOrEqual(header.x + header.width)
+    expect(await page.locator('header').evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true)
+  })
+}

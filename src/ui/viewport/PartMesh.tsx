@@ -32,8 +32,8 @@ export function PartMesh({ ref }: { ref?: Ref<Mesh> }) {
         roughness={0.85}
         metalness={0.05}
         polygonOffset
-        polygonOffsetFactor={1}
-        polygonOffsetUnits={1}
+        polygonOffsetFactor={2}
+        polygonOffsetUnits={2}
       />
     </mesh>
   )

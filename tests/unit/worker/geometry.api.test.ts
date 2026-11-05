@@ -332,7 +332,7 @@ describe('geometry api: winding repair', () => {
 })
 
 describe('geometry api: snapDraw', () => {
-  const clicks = ([[-99.5, 5.3, 10.2], [0, 4.7, 10.4], [99.5, 5.2, 9.8]] as const).map((p) => ({ p: [...p] as [number, number, number], face: 0 }))
+  const clicks = ([[-99.5, 5.3, 10.2], [0, 4.7, 10.4], [99.5, 5.2, 9.8]] as const).map((p) => ({ p: [...p] as [number, number, number] }))
 
   it('says what is missing before any part is loaded', async () => {
     const outcome = await createGeometryApi().snapDraw(clicks, 3)

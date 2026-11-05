@@ -23,7 +23,7 @@ import { parseStl, StlError } from '../core/mesh/parseStl'
 import { guessUnits, scaleToMm, type KnownUnits, type Units } from '../core/mesh/units'
 import { buildBodyBvhs, buildWholeBvh, MAX_WHOLE_BVH_TRIANGLES, wholeBvhFor, type BodyBvh } from '../core/seams/bodyBvh'
 import { detectSeams, type DetectSettings, type SeamCandidate } from '../core/seams/detect'
-import { buildSnapContext, snapPolyline, type DrawClick, type SnapContext } from '../core/seams/draw'
+import { buildSnapContext, snapPoint, snapPolyline, type DrawClick, type SnapContext } from '../core/seams/draw'
 import { isManualError } from '../core/seams/manual'
 import { probeFromBvhs, seamThickness } from '../core/seams/thickness'
 import { torchPoses, type TorchParams, type TorchPose } from '../core/torch/frames'
@@ -113,6 +113,9 @@ export interface GeometryApi {
   detect(settings: DetectSettings, onProgress: Progress): Promise<DetectOutcome>
   // Turns the user's clicks on the part into one seam snapped to its edges.
   snapDraw(clicks: DrawClick[], snapRadiusMm: number): Promise<SnapOutcome>
+  // Where a click at this point would land: the same snap as the first click of snapDraw. Null when no part is loaded or no
+  // edge is within the radius; it never reports an error, because it only feeds a hover marker.
+  snapPreview(point: Vec3, radiusMm: number): Promise<Vec3 | null>
   // Welding position of every seam under one gravity, keyed by seam id. Needs no part: it reads the seams alone.
   // A seam without points is left out.
   torchPositions(seams: SeamCandidate[], gravity: Gravity): Promise<TorchPositionsOutcome>
@@ -321,6 +324,16 @@ export function createGeometryApi(): GeometryApi {
         return { status: 'ok', seam: { ...result, thicknessMm } }
       } catch (error) {
         return { status: 'error', error: toUserError(error) }
+      }
+    },
+
+    async snapPreview(point, radiusMm) {
+      if (!current) return null
+      try {
+        snapContext ??= buildSnapContext(current, computeFaceData(current.mesh))
+        return snapPoint(snapContext, point, radiusMm)
+      } catch {
+        return null
       }
     },
 

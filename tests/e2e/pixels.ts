@@ -77,3 +77,58 @@ export async function findColour(page: Page, rect: { x: number; y: number; width
     await scratch.close()
   }
 }
+
+// The mean of the red, green and blue values (0 to 255) of the pixels in a page rectangle.
+export async function meanBrightness(page: Page, rect: { x: number; y: number; width: number; height: number }): Promise<number> {
+  const png = await page.screenshot({ clip: rect })
+  const scratch = await page.context().newPage()
+  try {
+    return await scratch.evaluate(async (data) => {
+      const image = new Image()
+      image.src = `data:image/png;base64,${data}`
+      await image.decode()
+      const canvas = document.createElement('canvas')
+      canvas.width = image.width
+      canvas.height = image.height
+      const context = canvas.getContext('2d')!
+      context.drawImage(image, 0, 0)
+      const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data
+      let sum = 0
+      for (let i = 0; i < pixels.length; i += 4) sum += (pixels[i]! + pixels[i + 1]! + pixels[i + 2]!) / 3
+      return sum / (pixels.length / 4)
+    }, png.toString('base64'))
+  } finally {
+    await scratch.close()
+  }
+}
+
+// How many pixels differ between two screenshots of the same size by more than `tolerance` in any channel.
+export async function countChanged(page: Page, before: Buffer, after: Buffer, tolerance: number): Promise<number> {
+  const scratch = await page.context().newPage()
+  try {
+    return await scratch.evaluate(
+      async ({ a, b, tolerance }) => {
+        const read = async (data: string) => {
+          const image = new Image()
+          image.src = `data:image/png;base64,${data}`
+          await image.decode()
+          const canvas = document.createElement('canvas')
+          canvas.width = image.width
+          canvas.height = image.height
+          const context = canvas.getContext('2d')!
+          context.drawImage(image, 0, 0)
+          return context.getImageData(0, 0, canvas.width, canvas.height).data
+        }
+        const [first, second] = [await read(a), await read(b)]
+        let count = 0
+        for (let i = 0; i < first.length; i += 4) {
+          if (Math.abs(first[i]! - second[i]!) > tolerance || Math.abs(first[i + 1]! - second[i + 1]!) > tolerance || Math.abs(first[i + 2]! - second[i + 2]!) > tolerance) count++
+        }
+        return count
+      },
+      { a: before.toString('base64'), b: after.toString('base64'), tolerance },
+    )
+  } finally {
+    await scratch.close()
+  }
+}

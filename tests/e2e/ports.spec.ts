@@ -1,5 +1,5 @@
 import { counts, expect, expectedSeams, field, loadSample, placePort, runReach, sampleById, seamRows, selectAllRows, statusBar, test } from './helpers'
-import { countColour, findColour, hexToRgb } from './pixels'
+import { countChanged, findColour, hexToRgb } from './pixels'
 
 const tank = sampleById('tank-with-manhole')
 // Bright Discovery, the colour of an accepted seam.
@@ -11,8 +11,6 @@ const SPRAY = 'WPS-GMAW-SPRAY-FW6'
 // The seam on the manhole side face of the stiffener at x 746, and the station pinned reachable in the unit tests.
 const STIFFENER = 'S16'
 const STATION_MM = '630.7'
-// The arm is lit, so its colour spreads well around the token value.
-const ARM_TOLERANCE = 90
 
 test('placing a port on a spot where a seam lies does not toggle that seam', async ({ page }) => {
   await page.goto('/')
@@ -57,17 +55,17 @@ test('the arm is drawn at a reached station, and Insert plays', async ({ page })
   await page.getByRole('button', { name: 'X-ray' }).click()
   const main = page.getByRole('main', { name: '3D viewport' })
   const box = (await page.locator('canvas').boundingBox())!
-  // The seam lines are accent too, so the arm is told apart by what it adds to a view of the same seam without it.
+  // The arm is lit and seen through the part, so it has no one colour to count; what it adds to a view of the same seam without it does.
   await seamRows(page).filter({ has: page.getByRole('cell', { name: STIFFENER, exact: true }) }).getByRole('cell', { name: STIFFENER, exact: true }).click()
   await field(page, 'Position along seam', '0')
   await page.waitForTimeout(500)
-  const before = await countColour(page, box, ACCEPTED, ARM_TOLERANCE)
+  const before = await page.screenshot({ clip: box })
 
   await field(page, 'Position along seam', STATION_MM)
   await expect.poll(async () => Number(await main.getAttribute('data-arm-links'))).toBeGreaterThan(0)
   await page.waitForTimeout(500)
-  const after = await countColour(page, box, ACCEPTED, ARM_TOLERANCE)
-  expect(after, 'the arm adds snake coloured pixels to the view').toBeGreaterThan(before + 200)
+  const after = await page.screenshot({ clip: box })
+  expect(await countChanged(page, before, after, 24), 'drawing the arm changes a large part of the view').toBeGreaterThan(1500)
 
   await page.getByRole('button', { name: 'Insert', exact: true }).click()
   const frame = page.getByRole('slider', { name: 'Insertion frame' })

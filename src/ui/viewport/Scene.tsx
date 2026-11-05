@@ -9,7 +9,9 @@ import { AirMoves } from './AirMoves'
 import { ArmCapsules } from './ArmCapsules'
 import { cssVar } from './cssVar'
 import { DrawTool } from './DrawTool'
-import { GIZMO_MARGIN } from './gizmo'
+import { gizmoMargin } from './gizmo'
+import { LIGHT_RIG } from './lighting'
+import { PartEdges } from './PartEdges'
 import { PartMesh } from './PartMesh'
 import { PlaybackTorch } from './PlaybackTorch'
 import { PortMarkers } from './PortMarkers'
@@ -31,6 +33,8 @@ export function Scene() {
   const partMesh = useRef<Mesh>(null)
   const part = useStore((s) => s.part)
   const invalidate = useThree((state) => state.invalidate)
+  const size = useThree((state) => state.size)
+  const margin = gizmoMargin(size.width, size.height)
 
   const fit = useCallback(() => {
     const current = useStore.getState().part
@@ -53,9 +57,9 @@ export function Scene() {
   return (
     <>
       <color attach="background" args={[cssVar('--viewport-bg')]} />
-      <ambientLight intensity={1.4} />
-      <directionalLight position={[300, -400, 600]} intensity={3} />
-      <directionalLight position={[-400, 300, 200]} intensity={1} />
+      <ambientLight intensity={LIGHT_RIG.ambient} />
+      <directionalLight position={LIGHT_RIG.key.position} intensity={LIGHT_RIG.key.intensity} />
+      <directionalLight position={LIGHT_RIG.fill.position} intensity={LIGHT_RIG.fill.intensity} />
       <CameraControls ref={controls} makeDefault />
       <Grid
         rotation={[Math.PI / 2, 0, 0]}
@@ -70,6 +74,7 @@ export function Scene() {
         infiniteGrid
       />
       <PartMesh ref={partMesh} />
+      <PartEdges />
       <SeamLines partRef={partMesh} />
       <DrawTool partRef={partMesh} />
       <SplitTool />
@@ -82,7 +87,7 @@ export function Scene() {
       <WeldGlow />
       <PlaybackTorch />
       <SequenceLabels />
-      <GizmoHelper alignment="top-right" margin={[GIZMO_MARGIN, GIZMO_MARGIN]}>
+      <GizmoHelper alignment="top-right" margin={[margin, margin]}>
         <GizmoViewcube
           faces={Z_UP_FACES}
           color={cssVar('--bg-2')}

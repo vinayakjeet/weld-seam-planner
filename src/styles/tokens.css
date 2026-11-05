@@ -52,7 +52,7 @@
   /* 3D scene */
   --viewport-bg: var(--bg-0);
   --part: #8E8F88;
-  --part-edge: var(--revolution-green);
+  --part-edge: var(--revolution-green-t1);
   --seam-candidate: var(--light-sand-s2);
   --seam-accepted: var(--brand-accent);
   --seam-hover: var(--light-sand);

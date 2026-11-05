@@ -22,6 +22,7 @@ import { createRecoveringClient } from './recovery'
 export type GeometryClient = GeometryApi
 
 export const DEFAULT_TIMEOUT_MS = 30_000
+const PREVIEW_TIMEOUT_MS = 1500
 
 export interface ClientOptions {
   // A call fails when the worker sends nothing for this long. Progress counts as a reply, so a slow load is not cut off.
@@ -123,6 +124,9 @@ export function wrapGeometryApi(endpoint: Endpoint, options: ClientOptions = {})
       supervise<DetectOutcome>(options, 'detecting seams', (activity) => remote.detect(settings, watching(activity, onProgress))),
     snapDraw: (clicks, snapRadiusMm) =>
       supervise<SnapOutcome>(options, 'snapping the drawn seam', () => remote.snapDraw(clicks, snapRadiusMm)),
+    // A hover aid: a slow or dead worker gives no marker, and does not count as a failure that replaces the worker.
+    snapPreview: (point, radiusMm) =>
+      Promise.race([remote.snapPreview(point, radiusMm).catch(() => null), new Promise<null>((resolve) => setTimeout(() => resolve(null), PREVIEW_TIMEOUT_MS))]),
     torchPositions: (seams, gravity) =>
       supervise<TorchPositionsOutcome>(options, 'working out the welding positions', () => remote.torchPositions(seams, gravity)),
     torchPoses: (seam, params) =>

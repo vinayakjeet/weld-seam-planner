@@ -105,6 +105,9 @@ export function createRecoveringClient(spawn: (onDead: () => void) => GeometryCl
       return lost ?? target.snapDraw(clicks, snapRadiusMm)
     },
 
+    // A hover aid: it is not worth restoring the part for, so a fresh worker answers null until the next real call.
+    snapPreview: (point, radiusMm) => current().snapPreview(point, radiusMm),
+
     // These read only the seams they are given, so a replacement worker does not need the part back first.
     torchPositions: (seams, gravity) => current().torchPositions(seams, gravity),
 

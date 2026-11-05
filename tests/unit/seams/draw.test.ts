@@ -1,10 +1,8 @@
-import { Vector3 } from 'three'
 import { describe, expect, it } from 'vitest'
-import { buildWholeBvh } from '../../../src/core/seams/bodyBvh'
 import { cross, dot, length, sub, type Vec3 } from '../../../src/core/math/vec3'
 import { computeFaceData } from '../../../src/core/mesh/faces'
 import { buildMeshModel, type MeshModel } from '../../../src/core/mesh/model'
-import { buildSnapContext, snapPolyline, type DrawClick } from '../../../src/core/seams/draw'
+import { buildSnapContext, snapPoint, snapPolyline, type DrawClick } from '../../../src/core/seams/draw'
 import type { SeamCandidate } from '../../../src/core/seams/detect'
 import { isManualError, type ManualError } from '../../../src/core/seams/manual'
 import { loadSampleModel } from '../helpers/models'
@@ -13,9 +11,7 @@ import { cubeTriangles, soupOf } from '../helpers/shapes'
 function setup(model: MeshModel) {
   const faces = computeFaceData(model.mesh)
   const context = buildSnapContext(model, faces)
-  // The viewport hands over the triangle it hit; here the triangle nearest the point stands in for it.
-  const bvh = buildWholeBvh(model).bvh
-  const click = (p: Vec3): DrawClick => ({ p, face: bvh.closestPointToPoint(new Vector3(...p))!.faceIndex })
+  const click = (p: Vec3): DrawClick => ({ p })
   return { context, click }
 }
 
@@ -69,7 +65,7 @@ describe('snapPolyline on a T-joint', () => {
   it('gives the same seam when the clicks name no triangle, because the viewport cannot tell the model triangle', () => {
     const points: Vec3[] = [[-80, -40, 10], [80, -30, 10]]
     const named = ok(snapPolyline(points.map(click), context, 3))
-    const unnamed = ok(snapPolyline(points.map((p) => ({ p, face: -1 })), context, 3))
+    const unnamed = ok(snapPolyline(points.map((p) => ({ p })), context, 3))
     expect(unnamed.points).toEqual(named.points)
     expect(unnamed.approximateNormals).toBe(true)
     for (const { n1, n2 } of unnamed.points) {
@@ -120,5 +116,45 @@ describe('snapPolyline across the feature edge graph', () => {
     expect(seam.lengthMm).toBeCloseTo(60, 6)
     expect(seam.approximateNormals).toBe(true)
     for (const { p } of seam.points) expect(p[1]).toBeCloseTo(0, 6)
+  })
+})
+
+describe('snapPoint', () => {
+  const { context } = setup(loadSampleModel('t-joint-merged'))
+
+  it('moves a point near the crease onto it', () => {
+    const snapped = snapPoint(context, [-99.5, 5.3, 10.2], 3)
+    expect(snapped).not.toBeNull()
+    expect(length(sub(snapped!, [-99.5, 5.3, 10.2]))).toBeLessThanOrEqual(3)
+  })
+
+  it('gives the point the first click of a drawn seam snaps to', () => {
+    const clicks: DrawClick[] = [[-99.5, 5.3, 10.2], [99.5, 5.2, 9.8]].map((p) => ({ p: p as Vec3 }))
+    const seam = ok(snapPolyline(clicks, context, 3))
+    expect(snapPoint(context, clicks[0]!.p, 3)).toEqual(seam.points[0]!.p)
+  })
+
+  it('gives null when no feature edge is in reach or the radius is zero', () => {
+    expect(snapPoint(context, [0, 40, 30], 3)).toBeNull()
+    expect(snapPoint(context, [-99.5, 5.3, 10.2], 0)).toBeNull()
+  })
+})
+
+describe('snapPolyline with a radius carried by each click', () => {
+  const { context } = setup(loadSampleModel('t-joint-merged'))
+  const ends: Vec3[] = [[-99.5, 5.3, 10.2], [99.5, 5.2, 9.8]]
+
+  it('snaps a click by its own radius and not by the call radius', () => {
+    const own = ok(snapPolyline(ends.map((p) => ({ p, snapRadiusMm: 3 })), context, 0))
+    const none = ok(snapPolyline(ends.map((p) => ({ p })), context, 0))
+    expect(own.approximateNormals).toBeFalsy()
+    expect(none.approximateNormals).toBe(true)
+  })
+
+  it('lets a click turn snapping off when the call radius would snap it', () => {
+    const first = snapPoint(context, ends[0]!, 3)!
+    const seam = ok(snapPolyline([{ p: ends[0]!, snapRadiusMm: 0 }, { p: ends[1]! }], context, 3))
+    expect(seam.points[0]!.p).toEqual(ends[0])
+    expect(seam.points[0]!.p).not.toEqual(first)
   })
 })

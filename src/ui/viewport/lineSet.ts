@@ -17,31 +17,29 @@ interface LineStyle {
   opacity?: number
 }
 
+// Steps towards the camera that the lowest layer of lines gets over the part, which is itself pushed back by two.
+const LINE_OFFSET = 4
+
 export function lineSet(positions: Float32Array, { width, colors, color, renderOrder = 0, dashed, overlay = false, opacity = 1 }: LineStyle): LineSegments2 {
   const geometry = new LineSegmentsGeometry()
   geometry.setPositions(positions)
   if (colors) geometry.setColors(colors)
-  const material = new LineMaterial({ linewidth: width, vertexColors: colors !== undefined })
+  // Every line is drawn in the transparent pass, which is ordered by renderOrder alone: a halo or an edge line is always
+  // drawn before the line over it and writes no depth, so none of them can win a depth tie against the line they sit under.
+  const material = new LineMaterial({ linewidth: width, vertexColors: colors !== undefined, transparent: true })
   if (color) material.color = new Color(color)
-  if (opacity < 1) {
-    material.transparent = true
-    material.opacity = opacity
-  }
-  if (overlay) {
-    material.depthTest = false
-    material.transparent = true
-  }
+  material.opacity = opacity
+  if (overlay) material.depthTest = false
   if (dashed) {
     material.dashed = true
     material.dashSize = dashed.dashSize
     material.gapSize = dashed.gapSize
   }
-  // An overlay lies exactly on the line set below it; without a lift the two fight over the depth test and speckle.
-  if (renderOrder > 0) {
-    material.polygonOffset = true
-    material.polygonOffsetFactor = -renderOrder
-    material.polygonOffsetUnits = -renderOrder
-  }
+  // A line on a crease lies exactly where two faces meet, and a face sloping towards the camera would cut it into dashes.
+  // The lift grows with the layer, so an overlay on a line set below it does not fight it over the depth test either.
+  material.polygonOffset = true
+  material.polygonOffsetFactor = -(LINE_OFFSET + renderOrder)
+  material.polygonOffsetUnits = -(LINE_OFFSET + renderOrder)
   const lines = new LineSegments2(geometry, material)
   if (dashed) lines.computeLineDistances()
   lines.frustumCulled = false
@@ -66,22 +64,24 @@ interface Halo {
   extraPx: number
 }
 
-export const HALO_EXTRA_PX = 4
+// 1.5 px on each side of the line, and see-through, so the line itself stays the dominant colour.
+export const HALO_EXTRA_PX = 3
+export const HALO_OPACITY = 0.6
 
 // A wider line in the halo colour drawn just under another one, so the line reads on a light part. It shares the line's
 // geometry and follows its opacity and depth settings; the material is its own.
 export function haloFor(lines: LineSegments2, { color, extraPx }: Halo): LineSegments2 {
   const material = new LineMaterial({ linewidth: lines.material.linewidth + extraPx })
   material.color = new Color(color)
-  material.transparent = lines.material.transparent
-  material.opacity = lines.material.opacity
+  material.transparent = true
+  material.opacity = HALO_OPACITY * lines.material.opacity
   material.depthTest = lines.material.depthTest
-  // The line sits half a step nearer the camera than its halo, so the two do not fight over the depth test.
-  if (lines.material.polygonOffset) {
-    material.polygonOffset = true
-    material.polygonOffsetFactor = lines.material.polygonOffsetFactor + 0.5
-    material.polygonOffsetUnits = lines.material.polygonOffsetUnits + 0.5
-  }
+  // The line sits a whole step nearer the camera than its halo (half a step is below what the depth buffer can tell apart,
+  // and the two speckle), and the halo writes no depth, so it can never hide the line.
+  material.depthWrite = false
+  material.polygonOffset = true
+  material.polygonOffsetFactor = lines.material.polygonOffsetFactor + 1
+  material.polygonOffsetUnits = lines.material.polygonOffsetUnits + 1
   const halo = new LineSegments2(lines.geometry, material)
   halo.frustumCulled = false
   halo.renderOrder = lines.renderOrder - 1
