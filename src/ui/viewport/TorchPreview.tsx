@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { poseAt } from '../../core/torch/frames'
+import { previewCtwdMm } from '../../state/flows'
 import { posesFor } from '../../state/torchSlice'
 import { useStore } from '../../state/store'
 import { useVisibleSeams } from '../../state/useVisibleSeams'
@@ -15,8 +16,9 @@ export function TorchPreview() {
   const playbackStep = useStore((s) => s.activeStep === 'sequence' || s.activeStep === 'export')
   const seam = useVisibleSeams().find((s) => s.id === selectedId)
 
+  const ctwdMm = useStore((s) => (seam ? previewCtwdMm(s, seam) : null))
   const poses = seam ? posesFor({ posesForSelected: entry }, seam) : null
   const pose = useMemo(() => (seam && poses && poses.length > 0 ? poseAt(poses, scrubS, seam.closed) : null), [seam, poses, scrubS])
   if (!pose || playbackStep) return null
-  return <TorchMesh pose={pose} name="torch-preview" />
+  return <TorchMesh pose={pose} name="torch-preview" ctwdMm={ctwdMm} />
 }

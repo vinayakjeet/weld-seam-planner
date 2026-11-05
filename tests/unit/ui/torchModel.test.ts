@@ -9,6 +9,30 @@ const IDENTITY: Quat = [0, 0, 0, 1]
 const pose = (p: Vec3, q: Quat) => ({ p, q })
 const finite = (v: readonly number[]) => v.every(Number.isFinite)
 
+describe('placeTorch with a contact tip distance', () => {
+  it('puts the nozzle tip that many mm back from the seam point, in place of the default', () => {
+    const model = placeTorch(pose([10, 20, 30], IDENTITY), 1, 22)!
+    expect(model.wire.tip).toEqual([10, 20, 30])
+    expect(model.nozzle.tip).toEqual([10, 20, 8])
+  })
+
+  it('scales the distance with the display scale like every other dimension', () => {
+    const model = placeTorch(pose([0, 0, 0], IDENTITY), 2, 20)!
+    expect(model.nozzle.tip).toEqual([0, 0, -40])
+  })
+
+  it('keeps the nozzle and body lengths whatever the distance', () => {
+    const near = placeTorch(pose([0, 0, 0], IDENTITY), 1, 10)!
+    const far = placeTorch(pose([0, 0, 0], IDENTITY), 1, 30)!
+    expect(near.nozzle.tip[2]! - near.nozzle.base[2]!).toBeCloseTo(far.nozzle.tip[2]! - far.nozzle.base[2]!, 9)
+    expect(near.body.tip[2]! - near.body.base[2]!).toBeCloseTo(far.body.tip[2]! - far.body.base[2]!, 9)
+  })
+
+  it('falls back to the default for a distance that is null, zero, negative or not finite', () => {
+    for (const bad of [null, 0, -5, Number.NaN, Infinity]) expect(placeTorch(pose([0, 0, 0], IDENTITY), 1, bad)!.nozzle.tip, String(bad)).toEqual([0, 0, -15])
+  })
+})
+
 describe('placeTorch', () => {
   it('puts the wire tip on the seam point and the nozzle tip the display CTWD back along minus z', () => {
     const model = placeTorch(pose([10, 20, 30], IDENTITY))!

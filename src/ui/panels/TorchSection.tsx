@@ -4,9 +4,12 @@ import { poseAt } from '../../core/torch/frames'
 import { positionFor, posesFor } from '../../state/torchSlice'
 import { useStore } from '../../state/store'
 import { useVisibleSeams } from '../../state/useVisibleSeams'
+import { previewCtwdMm } from '../../state/flows'
+import { useTorchScale } from '../viewport/TorchMesh'
 import { GravitySelect } from './GravitySelect'
 import { PositionChip } from './PositionChip'
 import { ScrubSlider } from './ScrubSlider'
+import { torchNote } from './torchNote'
 
 const fixed = (values: readonly number[], digits: number) => values.map((v) => v.toFixed(digits)).join(', ')
 
@@ -51,6 +54,14 @@ function PoseReadout() {
   )
 }
 
+function DrawingNote() {
+  const selectedId = useStore((s) => s.selectedId)
+  const seam = useVisibleSeams().find((s) => s.id === selectedId)
+  const ctwdMm = useStore((s) => (seam ? previewCtwdMm(s, seam) : null))
+  const scale = useTorchScale()
+  return <p className="text-[11px] text-ink-2">{torchNote(scale, ctwdMm)}</p>
+}
+
 export function TorchSection() {
   const selectedId = useStore((s) => s.selectedId)
   const hasSelection = useVisibleSeams().some((s) => s.id === selectedId)
@@ -62,6 +73,7 @@ export function TorchSection() {
         <div className="flex flex-col gap-3">
           <ScrubSlider />
           <PoseReadout />
+          <DrawingNote />
         </div>
       ) : (
         <p className="text-ink-2">Select a seam to preview the torch along it.</p>

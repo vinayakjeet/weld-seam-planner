@@ -1,7 +1,7 @@
 import { rotate, type Quat } from '../../core/math/quat'
 import { length, scale, sub, type Vec3 } from '../../core/math/vec3'
 
-// Nozzle tip to the work, as the preview draws it. The real stickout is a procedure setting; the preview is a picture.
+// Nozzle tip to the work when the procedure has no contact tip distance. Otherwise the distance is the procedure's.
 export const DISPLAY_CTWD_MM = 15
 const NOZZLE_LENGTH_MM = 22
 const BODY_LENGTH_MM = 70
@@ -31,19 +31,20 @@ const finite = (values: readonly number[]) => values.every(Number.isFinite)
 // The torch laid out along the tool axis of a pose: the wire runs from the nozzle tip to the seam point, the nozzle and
 // the body sit behind it, away from the joint. displayScale grows or shrinks every dimension. Null when the pose or the
 // scale cannot be drawn, so the caller shows nothing rather than a torch in the wrong place.
-export function placeTorch(pose: { p: Vec3; q: Quat }, displayScale = 1): TorchPlacement | null {
+export function placeTorch(pose: { p: Vec3; q: Quat }, displayScale = 1, ctwdMm?: number | null): TorchPlacement | null {
   if (!finite([...pose.p, ...pose.q]) || !Number.isFinite(displayScale) || displayScale <= 0) return null
   if (Math.abs(Math.hypot(...pose.q) - 1) > UNIT_TOLERANCE) return null
   const z = rotate(pose.q, [0, 0, 1])
   if (!finite(z) || length(z) === 0) return null
 
   const back = (mm: number): Vec3 => sub(pose.p, scale(z, mm * displayScale))
-  const nozzleTip = back(DISPLAY_CTWD_MM)
-  const bodyTip = back(DISPLAY_CTWD_MM + NOZZLE_LENGTH_MM)
+  const ctwd = ctwdMm !== null && ctwdMm !== undefined && Number.isFinite(ctwdMm) && ctwdMm > 0 ? ctwdMm : DISPLAY_CTWD_MM
+  const nozzleTip = back(ctwd)
+  const bodyTip = back(ctwd + NOZZLE_LENGTH_MM)
   const s = displayScale
   return {
     wire: { tip: [...pose.p], base: nozzleTip, tipRadius: WIRE_RADIUS_MM * s, baseRadius: WIRE_RADIUS_MM * s },
     nozzle: { tip: nozzleTip, base: bodyTip, tipRadius: NOZZLE_TIP_RADIUS_MM * s, baseRadius: NOZZLE_BASE_RADIUS_MM * s },
-    body: { tip: bodyTip, base: back(DISPLAY_CTWD_MM + NOZZLE_LENGTH_MM + BODY_LENGTH_MM), tipRadius: BODY_RADIUS_MM * s, baseRadius: BODY_RADIUS_MM * s },
+    body: { tip: bodyTip, base: back(ctwd + NOZZLE_LENGTH_MM + BODY_LENGTH_MM), tipRadius: BODY_RADIUS_MM * s, baseRadius: BODY_RADIUS_MM * s },
   }
 }

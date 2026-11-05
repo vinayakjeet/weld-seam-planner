@@ -513,6 +513,11 @@ export function previewTorchParams(state: AppState, seam: SeamCandidate): TorchP
   return resolved.procedure ? torchParamsFor(resolved.procedure, plan.settings) : { ...DEFAULT_TORCH, approachMm: state.jobSettings.approachMm }
 }
 
+// The contact tip distance of the procedure the seam will be welded with, overrides included; null with no procedure or none set.
+export function previewCtwdMm(state: AppState, seam: SeamCandidate): number | null {
+  return resolveSeam(selectPlan(state), plannedSeam(state, seam)).procedure?.ctwdMm ?? null
+}
+
 export async function refreshPoses(client: GeometryClient): Promise<void> {
   const request = ++posesRequest
   const state = useStore.getState()

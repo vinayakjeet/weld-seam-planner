@@ -21,11 +21,10 @@ export function PlaybackTorch() {
     state.invalidate()
   })
 
-  const pose = useMemo(() => {
-    if (!active || !data) return null
-    const at = poseAtTime(data.path, data.timing, timeS)
-    return { p: at.position, q: at.quaternion }
-  }, [active, data, timeS])
-  if (!pose) return null
-  return <TorchMesh pose={pose} name="playback-torch" />
+  const ctwdBySeam = useMemo(() => new Map(data?.path.seams.map((s) => [s.seamId, s.ctwdMm]) ?? []), [data])
+  const at = useMemo(() => (active && data ? poseAtTime(data.path, data.timing, timeS) : null), [active, data, timeS])
+  const pose = useMemo(() => (at ? { p: at.position, q: at.quaternion } : null), [at])
+  if (!pose || !at) return null
+  // The air move to a seam already shows that seam's torch; the move home has no seam.
+  return <TorchMesh pose={pose} name="playback-torch" ctwdMm={ctwdBySeam.get(at.seamId) ?? null} />
 }

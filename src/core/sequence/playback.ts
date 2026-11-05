@@ -1,5 +1,5 @@
 import { buildOrdered, homePoint } from '../job/build'
-import type { Plan } from '../job/plan'
+import { resolveSeam, type Plan } from '../job/plan'
 import type { PlanTiming } from '../job/timing'
 import { normalizeQuat, slerp, type Quat } from '../math/quat'
 import { length, sub, type Vec3 } from '../math/vec3'
@@ -18,6 +18,8 @@ export interface PathSeam {
   // The torch points of the air move before and after the seam.
   approach: Vec3
   retract: Vec3
+  // The contact tip distance of the seam's procedure with its overrides, or null when it has none.
+  ctwdMm: number | null
 }
 
 export interface PlaybackPath {
@@ -37,6 +39,7 @@ export interface PlaybackPose {
 
 // The torch path of the plan in its sequence order, built from the same seams the export is.
 export function playbackPathOf(plan: Plan): PlaybackPath {
+  const planned = new Map(plan.seams.map((p) => [p.seam.id, p]))
   return {
     home: homePoint(plan),
     seams: buildOrdered(plan).map((built) => ({
@@ -44,6 +47,7 @@ export function playbackPathOf(plan: Plan): PlaybackPath {
       poses: built.seam.poses.map((pose) => ({ s: pose.s, position: [...pose.position] as Vec3, quaternion: [...pose.quaternion] as Quat })),
       approach: built.firstApproach,
       retract: built.lastRetract,
+      ctwdMm: resolveSeam(plan, planned.get(built.seam.id)!).procedure?.ctwdMm ?? null,
     })),
   }
 }

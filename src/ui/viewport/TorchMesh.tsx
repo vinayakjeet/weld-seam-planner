@@ -37,9 +37,9 @@ export function useTorchScale(): number {
 }
 
 // The torch in a pose. Nothing is drawn when the pose is one that cannot be drawn.
-export function TorchMesh({ pose, name }: { pose: { p: Vec3; q: Quat }; name: string }) {
+export function TorchMesh({ pose, name, ctwdMm }: { pose: { p: Vec3; q: Quat }; name: string; ctwdMm?: number | null }) {
   const scale = useTorchScale()
-  const placed = useMemo(() => placeTorch(pose, scale), [pose, scale])
+  const placed = useMemo(() => placeTorch(pose, scale, ctwdMm), [pose, scale, ctwdMm])
   const orientation = useMemo(() => new Quaternion(...pose.q).multiply(Y_TO_Z), [pose])
   // The body takes the text colour, which changes with the theme; the other two are signal colours and do not.
   useStore((s) => s.theme)

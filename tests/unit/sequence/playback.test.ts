@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { homePoint } from '../../../src/core/job/build'
+import { resolveSeam } from '../../../src/core/job/plan'
 import { planTiming } from '../../../src/core/job/timing'
 import { length, sub, type Vec3 } from '../../../src/core/math/vec3'
 import { playbackPathOf, playbackTotalS, poseAtTime, trailAlong, weldedUpTo } from '../../../src/core/sequence/playback'
@@ -29,6 +30,21 @@ describe('playbackPathOf', () => {
       expect(dist(seam.approach, seam.poses[0]!.position)).toBeCloseTo(plan.settings.approachMm, 2)
       expect(dist(seam.retract, seam.poses[seam.poses.length - 1]!.position)).toBeCloseTo(plan.settings.approachMm, 2)
     }
+  })
+
+  it('carries the contact tip distance of the procedure of each seam, overrides included', () => {
+    const base = resolveSeam(plan, plan.seams[0]!).procedure!.ctwdMm
+    expect(base).not.toBeNull()
+    expect(path.seams.map((s) => s.ctwdMm)).toEqual([base, base])
+    const changed = playbackPathOf({ ...plan, seams: [{ ...plan.seams[0]!, overrides: { ctwdMm: 31 } }, plan.seams[1]!] })
+    expect(changed.seams.map((s) => s.ctwdMm)).toEqual([31, base])
+  })
+
+  it('has no distance for a seam without a procedure or with a procedure that has none', () => {
+    const bare = playbackPathOf({ ...plan, seams: [{ ...plan.seams[0]!, procedureId: null }, plan.seams[1]!] })
+    expect(bare.seams[0]!.ctwdMm).toBeNull()
+    const noCtwd = playbackPathOf({ ...plan, procedures: plan.procedures.map((p) => ({ ...p, ctwdMm: null })) })
+    expect(noCtwd.seams.map((s) => s.ctwdMm)).toEqual([null, null])
   })
 
   it('follows the sequence of the plan, reversed seams included', () => {
