@@ -54,6 +54,7 @@ export function displayStub(): DisplayData {
     positions: new Float32Array(9),
     indices: new Uint32Array(3),
     bvh: { roots: [], index: null, indirectBuffer: null },
+    edges: new Float32Array(0),
   }
 }
 

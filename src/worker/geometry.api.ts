@@ -19,6 +19,7 @@ import { computeBounds } from '../core/mesh/bounds'
 import { computeFaceData } from '../core/mesh/faces'
 import { sha256Hex } from '../core/mesh/hash'
 import { displayOrigin, toLocalArray } from '../core/mesh/displayOrigin'
+import { featureEdgePositions } from '../core/mesh/featureEdges'
 import { buildMeshModel, type MeshModel } from '../core/mesh/model'
 import { parseStl, StlError } from '../core/mesh/parseStl'
 import { guessUnits, scaleToMm, type KnownUnits, type Units } from '../core/mesh/units'
@@ -70,6 +71,8 @@ export interface DisplayData {
   // Already in the order the BVH expects: building a BVH reorders the triangles.
   indices: Uint32Array
   bvh: SerializedBVH
+  // The outline and creases to draw, 6 floats per segment, relative to the display origin like positions.
+  edges: Float32Array
 }
 
 export type LoadOutcome =
@@ -198,6 +201,9 @@ function toUserError(error: unknown): UserError {
   }
 }
 
+// Faces meeting at more than this are drawn as an edge of the part.
+const EDGE_THRESHOLD_DEG = 30
+
 // A long reach gives way to the worker's messages this often, so a cancel is read between stations.
 const GIVE_WAY_MS = 30
 
@@ -225,6 +231,7 @@ function buildDisplay(model: MeshModel, report: Progress): DisplayData {
     positions: geometry.getAttribute('position').array as Float32Array,
     indices: geometry.getIndex()!.array as Uint32Array,
     bvh: MeshBVH.serialize(bvh, { cloneBuffers: false }),
+    edges: featureEdgePositions(model, computeFaceData(model.mesh), EDGE_THRESHOLD_DEG, displayOrigin(model.bounds)),
   }
 }
 
@@ -268,7 +275,7 @@ export function createGeometryApi(): GeometryApi {
     partBvh = null
     snapContext = null
     const outcome: LoadOutcome = { status: 'ready', part: describePart(model, name, sha256, units), display }
-    const buffers = [display.positions.buffer, display.indices.buffer, ...display.bvh.roots]
+    const buffers = [display.positions.buffer, display.indices.buffer, display.edges.buffer, ...display.bvh.roots]
     return transfer(outcome, buffers as Transferable[])
   }
 

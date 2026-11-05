@@ -326,6 +326,15 @@ describe('geometry api: contact seams', () => {
   })
 })
 
+describe('geometry api: part outline', () => {
+  it('finds the outline and creases while it loads, so the page draws them without a pass of its own', async () => {
+    const { display } = ready(await createGeometryApi().loadStl(readSample('t-joint-merged'), 't.stl', () => {}))
+    expect(display.edges).toBeInstanceOf(Float32Array)
+    expect(display.edges.length % 6).toBe(0)
+    expect(display.edges.length / 6).toBeGreaterThanOrEqual(22)
+  })
+})
+
 describe('geometry api: winding repair', () => {
   it.each([
     ['t-joint-merged', 0],
