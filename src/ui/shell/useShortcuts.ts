@@ -7,7 +7,8 @@ import { shortcutFor, shortcutGate, stepForShortcut, viewForShortcut, type StepS
 export function useShortcuts(fit: () => void, showView: (index: number) => void): void {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.isComposing) return
+      // A dialog that closed on this key has already handled it, before the store says the dialog is shut.
+      if (event.isComposing || event.defaultPrevented) return
       const shortcut = shortcutFor({
         key: event.key,
         ctrlKey: event.ctrlKey,

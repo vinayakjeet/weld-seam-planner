@@ -31,6 +31,21 @@ test('the shortcut sheet lists the keys, blocks the step keys while open and clo
   await expect(sheet).toHaveCount(0)
 })
 
+test('Escape that closes the sheet leaves an armed tool armed', async ({ page }) => {
+  await page.goto('/')
+  await loadSample(page, sampleById('t-joint-merged'))
+  const draw = page.getByRole('button', { name: /^Draw/ })
+  await page.keyboard.press('d')
+  await expect(draw).toHaveAttribute('aria-pressed', 'true')
+  await page.keyboard.press('?')
+  await expect(page.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog', { name: 'Keyboard shortcuts' })).toHaveCount(0)
+  await expect(draw).toHaveAttribute('aria-pressed', 'true')
+  await page.keyboard.press('Escape')
+  await expect(draw).toHaveAttribute('aria-pressed', 'false')
+})
+
 test('? and digits typed into a field are text, not shortcuts', async ({ page }) => {
   await page.goto('/')
   await loadSample(page, sampleById('t-joint-merged'))
