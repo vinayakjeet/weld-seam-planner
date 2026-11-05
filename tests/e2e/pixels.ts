@@ -52,7 +52,7 @@ export async function findColour(page: Page, rect: { x: number; y: number; width
   const scratch = await page.context().newPage()
   try {
     const found = await scratch.evaluate(
-      async ({ data, rgb, tolerance }) => {
+      async ({ data, rgb, tolerance, width }) => {
         const image = new Image()
         image.src = `data:image/png;base64,${data}`
         await image.decode()
@@ -68,9 +68,11 @@ export async function findColour(page: Page, rect: { x: number; y: number; width
         }
         if (hits.length === 0) return null
         const at = hits[Math.floor(hits.length / 2)]!
-        return { x: at % canvas.width, y: Math.floor(at / canvas.width) }
+        // A screenshot holds device pixels; a device with a scale factor (Desktop Safari has 2) has more than CSS pixels.
+        const scale = canvas.width / width
+        return { x: (at % canvas.width) / scale, y: Math.floor(at / canvas.width) / scale }
       },
-      { data: png.toString('base64'), rgb, tolerance },
+      { data: png.toString('base64'), rgb, tolerance, width: rect.width },
     )
     return found ? { x: rect.x + found.x, y: rect.y + found.y } : null
   } finally {

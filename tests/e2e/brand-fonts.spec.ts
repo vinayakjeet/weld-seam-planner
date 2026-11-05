@@ -2,7 +2,8 @@ import { expect, loadSample, sampleById, test } from './helpers'
 import { STEPS } from '../../src/state/store'
 import { STEP_PANEL_HEADING } from '../../src/ui/panels/panelHeadings'
 
-const family = (locator: import('@playwright/test').Locator) => locator.evaluate((el) => getComputedStyle(el).fontFamily)
+// Firefox writes the family in quotes, Chromium and WebKit do not.
+const family = (locator: import('@playwright/test').Locator) => locator.evaluate((el) => getComputedStyle(el).fontFamily.replace(/"/g, ''))
 
 test('Redaction is only on the title, the empty-state headline and one left panel heading per step', async ({ page }) => {
   await page.goto('/')
@@ -28,14 +29,20 @@ test('with the font files blocked the app still lays out and falls back to a ser
   await page.goto('/')
   const title = page.getByText('Weld Seam Planner', { exact: true })
   await expect(title).toBeVisible()
-  expect(await page.evaluate(() => document.fonts.check('16px "Redaction"'))).toBe(false)
+  // document.fonts.check answers true in WebKit for a face that failed, so the faces themselves are asked.
+  const redactionLoaded = await page.evaluate(async () => {
+    await document.fonts.ready
+    return [...document.fonts].filter((face) => face.family.replace(/"/g, '') === 'Redaction').some((face) => face.status === 'loaded')
+  })
+  expect(redactionLoaded).toBe(false)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   const header = await page.locator('header').boundingBox()
   const export_ = await page.getByRole('button', { name: 'Export', exact: true }).boundingBox()
   expect(export_!.x + export_!.width).toBeLessThanOrEqual(header!.x + header!.width)
 
   // Blocking the files is the point of this test, so the browser's resource failures are expected and nothing else is.
-  expect(consoleErrors.every((message) => message.startsWith('Failed to load resource'))).toBe(true)
+  // Chromium and WebKit report "Failed to load resource", Firefox "downloadable font: download failed".
+  expect(consoleErrors.filter((message) => !/Failed to load resource|downloadable font: download failed/.test(message))).toEqual([])
   consoleErrors.length = 0
 })
 
