@@ -14,7 +14,7 @@ import { cssVar } from './cssVar'
 import { overGizmo } from './gizmo'
 import { lineSet, useDisposed, useHalo } from './lineSet'
 import { pointerClaimed } from './pickGuard'
-import { chooseSeamHit, type SeamLineHit } from './pickSeam'
+import { chooseSeamHit, occlusionTolerance, type SeamLineHit } from './pickSeam'
 import { buildSeamSegments, positionsOfSeams, seamSegmentPositions, type Rgb, type SeamPalette } from './seamSegments'
 
 // The coloured core. The halo adds 1.5 px on each side, so the seam colour is what the eye reads.
@@ -149,7 +149,7 @@ export function SeamLines({ partRef }: { partRef: RefObject<Mesh | null> }) {
         hits.push({ segment: hit.faceIndex, distance, occluderDistance })
       }
       const nearest = hits.reduce((least, hit) => Math.min(least, hit.distance), Infinity)
-      const index = chooseSeamHit(hits, built.segmentSeam, Math.max(0.05, 0.002 * nearest))
+      const index = chooseSeamHit(hits, built.segmentSeam, occlusionTolerance(nearest))
       return index === null ? null : (seams[index]?.id ?? null)
     }
 

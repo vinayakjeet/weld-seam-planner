@@ -96,7 +96,7 @@ export function Scene() {
       <PartEdges />
       <SeamLines partRef={partMesh} />
       <DrawTool partRef={partMesh} />
-      <SplitTool />
+      <SplitTool partRef={partMesh} />
       <PortMarkers />
       <ArmCapsules />
       <PortPlacer partRef={partMesh} />

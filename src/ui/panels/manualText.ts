@@ -32,8 +32,8 @@ export function fewPoints(count: number): ManualError {
 export function missedSeam(): ManualError {
   return {
     what: 'The seam was not split.',
-    why: 'The click was not close enough to the selected seam to pick a point on it.',
-    next: 'Click on the highlighted seam, or press Esc and choose another seam first.',
+    why: 'The click was not close enough to a visible point on the selected seam, and a point the part is covering cannot be picked.',
+    next: 'Click on the highlighted seam where it shows, turn the view or switch on x-ray to reach a covered part, or press Esc and choose another seam first.',
   }
 }
 

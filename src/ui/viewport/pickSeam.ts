@@ -7,6 +7,16 @@ export interface SeamLineHit {
   occluderDistance: number | null
 }
 
+// How far in front of a point the part may be before it counts as covering it: a share of the distance, with a floor.
+export function occlusionTolerance(distance: number): number {
+  return Math.max(0.05, 0.002 * distance)
+}
+
+// Whether the part is in front of a point on its surface by more than the tolerance, seen from the camera.
+export function isCovered(distance: number, occluderDistance: number | null): boolean {
+  return occluderDistance !== null && occluderDistance < distance - occlusionTolerance(distance)
+}
+
 // A seam is hidden when the part is in front of it by more than the tolerance. Seams sit on the surface, so a hit
 // with the surface at about the same distance is the seam itself, not something covering it.
 // Returns the index of the nearest visible seam, or null.
