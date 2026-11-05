@@ -27,9 +27,14 @@ interface Active {
   sha256: string | null
   // Set after the first failed write: the notice is shown once and the plan is not written again.
   off: boolean
+  // A demo session builds its own plan on a part that may have a plan saved from an earlier visit. Nothing is written
+  // for that part until another part replaces it; sha is null until the demo part has loaded.
+  demo: { sha: string | null } | null
 }
 
 let active: Active | null = null
+// The next restore offer is skipped, once: a demo link has just replaced the question with its own plan.
+let declineNextOffer = false
 
 const setNotice = (notice: Parameters<AppState['setNotice']>[0]) => useStore.getState().setNotice(notice)
 
@@ -48,7 +53,7 @@ function rebase(): void {
 async function save(current: Active): Promise<void> {
   const state = useStore.getState()
   // The offer is a question about the stored entry; writing now would answer it for the user.
-  if (current.off || state.part === null || state.offer !== null || state.part.sha256 !== current.sha256) return
+  if (current.off || current.demo !== null || state.part === null || state.offer !== null || state.part.sha256 !== current.sha256) return
   try {
     await current.storage.set(savedKey(state.part.sha256), snapshotOf(state, new Date().toISOString()))
   } catch (error) {
@@ -65,12 +70,16 @@ async function save(current: Active): Promise<void> {
 // Saves the plan, debounced, under the hash of the loaded STL. Returns a function that stops it.
 export function startAutosave(storage: PlanStorage, delayMs = AUTOSAVE_DELAY_MS): () => void {
   const state = useStore.getState()
-  const current: Active = { storage, timer: undefined, last: read(state), sha256: state.part?.sha256 ?? null, off: false }
+  const current: Active = { storage, timer: undefined, last: read(state), sha256: state.part?.sha256 ?? null, off: false, demo: null }
   active = current
   const unregister = registerAfterLoad(offerRestore)
   const unsubscribe = useStore.subscribe((next) => {
     const sha256 = next.part?.sha256 ?? null
     if (sha256 !== current.sha256) {
+      if (current.demo) {
+        if (current.demo.sha === null && sha256 !== null) current.demo.sha = sha256
+        else if (sha256 !== current.demo.sha) current.demo = null
+      }
       rebase()
       return
     }
@@ -89,9 +98,21 @@ export function startAutosave(storage: PlanStorage, delayMs = AUTOSAVE_DELAY_MS)
   }
 }
 
+// Called before a demo link loads its sample: the restore question is skipped for that load, and the plan the demo builds
+// is not autosaved over the one stored for the part. The stored plan is still there for the next visit without the link.
+export function beginDemoSession(): void {
+  if (!active) return
+  declineNextOffer = true
+  active.demo = { sha: null }
+}
+
 // After a part has loaded: opens the restore offer if this STL has a saved plan. A saved plan that cannot be read gives
 // a notice and no offer.
 export async function offerRestore(): Promise<void> {
+  if (declineNextOffer) {
+    declineNextOffer = false
+    return
+  }
   const current = active
   const part = useStore.getState().part
   if (!current || part === null) return

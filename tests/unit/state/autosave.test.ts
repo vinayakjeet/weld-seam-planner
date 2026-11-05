@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { importBuffer } from '../../../src/state/flows'
-import { AUTOSAVE_DELAY_MS, restoreSaved, startAutosave, startFresh, type PlanStorage } from '../../../src/state/autosave'
+import { AUTOSAVE_DELAY_MS, beginDemoSession, restoreSaved, startAutosave, startFresh, type PlanStorage } from '../../../src/state/autosave'
 import { savedKey, snapshotOf } from '../../../src/state/savedPlan'
 import { useStore } from '../../../src/state/store'
 import { detected, fakeClient, partInfo, readyOutcome, resetStore, seam } from '../helpers/state'
@@ -318,5 +318,50 @@ describe('restoreSaved and startFresh', () => {
     expect(state().offer).not.toBeNull()
     expect(state().statusById).toEqual({})
     stop()
+  })
+})
+
+describe('a demo session', () => {
+  it('skips the restore question for the part it loads and leaves the stored entry alone', async () => {
+    const stored = savedSnapshot()
+    const { storage, sets, data } = memoryStorage({ [KEY]: stored })
+    const stop = startAutosave(storage)
+    beginDemoSession()
+    await importBuffer(new ArrayBuffer(8), 'a.stl', loadClient())
+    expect(state().offer).toBeNull()
+    state().toggleAccepted('b')
+    state().toggleAccepted('a')
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY_MS * 3)
+    expect(sets).toHaveLength(0)
+    expect(data.get(KEY)).toBe(stored)
+    stop()
+  })
+
+  it('asks the restore question again for the next part that loads, once the demo part is replaced', async () => {
+    const { storage } = memoryStorage({ [KEY]: savedSnapshot() })
+    const stop = startAutosave(storage)
+    beginDemoSession()
+    await importBuffer(new ArrayBuffer(8), 'a.stl', loadClient())
+    expect(state().offer).toBeNull()
+    await importBuffer(new ArrayBuffer(8), 'b.stl', loadClient({ loadStl: async () => readyOutcome({ name: 'b.stl', sha256: 'b'.repeat(64) }) }))
+    await importBuffer(new ArrayBuffer(8), 'a.stl', loadClient())
+    expect(state().offer).toMatchObject({ partName: 'a.stl' })
+    stop()
+  })
+
+  it('saves again after the demo part is replaced', async () => {
+    const { storage, sets } = memoryStorage()
+    const stop = startAutosave(storage)
+    beginDemoSession()
+    await importBuffer(new ArrayBuffer(8), 'a.stl', loadClient())
+    await importBuffer(new ArrayBuffer(8), 'b.stl', loadClient({ loadStl: async () => readyOutcome({ name: 'b.stl', sha256: 'b'.repeat(64) }) }))
+    state().toggleAccepted('a')
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY_MS)
+    expect(sets).toHaveLength(1)
+    stop()
+  })
+
+  it('does nothing when autosave is not running', () => {
+    expect(() => beginDemoSession()).not.toThrow()
   })
 })

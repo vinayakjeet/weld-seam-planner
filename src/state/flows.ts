@@ -90,7 +90,7 @@ export async function attempt<T extends { status: string }>(work: () => Promise<
   }
 }
 
-function showError(error: UserError): void {
+export function showError(error: UserError): void {
   useStore.setState({ importState: { phase: 'error', error } })
 }
 

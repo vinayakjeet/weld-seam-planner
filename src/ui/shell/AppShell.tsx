@@ -8,6 +8,7 @@ import { Timeline } from './Timeline'
 import { TopBar } from './TopBar'
 import { useAccessSync } from './useAccessSync'
 import { useAutosave } from './useAutosave'
+import { useDeepLink } from './useDeepLink'
 import { useDropGuard } from './useDropGuard'
 import { usePlaybackSync } from './usePlaybackSync'
 import { usePreflightSync } from './usePreflightSync'
@@ -22,6 +23,7 @@ export function AppShell() {
   useAccessSync()
   usePlaybackSync()
   useAutosave()
+  useDeepLink()
   return (
     <TooltipProvider>
       <div className="flex h-full flex-col">
