@@ -367,8 +367,8 @@ Measured with `npx tsx scripts/key-numbers.ts` in Node 24 on an Intel i7-14700HX
 
 | What | Measured |
 | --- | --- |
-| Parse plus detect, a generated 1M-triangle single-body part (999,996 triangles) | 4.7 to 4.9 s |
-| Access analysis for the 56 seams of `double-bottom-cell` | 0.12 s |
+| A generated 1M-triangle STL (999,996 triangles) parsed, welded and analysed for seams, using the code the Web Worker runs | about 4.8 s (4.7 to 4.9 s) |
+| Access analysis of the 56 seams of `double-bottom-cell` | about 0.12 s |
 | Air travel, table order to minimum air travel, `double-bottom-cell` | 24.3 m to 8.5 m, 65 percent less |
 | Reach coverage of the tank seam at x 746 from the manhole port | 21 percent at an 18 degree bend limit, 100 percent at 25 degrees |
 | Entry chunk of the production build | 415 kB (budget 500 kB) |
@@ -381,10 +381,9 @@ Measured with `npx tsx scripts/key-numbers.ts` in Node 24 on an Intel i7-14700HX
 - **Faceted curves:** a faceted 50 mm bar measures 49.97 mm; the true cylinder is not in the file.
 - **Drawn seams on open surface** read "Fillet ?": with no second plate, inside and outside are undefined. Plate thickness is set per seam, not for a selection.
 - **Positions:** PE (groove overhead) is not produced; groove welds are out of scope, so overhead fillets report PD.
-- **Reach:** the tank reach takes about 9 s at defaults (7 to 13 s with machine load) against a 5 s target, because 660 stations out of reach have to be proven so. There is no free-space path search where FABRIK finds no chain; a bend-limited search would be needed and no sample needs it. Some exact-fit failures are physics: 4 links at 18 degrees shift the wrist about 180 mm sideways.
+- **Reach:** the tank reach takes about 9 s at defaults (7 to 13 s with machine load), because 660 stations out of reach have to be proven so. There is no free-space path search where FABRIK finds no chain; a bend-limited search would be needed and no sample needs it. Some exact-fit failures are physics: 4 links at 18 degrees shift the wrist about 180 mm sideways.
 - **Keyboard layouts:** on French AZERTY the step keys and Shift plus a digit are the same keystroke; the view keys win and the steps stay on the numpad and the stepper.
 - **RAPID data:** seamdata, welddata and weavedata belong to the cell and are placeholders.
-- **Key numbers:** parse plus detect of the 1M-triangle part takes 4.7 to 4.9 s here, and access for `double-bottom-cell` 0.12 s, against planning targets of 2.2 s and 0.1 s.
 - **Autosave on close:** a change still inside the one second autosave delay is written when the page hides or another part loads, but a browser does not promise to finish a storage write started while the page unloads: an edit made the moment before a reload or a closed tab can be lost.
 - **Access model:** access and reach use the neutral torch (no work or travel angle) and a 50 mm approach, not each procedure's angles and approach, so a seam near a class threshold can change class with the real torch.
 - **Rounding:** the cycle time in the status bar can differ from the exported `summary.cycleTimeS` by 0.1 s, because the export rounds arc and air time before adding them.
