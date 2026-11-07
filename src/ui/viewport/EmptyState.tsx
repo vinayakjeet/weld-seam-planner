@@ -39,12 +39,13 @@ export function EmptyState() {
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
-      className="absolute inset-0 grid place-items-center p-8"
+      // Auto margins centre the box while it fits and let it scroll from its top when it does not.
+      className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4"
     >
       <section
         aria-label="Import a part"
         aria-busy={loading}
-        className={`w-full max-w-[720px] border border-dashed px-8 py-9 backdrop-blur-sm ${
+        className={`m-auto w-full max-w-[720px] border border-dashed px-6 py-6 backdrop-blur-sm ${
           dragging ? 'border-brand bg-brand/10' : 'border-part-edge bg-viewport/80'
         }`}
       >
@@ -93,7 +94,7 @@ export function EmptyState() {
                   disabled={loading}
                   title={entry.description}
                   onClick={() => void importSample(entry, getGeometryClient(), fetch)}
-                  className="flex h-full w-full flex-col items-center gap-2 border border-line bg-surface-1 px-2 pb-3 pt-4 text-ink-1 outline-none hover:border-ink-2 hover:text-ink-0 focus-visible:ring-1 focus-visible:ring-brand disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-line disabled:hover:text-ink-1"
+                  className="flex h-full w-full flex-col items-center gap-2 border border-line bg-surface-1 px-2 pb-2.5 pt-3 text-ink-1 outline-none hover:border-ink-2 hover:text-ink-0 focus-visible:ring-1 focus-visible:ring-brand disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:border-line disabled:hover:text-ink-1"
                 >
                   {createElement(iconForSample(entry.id))}
                   <span>{entry.name}</span>

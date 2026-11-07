@@ -10,6 +10,17 @@ import { Scene } from './Scene'
 import { UnitsDialog } from './UnitsDialog'
 import { ViewToolbar } from './ViewToolbar'
 
+function Messages() {
+  return (
+    <>
+      <ProgressBar />
+      <ErrorBanner />
+      <ToolNotice />
+      <InfoNotice />
+    </>
+  )
+}
+
 export function Viewport() {
   const showImport = useStore((s) => s.part === null || s.activeStep === 'import')
   const overSeam = useStore((s) => s.hoverId !== null)
@@ -26,14 +37,22 @@ export function Viewport() {
       >
         <Scene />
       </Canvas>
-      {showImport && <EmptyState />}
-      {!showImport && <ViewToolbar />}
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col items-center gap-2 p-3">
-        <ProgressBar />
-        <ErrorBanner />
-        <ToolNotice />
-        <InfoNotice />
-      </div>
+      {showImport ? (
+        // The messages stand above the import box and push it down, so they never cover its heading.
+        <div className="absolute inset-0 z-10 flex flex-col">
+          <div className="pointer-events-none flex flex-col items-center gap-2 px-3 pt-3 empty:hidden">
+            <Messages />
+          </div>
+          <EmptyState />
+        </div>
+      ) : (
+        <>
+          <ViewToolbar />
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col items-center gap-2 p-3">
+            <Messages />
+          </div>
+        </>
+      )}
       <UnitsDialog />
     </main>
   )
