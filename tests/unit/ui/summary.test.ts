@@ -57,16 +57,20 @@ describe('statusFields', () => {
 })
 
 describe('partChip', () => {
-  it('says no part is loaded', () => {
-    expect(partChip(null)).toEqual({ name: 'No part loaded', units: 'units: none' })
+  it('says no part is loaded, with no units chip', () => {
+    expect(partChip(null)).toEqual({ name: 'No part loaded', file: '', units: null, unitsTitle: '' })
   })
 
-  it('names the file and its units', () => {
-    expect(partChip(partInfo({ name: 'box-beam.stl' }))).toEqual({ name: 'box-beam.stl', units: 'units: mm' })
+  it('names the part without its .stl ending, keeps the file name for the tooltip and gives the units', () => {
+    expect(partChip(partInfo({ name: 'box-beam.stl' }))).toEqual({ name: 'box-beam', file: 'box-beam.stl', units: 'mm', unitsTitle: 'Units: millimetres' })
+    expect(partChip(partInfo({ name: 'Bracket.STL' })).name).toBe('Bracket')
+    expect(partChip(partInfo({ name: 'notes' })).name).toBe('notes')
   })
 
   it('says when the file was converted from another unit', () => {
-    expect(partChip(partInfo({ sourceUnits: 'in', scaleToMm: 25.4 })).units).toBe('units: mm (from in)')
+    const chip = partChip(partInfo({ sourceUnits: 'in', scaleToMm: 25.4 }))
+    expect(chip.units).toBe('mm, from in')
+    expect(chip.unitsTitle).toBe('Converted from in to millimetres on import')
   })
 })
 

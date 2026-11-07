@@ -17,7 +17,7 @@ export function Stepper() {
                 type="button"
                 aria-current={active ? 'step' : undefined}
                 onClick={() => setActiveStep(step.id)}
-                className={`flex h-8 items-center gap-1 rounded-sm px-1.5 whitespace-nowrap outline-none focus-visible:ring-1 focus-visible:ring-brand ${
+                className={`flex h-8 items-center gap-1 rounded-sm px-1 whitespace-nowrap outline-none focus-visible:ring-1 focus-visible:ring-brand ${
                   active ? 'bg-brand/15 text-ink-0' : 'text-ink-1 hover:bg-surface-2 hover:text-ink-0'
                 }`}
               >
@@ -29,7 +29,7 @@ export function Stepper() {
                   {i + 1}
                 </span>
                 {/* Below the width that fits every name, only the open step is named; the others keep their name for screen readers. */}
-                <span className={active ? undefined : 'sr-only @min-[560px]:not-sr-only'}>{step.label}</span>
+                <span className={active ? undefined : 'sr-only @min-[536px]:not-sr-only'}>{step.label}</span>
               </button>
             </li>
           )

@@ -18,13 +18,14 @@ export function TopBar() {
         <span className="font-display text-base leading-none whitespace-nowrap">Weld Seam Planner</span>
       </div>
 
-      <div className="flex min-w-0 max-w-[120px] shrink items-center gap-2">
+      {/* At 1280 px the six step names take the rest of the bar; from 1440 px the part name has room to show in full. */}
+      <div className="flex min-w-0 max-w-[144px] shrink items-center gap-2 min-[1440px]:max-w-[280px] min-[1680px]:max-w-[420px]">
         {part ? (
           // The Import step holds the file chooser and the samples, and warns before accepted seams are discarded.
           <button
             type="button"
-            aria-label={`Open another part, current part ${chip.name}`}
-            title="Open another part"
+            aria-label={`Open another part, current part ${chip.file}`}
+            title={`${chip.file}: open another part`}
             onClick={() => setActiveStep('import')}
             className="min-w-0 truncate rounded-sm text-ink-0 underline decoration-line underline-offset-4 outline-none hover:decoration-ink-1 focus-visible:ring-1 focus-visible:ring-brand"
           >
@@ -33,7 +34,11 @@ export function TopBar() {
         ) : (
           <span className="truncate text-ink-2">{chip.name}</span>
         )}
-        <span className="num shrink-0 rounded-sm border border-line px-1.5 text-[11px] text-ink-2">{chip.units}</span>
+        {chip.units && (
+          <span title={chip.unitsTitle} className="num shrink-0 rounded-sm border border-line px-1.5 text-[11px] text-ink-2">
+            {chip.units}
+          </span>
+        )}
       </div>
 
       <div className="@container flex min-w-0 flex-1 justify-center">

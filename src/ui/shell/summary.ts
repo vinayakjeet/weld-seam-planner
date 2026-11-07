@@ -34,10 +34,13 @@ export function preflightNote(partLoaded: boolean, issues: readonly Issue[], cur
   return `Pre-flight: ${count(errors, 'error')}, ${count(warnings, 'warning')}`
 }
 
-// The app works in millimetres internally; say so when the file was converted on import.
-export function partChip(part: PartInfo | null): { name: string; units: string } {
-  if (!part) return { name: 'No part loaded', units: 'units: none' }
-  return { name: part.name, units: part.sourceUnits === 'mm' ? 'units: mm' : `units: mm (from ${part.sourceUnits})` }
+// The top bar names the part without its .stl ending, which every part has, so more of the name fits; the tooltip keeps
+// the file name. The app works in millimetres internally; the units chip says so, and when the file was converted.
+export function partChip(part: PartInfo | null): { name: string; file: string; units: string | null; unitsTitle: string } {
+  if (!part) return { name: 'No part loaded', file: '', units: null, unitsTitle: '' }
+  const name = part.name.replace(/\.stl$/i, '')
+  if (part.sourceUnits === 'mm') return { name, file: part.name, units: 'mm', unitsTitle: 'Units: millimetres' }
+  return { name, file: part.name, units: `mm, from ${part.sourceUnits}`, unitsTitle: `Converted from ${part.sourceUnits} to millimetres on import` }
 }
 
 // Cycle time as m:ss, or h:mm:ss from one hour; 0:00 when there is no time yet.

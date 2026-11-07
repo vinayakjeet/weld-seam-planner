@@ -25,6 +25,12 @@ for (const width of [1280, 1440]) {
         viewport: window.innerWidth,
       }
     })
+    const name = page.getByRole('button', { name: /Open another part, current part tank-with-manhole\.stl/ })
+    await expect(name).toHaveText('tank-with-manhole')
+    const shown = await name.evaluate((el) => ({ full: el.scrollWidth, box: el.clientWidth }))
+    // At 1280 px the step names keep their room and a long part name is cut short; from 1440 px it shows in full.
+    if (width >= 1440) expect(shown.full).toBeLessThanOrEqual(shown.box)
+    else expect(shown.box).toBeGreaterThan(90)
     expect(widths.headerScroll).toBeLessThanOrEqual(0)
     expect(widths.listScroll).toBeLessThanOrEqual(0)
     expect(widths.exportRight).toBeLessThanOrEqual(widths.viewport)
