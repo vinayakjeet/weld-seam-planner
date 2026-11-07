@@ -25,7 +25,7 @@ npm run test:e2e     # browser tests (Playwright; npx playwright install first)
 npm run build        # checks the schema and field table, type checks, bundles, checks the entry budget
 ```
 
-Other scripts: `npm run lint`, `npm run typecheck`, `npm run schema` (regenerates the JSON Schema from the zod types), `npm run fields` (regenerates the field table in this README), `npx tsx scripts/key-numbers.ts` (measures the numbers under Key numbers).
+Other scripts: `npm run lint`, `npm run typecheck`, `npm run schema` (regenerates the JSON Schema from the zod types), `npm run fields` (regenerates the field table in this README), `npx tsx scripts/key-numbers.ts` (measures the numbers under Key numbers), `npm run audit:visual` (not in CI: photographs every sample in both themes at 1280x800, 1440x900 and 1920x1080 through the six steps, the six standard views and the dialogs, and writes a checks.json of clipped, covered, overlapping and low contrast text per screen to test-results/visual-audit; AUDIT_ONLY, AUDIT_SIZES and AUDIT_THEMES narrow it).
 
 ## The six-step workflow
 
