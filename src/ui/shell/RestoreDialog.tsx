@@ -4,6 +4,7 @@ import { useStore } from '../../state/store'
 import { getGeometryClient } from '../../worker/client'
 import { Button } from '../kit/Button'
 import { Dialog } from '../kit/Dialog'
+import { savedOnText } from './restoreText'
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
@@ -11,7 +12,7 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 export function RestoreDialog() {
   const offer = useStore((s) => s.offer)
   const summary = offer ? offerSummary(offer) : null
-  const when = offer ? new Date(offer.savedAt).toLocaleString() : ''
+  const when = offer ? savedOnText(offer.savedAt) : ''
   return (
     <Dialog
       open={offer !== null}
