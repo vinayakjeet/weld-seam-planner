@@ -1,3 +1,4 @@
+import type { Plan } from '../../core/job/plan'
 import type { PlanTiming } from '../../core/job/timing'
 import type { PartInfo } from '../../worker/geometry.api'
 import type { Stats } from '../../state/selectors'
@@ -48,4 +49,14 @@ export function cleaningField(timing: PlanTiming | null): string | null {
 // on its way. Before any answer it reads 0:00.
 export function cycleField(timing: PlanTiming | null, current: boolean): { value: string; stale: boolean } {
   return { value: formatCycle(timing?.cycleTimeS ?? 0), stale: timing !== null && !current }
+}
+
+export const ARC_NEEDS_PROCEDURE = 'Arc time needs a procedure. Assign one in step 3.'
+
+// A seam without a procedure (or with one deleted from the library) has no travel speed, so it adds no arc time. When
+// that leaves the arc time at 0:00, the zero is explained instead of looking like a fault.
+export function arcTimeHint(plan: Plan, timing: PlanTiming | null): string | null {
+  if (plan.seams.length === 0 || formatCycle(timing?.arcTimeS ?? 0) !== '0:00') return null
+  const known = new Set(plan.procedures.map((p) => p.id))
+  return plan.seams.some((s) => s.procedureId === null || !known.has(s.procedureId)) ? ARC_NEEDS_PROCEDURE : null
 }

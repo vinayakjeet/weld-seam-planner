@@ -70,3 +70,26 @@ test('optimises, plays and exports a balanced-heat sequence on double-bottom-cel
   }
   expect(warned.size).toBeGreaterThan(0)
 })
+
+test('the timeline explains an arc time of 0:00 until the seams have a procedure, and jumps to that step', async ({ page }) => {
+  const tJoint = sampleById('t-joint-merged')
+  await page.goto('/')
+  await loadSample(page, tJoint)
+  await page.getByRole('button', { name: 'Accept all above 0.70' }).click()
+  await expect(statusBar(page)).toContainText(counts(expectedSeams(tJoint), 0))
+
+  const steps = page.getByRole('navigation', { name: 'Workflow steps' })
+  await steps.getByRole('button', { name: /Sequence/ }).click()
+  const timeline = page.getByRole('region', { name: 'Timeline' })
+  await expect(timeline).toContainText(/Arc\s*0:00/)
+  await expect(timeline.getByText('Arc time needs a procedure. Assign one in step 3.')).toBeVisible()
+
+  await timeline.getByRole('button', { name: 'Go to Procedures' }).click()
+  await expect(steps.getByRole('button', { name: /Procedures/ })).toHaveAttribute('aria-current', 'step')
+  await selectAllRows(page)
+  await page.getByLabel('Welding procedure').selectOption({ value: SPRAY })
+
+  await steps.getByRole('button', { name: /Sequence/ }).click()
+  await expect(timeline).not.toContainText(/Arc\s*0:00/)
+  await expect(timeline.getByText('Arc time needs a procedure.', { exact: false })).toHaveCount(0)
+})

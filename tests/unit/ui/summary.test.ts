@@ -3,7 +3,9 @@ import { importBuffer } from '../../../src/state/flows'
 import { selectStats } from '../../../src/state/selectors'
 import { useStore } from '../../../src/state/store'
 import { seamRows } from '../../../src/ui/panels/seamRows'
-import { cleaningField, cycleField, formatCycle, partChip, statusFields } from '../../../src/ui/shell/summary'
+import { planTiming } from '../../../src/core/job/timing'
+import { ARC_NEEDS_PROCEDURE, arcTimeHint, cleaningField, cycleField, formatCycle, partChip, statusFields } from '../../../src/ui/shell/summary'
+import { specExamplePlan } from '../helpers/jobs'
 import { detected, fakeClient, partInfo, readyOutcome, resetStore, seam } from '../helpers/state'
 
 const fields = () => {
@@ -127,5 +129,38 @@ describe('cycleField', () => {
 
   it('shows 0:00 before any timing, never dimmed', () => {
     expect(cycleField(null, false)).toEqual({ value: '0:00', stale: false })
+  })
+})
+
+describe('arcTimeHint', () => {
+  const twoSeams = () =>
+    specExamplePlan([
+      { id: 's1', from: [0, 0, 12], to: [800, 0, 12] },
+      { id: 's2', from: [0, 300, 12], to: [800, 300, 12] },
+    ])
+
+  it('explains an arc time of 0:00 when the accepted seams have no procedure', () => {
+    const plan = twoSeams()
+    for (const seam of plan.seams) seam.procedureId = null
+    const timing = planTiming(plan)
+    expect(formatCycle(timing.arcTimeS)).toBe('0:00')
+    expect(arcTimeHint(plan, timing)).toBe(ARC_NEEDS_PROCEDURE)
+    expect(ARC_NEEDS_PROCEDURE).toBe('Arc time needs a procedure. Assign one in step 3.')
+  })
+
+  it('counts a procedure that is no longer in the library as none', () => {
+    const plan = twoSeams()
+    for (const seam of plan.seams) seam.procedureId = 'WPS-DELETED'
+    expect(arcTimeHint(plan, planTiming(plan))).toBe(ARC_NEEDS_PROCEDURE)
+  })
+
+  it('says nothing once arc time is counted, or when every seam has a procedure, or with no accepted seams', () => {
+    const some = twoSeams()
+    some.seams[0]!.procedureId = null
+    expect(arcTimeHint(some, planTiming(some))).toBeNull()
+    const all = twoSeams()
+    expect(arcTimeHint(all, planTiming(all))).toBeNull()
+    expect(arcTimeHint(all, null)).toBeNull()
+    expect(arcTimeHint({ ...all, seams: [] }, null)).toBeNull()
   })
 })

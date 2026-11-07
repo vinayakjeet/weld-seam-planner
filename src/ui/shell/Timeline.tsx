@@ -4,7 +4,7 @@ import { selectPlan } from '../../state/selectors'
 import { useStore } from '../../state/store'
 import { NO_ACCEPTED_TEXT } from '../panels/NoAcceptedSeams'
 import { PlaybackControls } from './PlaybackControls'
-import { formatCycle } from './summary'
+import { arcTimeHint, formatCycle } from './summary'
 
 // A line over the bars at the playback time.
 function Playhead({ total }: { total: number }) {
@@ -23,6 +23,8 @@ export function Timeline() {
   const timing = useStore((s) => s.timing)
   const current = useStore((s) => s.timingFor === selectPlan(s))
   const seams = useStore((s) => selectPlan(s).seams)
+  const hint = useStore((s) => arcTimeHint(selectPlan(s), s.timing))
+  const setActiveStep = useStore((s) => s.setActiveStep)
   const [open, setOpen] = useState(true)
 
   const segments = useMemo(() => (timing ? timelineSegments(timing) : []), [timing])
@@ -57,6 +59,18 @@ export function Timeline() {
           <span aria-hidden className="size-2 rounded-sm bg-ink-2/50" />
           Air <span className="num text-ink-1">{formatCycle(air)}</span>
         </span>
+        {hint && (
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="truncate text-warn">{hint}</span>
+            <button
+              type="button"
+              onClick={() => setActiveStep('procedures')}
+              className="h-6 shrink-0 rounded-sm border border-line bg-surface-2 px-2 text-ink-0 outline-none hover:border-ink-2 focus-visible:ring-1 focus-visible:ring-brand"
+            >
+              Go to Procedures
+            </button>
+          </span>
+        )}
         {!current && segments.length > 0 && <span className="text-ink-2">Updating</span>}
         <span className="ml-auto">
           <PlaybackControls />
