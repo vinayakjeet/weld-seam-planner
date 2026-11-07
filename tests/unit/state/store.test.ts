@@ -455,3 +455,18 @@ describe('manual seam operations', () => {
     expect(state().statusById).not.toHaveProperty('a')
   })
 })
+
+describe('setActiveStep', () => {
+  it('clears the confirmation and the refused action notice of the step left behind', () => {
+    const notice = { what: 'Nothing to merge.', why: 'One seam is selected.', next: 'Select two seams.' }
+    useStore.getState().setActiveStep('access')
+    useStore.getState().setInfo('Reach measured for 20 seams in 10.9 s.')
+    useStore.getState().setNotice(notice)
+    useStore.getState().setActiveStep('access')
+    expect(useStore.getState().info).toBe('Reach measured for 20 seams in 10.9 s.')
+    expect(useStore.getState().notice).toEqual(notice)
+    useStore.getState().setActiveStep('sequence')
+    expect(useStore.getState().info).toBeNull()
+    expect(useStore.getState().notice).toBeNull()
+  })
+})

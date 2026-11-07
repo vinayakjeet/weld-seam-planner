@@ -32,10 +32,10 @@ interface UiSlice {
   // The armed manual tool and its progress. Not undo history.
   tool: ToolState
   setTool: (tool: ToolState) => void
-  // The last refused manual action, shown over the viewport until dismissed or the next action starts.
+  // The last refused manual action, shown over the viewport until dismissed, the next action starts or the step changes.
   notice: ManualError | null
   setNotice: (notice: ManualError | null) => void
-  // A plain confirmation (a plan restored, a file exported) shown over the viewport until dismissed.
+  // A plain confirmation (a plan restored, a file exported) shown over the viewport until dismissed or the step changes.
   info: string | null
   setInfo: (info: string | null) => void
   // The saved plan of the loaded part, while the question "restore or start fresh" is open. Not history.
@@ -46,7 +46,8 @@ export type AppState = UiSlice & PartSlice & SeamsSlice & PlanSlice & TorchSlice
 
 const createUiSlice: StateCreator<AppState, [], [], UiSlice> = (set) => ({
   activeStep: 'import',
-  setActiveStep: (activeStep) => set({ activeStep }),
+  // A message belongs to the step it came from; left on screen it would cover the next steps.
+  setActiveStep: (activeStep) => set((state) => (state.activeStep === activeStep ? state : { activeStep, info: null, notice: null })),
   tool: initialTool,
   setTool: (tool) => set({ tool }),
   notice: null,
