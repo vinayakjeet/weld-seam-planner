@@ -22,14 +22,17 @@ function IssueRow({ row, severity, open, onToggle }: { row: Row; severity: Sever
           if (issue.seamId !== null) select(issue.seamId)
           onToggle()
         }}
-        className="flex w-full items-baseline gap-2 px-3 py-1.5 text-left outline-none hover:bg-surface-2 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-brand"
+        className="grid w-full grid-cols-[2.5rem_minmax(0,1fr)] items-baseline gap-x-2 px-3 py-1.5 text-left outline-none hover:bg-surface-2 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-brand"
       >
-        <span className="w-10 shrink-0 truncate font-medium text-ink-0">{row.label}</span>
-        <span className={`num shrink-0 text-[10px] ${TONE[severity]}`}>{issue.code}</span>
-        <span className="min-w-0 flex-1 text-ink-1">{issue.what}</span>
+        <span className="truncate font-medium text-ink-0">{row.label}</span>
+        {/* The code sits above the sentence, so the sentence has the width of the panel instead of a narrow column. */}
+        <span className="min-w-0">
+          <span className={`num block text-[10px] ${TONE[severity]}`}>{issue.code}</span>
+          <span className="block text-ink-1">{issue.what}</span>
+        </span>
       </button>
       {open && (
-        <div className="space-y-1 px-3 pb-2 pl-[3.25rem] text-ink-1">
+        <div className="space-y-1 px-3 pb-2 pl-[3.75rem] text-ink-1">
           <p>{issue.why}</p>
           <p className="text-ink-0">{issue.next}</p>
         </div>
