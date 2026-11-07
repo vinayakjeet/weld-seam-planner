@@ -81,9 +81,8 @@ export function PreflightPanel() {
       return next
     })
 
-  if (!hasPart) {
-    return <p className="grid flex-1 place-items-center px-6 text-center text-ink-2">Nothing to check yet. Load a part and accept its seams first.</p>
-  }
+  // The message above the panel already says that a part is needed first.
+  if (!hasPart) return <div className="flex-1" />
   return (
     <div aria-label="Pre-flight" className="min-h-0 flex-1 overflow-y-auto">
       {!current ? (

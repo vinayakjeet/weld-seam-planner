@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { timelineSegments } from '../../core/sequence/timeline'
 import { selectPlan } from '../../state/selectors'
 import { useStore } from '../../state/store'
-import { NO_ACCEPTED_TEXT } from '../panels/NoAcceptedSeams'
+import { firstNeed } from '../panels/NoAcceptedSeams'
 import { PlaybackControls } from './PlaybackControls'
 import { arcTimeHint, formatCycle } from './summary'
 
@@ -25,6 +25,7 @@ export function Timeline() {
   const seams = useStore((s) => selectPlan(s).seams)
   const hint = useStore((s) => arcTimeHint(selectPlan(s), s.timing))
   const setActiveStep = useStore((s) => s.setActiveStep)
+  const partLoaded = useStore((s) => s.part !== null)
   const [open, setOpen] = useState(true)
 
   const segments = useMemo(() => (timing ? timelineSegments(timing) : []), [timing])
@@ -78,7 +79,7 @@ export function Timeline() {
       </header>
       {open &&
         (segments.length === 0 ? (
-          <p className="px-3 pt-2 text-ink-2">{NO_ACCEPTED_TEXT}</p>
+          <p className="px-3 pt-2 text-ink-2">{firstNeed(partLoaded).text}</p>
         ) : (
           <div className="relative">
           <div role="img" aria-label="Arc time and air time of each seam in sequence order" className={`flex h-[80px] items-end gap-px px-3 pb-2 ${current ? '' : 'opacity-60'}`}>

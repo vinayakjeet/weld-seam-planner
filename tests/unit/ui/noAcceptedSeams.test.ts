@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { NO_ACCEPTED_TEXT, showsNoAccepted } from '../../../src/ui/panels/NoAcceptedSeams'
+import { firstNeed, NO_ACCEPTED_TEXT, NO_PART_TEXT, showsNoAccepted } from '../../../src/ui/panels/NoAcceptedSeams'
 
 describe('showsNoAccepted', () => {
   it('is true in the procedures, sequence and export steps when nothing is accepted', () => {
@@ -21,5 +21,16 @@ describe('showsNoAccepted', () => {
 
   it('says what happened and what to do', () => {
     expect(NO_ACCEPTED_TEXT).toBe('No accepted seams. Accept seams in step 2 first.')
+  })
+})
+
+describe('firstNeed', () => {
+  it('sends the user to step 1 while no part is loaded, since accepting seams needs a part', () => {
+    expect(firstNeed(false)).toEqual({ text: NO_PART_TEXT, step: 'import', action: 'Go to Import' })
+    expect(NO_PART_TEXT).toBe('No part loaded. Pick a sample or drop an STL file in step 1 first.')
+  })
+
+  it('sends the user to step 2 once a part is loaded', () => {
+    expect(firstNeed(true)).toEqual({ text: NO_ACCEPTED_TEXT, step: 'seams', action: 'Go to Seams' })
   })
 })

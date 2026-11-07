@@ -9,7 +9,7 @@ import { Button } from '../kit/Button'
 import { cleaningField, cycleField } from '../shell/summary'
 import { NumberField } from '../kit/NumberField'
 import { cleaningEveryText, parseCleaningEvery, parseCleaningTime } from './cleaningFields'
-import { NO_ACCEPTED_TEXT } from './NoAcceptedSeams'
+import { firstNeed } from './NoAcceptedSeams'
 import { revealScrollTop, ROW_HEIGHT, rowWindow, windowParts } from './rowWindow'
 import { sequenceRows, type SequenceRow } from './sequenceRows'
 
@@ -91,7 +91,8 @@ function Controls() {
   const accepted = useStore((s) => selectPlan(s).seams.length)
   const used = useStore((s) => s.strategy)
   const setNotice = useStore((s) => s.setNotice)
-  const reason = accepted === 0 ? NO_ACCEPTED_TEXT : null
+  const partLoaded = useStore((s) => s.part !== null)
+  const reason = accepted === 0 ? firstNeed(partLoaded).text : null
 
   const run = async () => {
     setBusy(true)

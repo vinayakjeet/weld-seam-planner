@@ -36,3 +36,16 @@ for (const width of [1280, 1440]) {
     expect(widths.exportRight).toBeLessThanOrEqual(widths.viewport)
   })
 }
+
+test('before a part is loaded, the steps that need seams say a part comes first and lead back to step 1', async ({ page }) => {
+  await page.goto('/')
+  const steps = page.getByRole('navigation', { name: 'Workflow steps' })
+  const panel = page.getByRole('complementary', { name: 'Seam list' })
+  for (const step of [/Procedures/, /Sequence/, /Export/]) {
+    await steps.getByRole('button', { name: step }).click()
+    await expect(panel.getByText('No part loaded. Pick a sample or drop an STL file in step 1 first.')).toHaveCount(1)
+    await expect(page.getByText('No accepted seams', { exact: false })).toHaveCount(0)
+  }
+  await panel.getByRole('button', { name: 'Go to Import' }).click()
+  await expect(steps.getByRole('button', { name: /Import/ })).toHaveAttribute('aria-current', 'step')
+})
