@@ -2,7 +2,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { selectPlan, selectStats } from '../../state/selectors'
 import { useStore } from '../../state/store'
 import { toolHint } from '../panels/manualText'
-import { cycleField, statusFields } from './summary'
+import { cycleField, preflightNote, statusFields } from './summary'
 
 function Stat({ label, value, stale = false }: { label: string; value: string; stale?: boolean }) {
   return (
@@ -15,8 +15,8 @@ function Stat({ label, value, stale = false }: { label: string; value: string; s
 
 export function StatusBar() {
   const stats = useStore(useShallow(selectStats))
-  const partLoaded = useStore((s) => s.part !== null)
-  const { fields, note } = statusFields(stats, partLoaded)
+  const { fields } = statusFields(stats)
+  const note = useStore((s) => preflightNote(s.part !== null, s.issues, s.issuesFor === selectPlan(s)))
   const cycle = useStore(useShallow((s) => cycleField(s.timing, s.timingFor === selectPlan(s))))
   const hint = toolHint(useStore((s) => s.tool))
   return (

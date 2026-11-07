@@ -1,4 +1,5 @@
 import type { Plan } from '../../core/job/plan'
+import type { Issue } from '../../core/job/preflight'
 import type { PlanTiming } from '../../core/job/timing'
 import type { PartInfo } from '../../worker/geometry.api'
 import type { Stats } from '../../state/selectors'
@@ -10,7 +11,7 @@ export interface StatusField {
 
 const oneDecimal = (x: number) => String(Number(x.toFixed(1)))
 
-export function statusFields(stats: Stats, partLoaded: boolean): { fields: StatusField[]; note: string } {
+export function statusFields(stats: Stats): { fields: StatusField[] } {
   return {
     fields: [
       { label: 'Triangles', value: stats.triangles.toLocaleString('en-US') },
@@ -18,8 +19,19 @@ export function statusFields(stats: Stats, partLoaded: boolean): { fields: Statu
       { label: 'Seams accepted / candidate', value: `${stats.accepted} / ${stats.candidates}` },
       { label: 'Weld length', value: `${oneDecimal(stats.acceptedLengthMm)} mm` },
     ],
-    note: partLoaded ? 'Pre-flight: not run yet' : 'Pre-flight: no part loaded',
   }
+}
+
+const count = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+
+// The status bar's pre-flight line. The check runs in the background after every change, so the line gives its latest
+// counts, or says it is checking while the answer is for an older plan.
+export function preflightNote(partLoaded: boolean, issues: readonly Issue[], current: boolean): string {
+  if (!partLoaded) return 'Pre-flight: no part loaded'
+  if (!current) return 'Pre-flight: checking'
+  const errors = issues.filter((i) => i.severity === 'error').length
+  const warnings = issues.filter((i) => i.severity === 'warning').length
+  return `Pre-flight: ${count(errors, 'error')}, ${count(warnings, 'warning')}`
 }
 
 // The app works in millimetres internally; say so when the file was converted on import.

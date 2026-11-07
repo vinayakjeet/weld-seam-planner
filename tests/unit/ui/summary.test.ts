@@ -4,13 +4,14 @@ import { selectStats } from '../../../src/state/selectors'
 import { useStore } from '../../../src/state/store'
 import { seamRows } from '../../../src/ui/panels/seamRows'
 import { planTiming } from '../../../src/core/job/timing'
-import { ARC_NEEDS_PROCEDURE, arcTimeHint, cleaningField, cycleField, formatCycle, partChip, statusFields } from '../../../src/ui/shell/summary'
+import { preflight } from '../../../src/core/job/preflight'
+import { ARC_NEEDS_PROCEDURE, arcTimeHint, cleaningField, cycleField, formatCycle, partChip, preflightNote, statusFields } from '../../../src/ui/shell/summary'
 import { specExamplePlan } from '../helpers/jobs'
 import { detected, fakeClient, partInfo, readyOutcome, resetStore, seam } from '../helpers/state'
 
 const fields = () => {
   const state = useStore.getState()
-  return statusFields(selectStats(state), state.part !== null)
+  return statusFields(selectStats(state))
 }
 const value = (label: string) => fields().fields.find((f) => f.label === label)?.value
 
@@ -25,7 +26,6 @@ describe('statusFields', () => {
         { label: 'Seams accepted / candidate', value: '0 / 0' },
         { label: 'Weld length', value: '0 mm' },
       ],
-      note: 'Pre-flight: no part loaded',
     })
   })
 
@@ -39,7 +39,6 @@ describe('statusFields', () => {
     expect(value('Triangles')).toBe('1,040,000')
     expect(value('Bodies')).toBe('1')
     expect(value('Seams accepted / candidate')).toBe('0 / 8')
-    expect(fields().note).toBe('Pre-flight: not run yet')
   })
 
   it('counts accepted seams and sums their weld length', async () => {
@@ -162,5 +161,25 @@ describe('arcTimeHint', () => {
     expect(arcTimeHint(all, planTiming(all))).toBeNull()
     expect(arcTimeHint(all, null)).toBeNull()
     expect(arcTimeHint({ ...all, seams: [] }, null)).toBeNull()
+  })
+})
+
+describe('preflightNote', () => {
+  it('says there is no part, then that the check is running until its answer is for the current plan', () => {
+    expect(preflightNote(false, [], false)).toBe('Pre-flight: no part loaded')
+    expect(preflightNote(true, [], false)).toBe('Pre-flight: checking')
+  })
+
+  it('counts the errors and warnings the check found for the plan as it stands', () => {
+    const empty = specExamplePlan([])
+    expect(preflightNote(true, preflight(empty), true)).toBe('Pre-flight: 1 error, 0 warnings')
+    const plan = specExamplePlan()
+    plan.seams[0]!.procedureId = null
+    const issues = preflight(plan)
+    const errors = issues.filter((i) => i.severity === 'error').length
+    const warnings = issues.filter((i) => i.severity === 'warning').length
+    expect(errors).toBeGreaterThan(0)
+    expect(preflightNote(true, issues, true)).toBe(`Pre-flight: ${errors} ${errors === 1 ? 'error' : 'errors'}, ${warnings} ${warnings === 1 ? 'warning' : 'warnings'}`)
+    expect(preflightNote(true, preflight(specExamplePlan()), true)).toMatch(/^Pre-flight: 0 errors, \d+ warnings?$/)
   })
 })
