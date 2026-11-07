@@ -176,6 +176,7 @@ function apply(saved: SavedPlan): Partial<AppState> {
     nextPortNumber: Math.max(saved.nextPortNumber ?? 1, nextNumberAfter(saved.ports)),
     selectedPortId: null,
     placingPort: false,
+    movingPort: false,
     gravity: saved.gravity,
     detectSettings: saved.detectSettings,
     weldTolerance: saved.weldTolerance,

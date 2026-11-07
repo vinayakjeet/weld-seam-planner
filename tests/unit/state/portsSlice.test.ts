@@ -76,6 +76,68 @@ describe('ports slice', () => {
     expect(state().selectedPortId).toBeNull()
   })
 
+  describe('moving a port', () => {
+    it('starts off, and a new port is not in move mode', () => {
+      expect(state().movingPort).toBe(false)
+      state().addPort([0, 0, 0], DOWN)
+      expect(state().movingPort).toBe(false)
+    })
+
+    it('turns on for the selected port and is not an undo step or part of the plan', () => {
+      state().addPort([0, 0, 0], DOWN)
+      state().setMovingPort(true)
+      expect(state().movingPort).toBe(true)
+      expect(temporal().pastStates).toHaveLength(1)
+      expect(selectPlan(state()).access).toEqual({ ports: state().ports, arm: state().arm })
+    })
+
+    it('stays off when no port is selected', () => {
+      state().setMovingPort(true)
+      expect(state().movingPort).toBe(false)
+    })
+
+    it('turns off when another port or none is selected, or the port is deleted', () => {
+      state().addPort([0, 0, 0], DOWN)
+      state().addPort([10, 0, 0], DOWN)
+      state().selectPort('P1')
+      state().setMovingPort(true)
+      state().selectPort('P2')
+      expect(state().movingPort).toBe(false)
+      state().setMovingPort(true)
+      state().selectPort(null)
+      expect(state().movingPort).toBe(false)
+      state().selectPort('P2')
+      state().setMovingPort(true)
+      state().deletePort('P2')
+      expect(state().movingPort).toBe(false)
+    })
+
+    it('stays on when the same port is selected again, and when its position is typed', () => {
+      state().addPort([0, 0, 0], DOWN)
+      state().setMovingPort(true)
+      state().selectPort('P1')
+      state().movePort('P1', [1, 2, 3])
+      expect(state().movingPort).toBe(true)
+    })
+
+    it('turns off on leaving the Access step, and stays on within it', () => {
+      state().setActiveStep('access')
+      state().addPort([0, 0, 0], DOWN)
+      state().setMovingPort(true)
+      state().setActiveStep('access')
+      expect(state().movingPort).toBe(true)
+      state().setActiveStep('sequence')
+      expect(state().movingPort).toBe(false)
+    })
+
+    it('ends when placing a new port starts, because the click then belongs to the part', () => {
+      state().addPort([0, 0, 0], DOWN)
+      state().setMovingPort(true)
+      state().setPlacingPort(true)
+      expect(state().movingPort).toBe(false)
+    })
+  })
+
   it('clamps the arm through clampArm and keeps the fields it was not given', () => {
     state().setArm({ maxBendDeg: 90 })
     expect(state().arm.maxBendDeg).toBe(45)

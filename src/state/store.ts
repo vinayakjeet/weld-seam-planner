@@ -46,7 +46,7 @@ export type AppState = UiSlice & PartSlice & SeamsSlice & PlanSlice & TorchSlice
 
 const createUiSlice: StateCreator<AppState, [], [], UiSlice> = (set) => ({
   activeStep: 'import',
-  setActiveStep: (activeStep) => set({ activeStep }),
+  setActiveStep: (activeStep) => set((state) => (activeStep === 'access' || !state.movingPort ? { activeStep } : { activeStep, movingPort: false })),
   tool: initialTool,
   setTool: (tool) => set({ tool }),
   notice: null,
