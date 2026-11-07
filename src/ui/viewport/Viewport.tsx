@@ -6,9 +6,13 @@ import { InfoNotice } from '../shell/InfoNotice'
 import { ToolNotice } from '../shell/ToolNotice'
 import { ProgressBar } from '../shell/ProgressBar'
 import { EmptyState } from './EmptyState'
+import { GIZMO_MARGIN, GIZMO_RADIUS } from './gizmo'
 import { Scene } from './Scene'
 import { UnitsDialog } from './UnitsDialog'
 import { ViewToolbar } from './ViewToolbar'
+
+// Room the messages leave on the right for the view cube.
+const CUBE_CLEARANCE = GIZMO_MARGIN + GIZMO_RADIUS + 8
 
 function Messages() {
   return (
@@ -48,7 +52,7 @@ export function Viewport() {
       ) : (
         <>
           <ViewToolbar />
-          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col items-center gap-2 p-3">
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col items-center gap-2 p-3" style={{ paddingRight: CUBE_CLEARANCE }}>
             <Messages />
           </div>
         </>
