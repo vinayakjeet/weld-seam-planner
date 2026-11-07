@@ -89,12 +89,12 @@ describe('REACH_LEGEND', () => {
 })
 
 describe('staleReachText', () => {
-  it('counts the seams whose result is from the old ports or arm, and says how to update them', () => {
-    expect(staleReachText(19)).toBe('19 seams still have results from the old ports or arm. Run reach on all snake seams to update them.')
+  it('counts the seams whose result is from the old ports or arm, and leaves the update to the button below it', () => {
+    expect(staleReachText(19)).toBe('19 seams still have results from the old ports or arm.')
   })
 
   it('writes one seam in the singular', () => {
-    expect(staleReachText(1)).toBe('1 seam still has a result from the old ports or arm. Run reach on all snake seams to update it.')
+    expect(staleReachText(1)).toBe('1 seam still has a result from the old ports or arm.')
   })
 
   it('is empty when no seam is out of date', () => {

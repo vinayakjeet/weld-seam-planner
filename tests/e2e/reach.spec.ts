@@ -95,14 +95,20 @@ test('places a port, measures reach, plays the insertion and exports a job and a
   // The what-if of the demo: a looser bend limit makes the earlier result stale and reaches more of the stiffener seam.
   await page.getByRole('button', { name: /Access/ }).click()
   await field(page, 'Bend limit', '25')
-  await expect(page.getByText(`${SNAKE_SEAMS} seams still have results from the old ports or arm.`, { exact: false })).toBeVisible()
+  await expect(page.getByText(`${SNAKE_SEAMS} seams still have results from the old ports or arm.`, { exact: true })).toBeVisible()
   // The stiffener seam is still selected, so reach runs on that one seam only.
   await runReach(page, /Run reach on 1 selected seam/, /Reach measured for 1 seam in/)
-  await expect(page.getByText(`${SNAKE_SEAMS - 1} seams still have results from the old ports or arm.`, { exact: false })).toBeVisible()
+  const stale = page.getByText(`${SNAKE_SEAMS - 1} seams still have results from the old ports or arm.`, { exact: true })
+  await expect(stale).toBeVisible()
+  // The warning names no other way to update; the button right below it does.
+  const update = page.getByRole('button', { name: `Update ${SNAKE_SEAMS - 1} out-of-date seams` })
+  const [text, button] = [(await stale.boundingBox())!, (await update.boundingBox())!]
+  expect(button.y).toBeGreaterThanOrEqual(text.y + text.height)
+  expect(button.y - (text.y + text.height)).toBeLessThan(16)
   await rowOf(page, STIFFENER).locator('[data-access="snake"]').hover()
   await expect(page.getByRole('tooltip').getByText('Snake, 100 % reached from P1')).toBeVisible()
   // The other seams are measured again with the button under the warning, and the warning goes away.
-  await page.getByRole('button', { name: `Update ${SNAKE_SEAMS - 1} out-of-date seams` }).click()
+  await update.click()
   await expect(page.getByText(new RegExp(`Reach measured for ${SNAKE_SEAMS - 1} seams in`))).toBeVisible({ timeout: 120_000 })
   await expect(page.getByText(/still ha(ve|s) results? from the old ports or arm/)).toHaveCount(0)
 })
