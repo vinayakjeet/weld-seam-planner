@@ -37,7 +37,8 @@ const COLUMNS = [
   { key: 'status', label: '', title: 'Status' },
 ]
 
-const GRID = 'grid grid-cols-[22px_minmax(0,1fr)_46px_30px_68px_34px_34px_16px] items-center gap-x-1.5 px-3'
+// Len fits 9999.9 and WPS a ten letter code in tabular figures; Pos and Acc fit their chips, the label takes the rest.
+const GRID = 'grid grid-cols-[20px_minmax(0,1fr)_46px_50px_80px_26px_32px_16px] items-center gap-x-1.5 px-3'
 
 const STATUS_DOT = {
   accepted: 'bg-seam-accepted',

@@ -29,7 +29,7 @@ const STRATEGY_NAMES: Record<SequenceStrategy, string> = {
 }
 
 
-const GRID = 'grid grid-cols-[18px_24px_minmax(0,1fr)_44px_82px_24px] items-center gap-x-1.5 px-3'
+const GRID = 'grid grid-cols-[18px_24px_minmax(0,1fr)_52px_82px_24px] items-center gap-x-1.5 px-3'
 
 function Grip() {
   return (
