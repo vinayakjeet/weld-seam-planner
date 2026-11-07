@@ -17,6 +17,9 @@ export interface ViewSlice {
   // Which token set the page and the viewport read. The attribute and the stored choice are set by chooseTheme.
   theme: Theme
   setTheme: (theme: Theme) => void
+  // How many sequence labels the part hides from the camera, so the view toolbar can say that x-ray shows them.
+  hiddenLabels: number
+  setHiddenLabels: (count: number) => void
 }
 
 export const createViewSlice: StateCreator<AppState, [], [], ViewSlice> = (set) => ({
@@ -28,4 +31,6 @@ export const createViewSlice: StateCreator<AppState, [], [], ViewSlice> = (set) 
   theme: 'dark',
   setTheme: (theme) => set((state) => (state.theme === theme ? state : { theme })),
   setHelpOpen: (helpOpen) => set((state) => (state.helpOpen === helpOpen ? state : { helpOpen })),
+  hiddenLabels: 0,
+  setHiddenLabels: (hiddenLabels) => set((state) => (state.hiddenLabels === hiddenLabels ? state : { hiddenLabels })),
 })

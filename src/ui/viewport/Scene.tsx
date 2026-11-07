@@ -109,7 +109,7 @@ export function Scene() {
             <AirMoves />
             <WeldGlow />
             <PlaybackTorch />
-            <SequenceLabels />
+            <SequenceLabels partRef={partMesh} />
         </group>
       </OriginContext.Provider>
       <GizmoHelper alignment="top-right" margin={[margin, margin]}>
