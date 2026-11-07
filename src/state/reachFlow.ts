@@ -5,6 +5,7 @@ import type { GeometryClient } from '../worker/client'
 import { accessFor } from './accessSlice'
 import { attempt, setNotice } from './flows'
 import { reachFor, stationAt } from './reachSlice'
+import { runTimeText } from './runTime'
 import { selectPlan } from './selectors'
 import { useStore, type AppState } from './store'
 
@@ -89,7 +90,7 @@ export async function runReach(client: GeometryClient, only?: SeamCandidate[]): 
   const done = useStore.getState()
   done.setReachBusy(false)
   done.setReachProgress(null)
-  done.setInfo(`Reach measured for ${plural(targets.length, 'seam')} in ${((performance.now() - started) / 1000).toFixed(1)} s.`)
+  done.setInfo(`Reach measured for ${plural(targets.length, 'seam')} in ${runTimeText(performance.now() - started)}.`)
 }
 
 // Stops the run, the seam in flight at its next station. Seams already measured keep their result.

@@ -71,6 +71,7 @@ describe('runReach', () => {
     expect(state().reachBusy).toBe(false)
     expect(state().reachProgress).toBeNull()
     expect(state().info).toContain(`${seams.length}`)
+    expect(state().info).not.toContain('0.0 s')
   })
 
   it('sends only the selected seams when there is a selection', async () => {
