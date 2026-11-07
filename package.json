@@ -11,6 +11,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "audit:visual": "playwright test -c scripts/visual-audit/playwright.config.ts",
     "lint": "eslint .",
     "typecheck": "tsc -b --noEmit"
   },
