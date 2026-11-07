@@ -79,7 +79,7 @@ function TrimRow({ enabled, lengthMm }: { enabled: boolean; lengthMm: number | n
   }
   return (
     <form onSubmit={submit} className="flex flex-col gap-1.5" aria-label="Trim the selected seam">
-      <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-2">Trim ends</span>
+      <span className="text-xs font-semibold text-ink-0">Trim ends</span>
       <div className="flex items-center gap-2">
         {[
           { name: 'Start', value: start, set: setStart },
@@ -129,7 +129,7 @@ export function ManualTools() {
   return (
     <div role="group" aria-label="Seam tools" className="flex shrink-0 flex-col gap-2 border-b border-line px-3 py-2">
       <div className="flex items-baseline justify-between">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-2">Edit seam</span>
+        <span className="text-xs font-semibold text-ink-0">Edit seam</span>
         {selected ? (
           <span className="num text-[11px] text-ink-1">
             <span className="text-ink-0">{selected.label}</span> {selected.lengthMm.toFixed(1)} mm

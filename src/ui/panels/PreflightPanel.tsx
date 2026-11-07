@@ -44,7 +44,7 @@ function IssueRow({ row, severity, open, onToggle }: { row: Row; severity: Sever
 function Group({ title, severity, rows, open, toggle }: { title: string; severity: Severity; rows: Row[]; open: Set<string>; toggle: (key: string) => void }) {
   return (
     <section aria-label={title}>
-      <h3 className="flex items-center gap-2 border-b border-line px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-2">
+      <h3 className="flex items-center gap-2 border-b border-line px-3 py-1.5 text-xs font-semibold text-ink-0">
         <span>{title}</span>
         <span className={`num rounded-full border border-line px-1.5 ${rows.length > 0 ? TONE[severity] : ''}`}>{rows.length}</span>
       </h3>
