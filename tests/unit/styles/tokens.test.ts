@@ -133,3 +133,22 @@ describe('scene colours', () => {
     }
   })
 })
+
+describe('chip colours', () => {
+  const mixHex = (top: string, alpha: number, bottom: string) => {
+    const rgb = (h: string) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16))
+    const [t, b] = [rgb(top), rgb(bottom)]
+    return `#${t.map((v, i) => Math.round(v * alpha + b[i]! * (1 - alpha)).toString(16).padStart(2, '0')).join('')}`
+  }
+
+  // A chip is 10 px text on a tenth of its own colour, in a row that may be plain, hovered (bg-2) or selected (the brand
+  // colour at 15, 20 or 25 percent over the panel).
+  it.each(['dark', 'light'] as const)('keep 10 px chip text at 4.5 to 1 on every row a chip can sit in, %s theme', (theme) => {
+    const t = readTokens(undefined, theme)
+    const at = (name: string) => resolveToken(t, name)
+    const rows = [at('--bg-0'), at('--bg-1'), at('--bg-2'), ...[0.15, 0.2, 0.25].map((a) => mixHex(at('--brand-primary'), a, at('--bg-1')))]
+    for (const chip of ['--chip-ok', '--chip-info', '--chip-warn', '--chip-err', '--chip-accent']) {
+      for (const row of rows) expect(contrast(at(chip), mixHex(at(chip), 0.1, row)), `${chip} on ${row}`).toBeGreaterThanOrEqual(4.5)
+    }
+  })
+})

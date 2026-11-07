@@ -2,11 +2,13 @@ import type { AccessClass } from '../../core/access/clearance'
 import { Tooltip } from '../kit/Tooltip'
 import { accessChipText, accessLabel, accessLine } from './accessText'
 
+// The frame and tint are the class colours the part is drawn in; the text is the chip colour of the same hue, which stays
+// readable on the light page.
 export const ACCESS_TONE: Record<AccessClass, string> = {
-  standard: 'border-access-standard/40 bg-access-standard/10 text-access-standard',
-  slim: 'border-access-slim/40 bg-access-slim/10 text-access-slim',
-  snake: 'border-access-snake/40 bg-access-snake/10 text-access-snake',
-  blocked: 'border-access-blocked/40 bg-access-blocked/10 text-access-blocked',
+  standard: 'border-access-standard/40 bg-access-standard/10 text-chip-ok',
+  slim: 'border-access-slim/40 bg-access-slim/10 text-chip-info',
+  snake: 'border-access-snake/40 bg-access-snake/10 text-chip-accent',
+  blocked: 'border-access-blocked/40 bg-access-blocked/10 text-chip-err',
 }
 
 // The class of a seam as a chip, a neutral dash when it has none, and a neutral dot while the check runs.

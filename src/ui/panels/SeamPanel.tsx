@@ -215,7 +215,7 @@ function SeamTable({ filters }: { filters: ReadonlySet<RowFilter> }) {
                       : 'text-ink-1'
               }`}
             >
-              <span role="cell" className="num text-ink-2">
+              <span role="cell" className={`num ${selectedIds.includes(row.id) ? 'text-ink-1' : 'text-ink-2'}`}>
                 {row.n}
               </span>
               <span role="cell" className="truncate text-ink-0">

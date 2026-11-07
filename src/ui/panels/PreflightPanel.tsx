@@ -3,7 +3,8 @@ import { selectAllSeams, selectPlan } from '../../state/selectors'
 import { useStore } from '../../state/store'
 import { groupIssues, type Row } from './preflightGroups'
 
-const TONE = { error: 'text-err', warning: 'text-warn', info: 'text-info' } as const
+// The 10 px code and the count badge use the chip colours, which stay readable on a selected row.
+const TONE = { error: 'text-chip-err', warning: 'text-chip-warn', info: 'text-chip-info' } as const
 
 type Severity = keyof typeof TONE
 

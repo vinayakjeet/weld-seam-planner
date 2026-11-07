@@ -4,11 +4,11 @@ import { positionLines } from './seamRows'
 
 // Easy positions read green, vertical blue, overhead amber, so the hard seams stand out in a long list.
 const TONE: Record<string, string> = {
-  PA: 'border-ok/40 bg-ok/10 text-ok',
-  PB: 'border-ok/40 bg-ok/10 text-ok',
-  PF: 'border-info/40 bg-info/10 text-info',
-  PG: 'border-info/40 bg-info/10 text-info',
-  PD: 'border-warn/40 bg-warn/10 text-warn',
+  PA: 'border-ok/40 bg-ok/10 text-chip-ok',
+  PB: 'border-ok/40 bg-ok/10 text-chip-ok',
+  PF: 'border-info/40 bg-info/10 text-chip-info',
+  PG: 'border-info/40 bg-info/10 text-chip-info',
+  PD: 'border-warn/40 bg-warn/10 text-chip-warn',
 }
 
 export function PositionChip({ position }: { position: SeamPosition | null }) {

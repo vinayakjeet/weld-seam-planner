@@ -65,6 +65,9 @@
   --ok: var(--signal-ok);  --warn: var(--scene-warn);  --err: var(--scene-reject);  --info: var(--signal-info);
   --access-standard: var(--signal-ok);  --access-slim: var(--signal-info);  --access-snake: var(--brand-accent);  --access-blocked: var(--scene-reject);
   --reach-ok: var(--signal-ok);  --reach-miss: var(--scene-reject);
+  /* Chips and codes: 10 px coloured text on a tint of its own colour, in a row that may be hovered or selected. These
+     keep 4.5 to 1 there, which the scene colours cannot do on a light page; the access chips use them for their text. */
+  --chip-ok: var(--ok);  --chip-info: var(--info);  --chip-warn: var(--warn);  --chip-err: #F3807B;  --chip-accent: #EB8915;
 
   --scroll-thumb: var(--text-2);  --scroll-track: transparent;
   --num: var(--brand-font-ui);  /* numbers use the UI face with tabular figures */
@@ -79,4 +82,5 @@
   --text-0: var(--dark-forest);  --text-1: var(--revolution-green);  --text-2: var(--revolution-green-t2);
   --brand-primary: var(--revolution-green-t2);
   --ok: #2C5A18;  --warn: #6E4A00;  --err: #9C1F19;  --info: #1A5380;
+  --chip-ok: #234813;  --chip-info: #154266;  --chip-warn: #563A00;  --chip-err: #7A1814;  --chip-accent: #603400;
 }

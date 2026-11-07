@@ -31,6 +31,11 @@
   --color-warn: var(--warn);
   --color-err: var(--err);
   --color-info: var(--info);
+  --color-chip-ok: var(--chip-ok);
+  --color-chip-info: var(--chip-info);
+  --color-chip-warn: var(--chip-warn);
+  --color-chip-err: var(--chip-err);
+  --color-chip-accent: var(--chip-accent);
   --font-display: var(--brand-font-display);
   --font-sans: var(--brand-font-ui);
   --font-mono: var(--num);
