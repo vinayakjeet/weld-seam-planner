@@ -30,3 +30,6 @@ export function reachSummary(coverages: number[]): string {
   const mean = coverages.reduce((total, c) => total + c, 0) / coverages.length
   return `${coverages.length} snake ${coverages.length === 1 ? 'seam' : 'seams'} measured: ${full} fully reached, mean coverage ${coverageText(mean)}.`
 }
+
+// Under the reach results: what the seam colours mean (--reach-ok and --reach-miss) and how to see the arm.
+export const REACH_LEGEND = 'Seams are coloured green where the arm reaches them and red where it does not. Select a seam and move the scrub to see the arm.'

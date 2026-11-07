@@ -1,5 +1,7 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { accessTitle, coverageText, reachLine, reachSummary } from '../../../src/ui/panels/reachText'
+import { accessTitle, coverageText, REACH_LEGEND, reachLine, reachSummary } from '../../../src/ui/panels/reachText'
 import { reachOf } from '../helpers/reach'
 
 describe('coverageText', () => {
@@ -58,5 +60,30 @@ describe('reachSummary', () => {
 
   it('is empty with nothing measured', () => {
     expect(reachSummary([])).toBe('')
+  })
+})
+
+describe('REACH_LEGEND', () => {
+  const tokens = readFileSync(fileURLToPath(new URL('../../../src/styles/tokens.css', import.meta.url)), 'utf8')
+  // The token a reach colour points to, followed to its hex value, and the name of its hue.
+  const hexOf = (name: string): string => {
+    const value = new RegExp(`${name}:\\s*([^;]+);`).exec(tokens)![1]!.trim()
+    const ref = /^var\((--[\w-]+)\)$/.exec(value)
+    return ref ? hexOf(ref[1]!) : value
+  }
+  const hueName = (hex: string): string => {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255) as [number, number, number]
+    const max = Math.max(r, g, b)
+    const d = max - Math.min(r, g, b)
+    const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4
+    const hue = (h * 60 + 360) % 360
+    return hue < 20 || hue >= 340 ? 'red' : hue < 70 ? 'orange' : hue < 170 ? 'green' : hue < 260 ? 'blue' : 'purple'
+  }
+
+  it('names the colours the seams are drawn in once reach has run', () => {
+    expect(hueName(hexOf('--reach-ok'))).toBe('green')
+    expect(hueName(hexOf('--reach-miss'))).toBe('red')
+    expect(REACH_LEGEND).toContain(`coloured ${hueName(hexOf('--reach-ok'))} where the arm reaches them`)
+    expect(REACH_LEGEND).toContain(`${hueName(hexOf('--reach-miss'))} where it does not`)
   })
 })

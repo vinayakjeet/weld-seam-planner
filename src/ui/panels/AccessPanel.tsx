@@ -12,7 +12,7 @@ import { Tooltip } from '../kit/Tooltip'
 import { ARM_FIELDS } from './armFields'
 import { InsertionControls } from './InsertionControls'
 import { portRows } from './portRows'
-import { reachSummary } from './reachText'
+import { REACH_LEGEND, reachSummary } from './reachText'
 
 export const NEED_PART_FOR_PORT = 'Load a part first. A port is a hole in the part, so there is nothing to place it on yet.'
 
@@ -204,7 +204,7 @@ function ReachSection() {
         <p className="text-warn">The ports or the arm changed since the last run, so the earlier results are out of date and are not used. Run reach again.</p>
       )}
       {summary !== '' && !stale && <p className="text-ink-1">{summary}</p>}
-      <p className="text-ink-2">Seams are coloured blue where the arm reaches them and red where it does not. Select a seam and move the scrub to see the arm.</p>
+      <p className="text-ink-2">{REACH_LEGEND}</p>
     </section>
   )
 }
