@@ -8,6 +8,7 @@ import { useStore } from '../../state/store'
 import { useVisibleSeams } from '../../state/useVisibleSeams'
 import { Button } from '../kit/Button'
 import { PanelHeading } from '../kit/PanelHeading'
+import { showsSeamTable } from './panelHeadings'
 import { Tooltip } from '../kit/Tooltip'
 import { Tab, TabList, TabPanel, Tabs } from '../kit/Tabs'
 import { AccessChip } from './AccessChip'
@@ -286,19 +287,21 @@ export function SeamPanel() {
         </TabList>
         <TabPanel value="seams" className="data-[state=active]:flex data-[state=active]:flex-col">
           <PanelHeading step={activeStep} />
-          <div className="flex shrink-0 gap-1.5 border-b border-line px-3 py-2">
-            {ROW_FILTERS.map((chip) => (
-              <button
-                key={chip.id}
-                type="button"
-                aria-pressed={filters.has(chip.id)}
-                onClick={() => setFilters(toggled(filters, chip.id))}
-                className="rounded-full border border-line px-2 py-0.5 text-[11px] text-ink-2 outline-none hover:text-ink-0 focus-visible:ring-1 focus-visible:ring-brand aria-pressed:border-brand aria-pressed:text-ink-0"
-              >
-                {chip.label}
-              </button>
-            ))}
-          </div>
+          {showsSeamTable(activeStep) && (
+            <div className="flex shrink-0 gap-1.5 border-b border-line px-3 py-2">
+              {ROW_FILTERS.map((chip) => (
+                <button
+                  key={chip.id}
+                  type="button"
+                  aria-pressed={filters.has(chip.id)}
+                  onClick={() => setFilters(toggled(filters, chip.id))}
+                  className="rounded-full border border-line px-2 py-0.5 text-[11px] text-ink-2 outline-none hover:text-ink-0 focus-visible:ring-1 focus-visible:ring-brand aria-pressed:border-brand aria-pressed:text-ink-0"
+                >
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+          )}
           <PartWarnings />
           {empty && <NoAcceptedSeams />}
           {exportStep ? (

@@ -25,3 +25,17 @@ test('the Accepted and Candidates chips filter the seam rows and the part name o
   await page.getByRole('button', { name: /Open another part/ }).click()
   await expect(page.getByRole('heading', { name: 'Drop an STL file or pick a sample' })).toBeVisible()
 })
+
+test('the chips that filter the seam table are left out of the Sequence and Export steps, which have no seam table', async ({ page }) => {
+  await page.goto('/')
+  await loadSample(page, tJoint)
+  const chip = page.getByRole('button', { name: 'Candidates', exact: true })
+  const steps = page.getByRole('navigation', { name: 'Workflow steps' })
+  await expect(chip).toBeVisible()
+  for (const step of [/Sequence/, /Export/]) {
+    await steps.getByRole('button', { name: step }).click()
+    await expect(chip).toHaveCount(0)
+  }
+  await steps.getByRole('button', { name: /Access/ }).click()
+  await expect(chip).toBeVisible()
+})

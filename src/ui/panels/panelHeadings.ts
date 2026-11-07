@@ -9,3 +9,6 @@ export const STEP_PANEL_HEADING: Record<StepId, string> = {
   sequence: 'Sequence',
   export: 'Pre-flight',
 }
+
+// Sequence and Export put their own lists in place of the seam table, so the chips that filter it are left out there.
+export const showsSeamTable = (step: StepId): boolean => step !== 'sequence' && step !== 'export'
