@@ -1,4 +1,4 @@
-import { CameraControls, GizmoHelper, GizmoViewcube, Grid } from '@react-three/drei'
+import { CameraControls, GizmoHelper, Grid } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useCallback, useMemo, useEffect, useRef } from 'react'
 import { Sphere, Vector3, type Mesh } from 'three'
@@ -21,12 +21,10 @@ import { SeamLines } from './SeamLines'
 import { SequenceLabels } from './SequenceLabels'
 import { SplitTool } from './SplitTool'
 import { TorchPreview } from './TorchPreview'
+import { ViewCube } from './ViewCube'
 import { WeldGlow } from './WeldGlow'
 import { displayOrigin } from '../../core/mesh/displayOrigin'
 import { OriginContext } from './origin'
-
-// Face order is +X, -X, +Y, -Y, +Z, -Z; the camera looks along +Y from the front.
-const Z_UP_FACES = ['Right', 'Left', 'Back', 'Front', 'Top', 'Bottom']
 
 // Space left around the fitted part, as a share of its size.
 const FIT_PADDING = 0.08
@@ -115,14 +113,7 @@ export function Scene() {
         </group>
       </OriginContext.Provider>
       <GizmoHelper alignment="top-right" margin={[margin, margin]}>
-        <GizmoViewcube
-          faces={Z_UP_FACES}
-          color={cssVar('--bg-2')}
-          hoverColor={cssVar('--scene-select')}
-          textColor={cssVar('--text-0')}
-          strokeColor={cssVar('--line')}
-          opacity={1}
-        />
+        <ViewCube colours={{ face: cssVar('--bg-2'), hover: cssVar('--scene-select'), text: cssVar('--text-0'), stroke: cssVar('--line') }} />
       </GizmoHelper>
     </>
   )
