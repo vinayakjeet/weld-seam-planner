@@ -135,6 +135,7 @@ async function applyLoad(outcome: LoadOutcome, fileName: string, client: Geometr
     ports: [],
     selectedPortId: null,
     placingPort: false,
+    movingPort: false,
     nextPortNumber: 1,
     playing: false,
     timeS: 0,

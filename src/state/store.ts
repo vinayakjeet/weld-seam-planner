@@ -46,8 +46,14 @@ export type AppState = UiSlice & PartSlice & SeamsSlice & PlanSlice & TorchSlice
 
 const createUiSlice: StateCreator<AppState, [], [], UiSlice> = (set) => ({
   activeStep: 'import',
-  // A message belongs to the step it came from; left on screen it would cover the next steps.
-  setActiveStep: (activeStep) => set((state) => (state.activeStep === activeStep ? state : { activeStep, info: null, notice: null })),
+  // A message belongs to the step it came from; left on screen it would cover the next steps. Moving a port ends with
+  // the Access step.
+  setActiveStep: (activeStep) =>
+    set((state) =>
+      state.activeStep === activeStep
+        ? state
+        : { activeStep, info: null, notice: null, ...(activeStep !== 'access' && state.movingPort ? { movingPort: false } : {}) },
+    ),
   tool: initialTool,
   setTool: (tool) => set({ tool }),
   notice: null,

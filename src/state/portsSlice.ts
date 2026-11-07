@@ -13,6 +13,9 @@ export interface PortsSlice {
   arm: ArmParams
   selectedPortId: string | null
   placingPort: boolean
+  // Whether the selected port shows its drag handles. Off by default so an orbit that starts on the port cannot move it;
+  // the Move button turns it on, and Escape, Done, another selection or leaving Access turn it off.
+  movingPort: boolean
   // The next port number, kept apart from the list so a deleted port's id is not given out again.
   nextPortNumber: number
   addPort: (position: Vec3, direction: Vec3) => string
@@ -21,6 +24,7 @@ export interface PortsSlice {
   deletePort: (id: string) => void
   setArm: (patch: Partial<ArmParams>) => void
   setPlacingPort: (on: boolean) => void
+  setMovingPort: (on: boolean) => void
   selectPort: (id: string | null) => void
 }
 
@@ -32,6 +36,7 @@ export const createPortsSlice: StateCreator<AppState, [], [], PortsSlice> = (set
   arm: DEFAULT_ARM,
   selectedPortId: null,
   placingPort: false,
+  movingPort: false,
   nextPortNumber: 1,
 
   addPort: (position, direction) => {
@@ -43,6 +48,7 @@ export const createPortsSlice: StateCreator<AppState, [], [], PortsSlice> = (set
       nextPortNumber: n + 1,
       selectedPortId: id,
       placingPort: false,
+      movingPort: false,
     })
     return id
   },
@@ -61,7 +67,11 @@ export const createPortsSlice: StateCreator<AppState, [], [], PortsSlice> = (set
   deletePort: (id) =>
     set((state) =>
       state.ports.some((p) => p.id === id)
-        ? { ports: state.ports.filter((p) => p.id !== id), selectedPortId: state.selectedPortId === id ? null : state.selectedPortId }
+        ? {
+            ports: state.ports.filter((p) => p.id !== id),
+            selectedPortId: state.selectedPortId === id ? null : state.selectedPortId,
+            movingPort: state.selectedPortId === id ? false : state.movingPort,
+          }
         : state,
     ),
 
@@ -71,7 +81,14 @@ export const createPortsSlice: StateCreator<AppState, [], [], PortsSlice> = (set
       return (Object.keys(arm) as Array<keyof ArmParams>).every((key) => arm[key] === state.arm[key]) ? state : { arm }
     }),
 
-  setPlacingPort: (placingPort) => set((state) => (state.placingPort === placingPort ? state : { placingPort })),
+  setPlacingPort: (placingPort) =>
+    set((state) => (state.placingPort === placingPort ? state : { placingPort, movingPort: placingPort ? false : state.movingPort })),
 
-  selectPort: (selectedPortId) => set((state) => (state.selectedPortId === selectedPortId ? state : { selectedPortId })),
+  setMovingPort: (movingPort) =>
+    set((state) => {
+      const on = movingPort && state.selectedPortId !== null && state.ports.some((p) => p.id === state.selectedPortId)
+      return state.movingPort === on ? state : { movingPort: on, placingPort: on ? false : state.placingPort }
+    }),
+
+  selectPort: (selectedPortId) => set((state) => (state.selectedPortId === selectedPortId ? state : { selectedPortId, movingPort: false })),
 })

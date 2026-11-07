@@ -53,7 +53,8 @@ function ArmFields() {
 }
 
 function PortCard({ port, row, selected }: { port: Port; row: ReturnType<typeof portRows>[number]; selected: boolean }) {
-  const { selectPort, movePort, setPortDiameter, deletePort } = useStore.getState()
+  const { selectPort, movePort, setPortDiameter, deletePort, setMovingPort } = useStore.getState()
+  const moving = useStore((s) => s.movingPort) && selected
   const axes = ['X', 'Y', 'Z'] as const
   return (
     <li
@@ -64,13 +65,26 @@ function PortCard({ port, row, selected }: { port: Port; row: ReturnType<typeof 
     >
       <div className="flex items-center justify-between">
         <span className="font-medium text-ink-0">{port.id}</span>
-        <button
-          type="button"
-          onClick={() => deletePort(port.id)}
-          className="rounded-sm text-[11px] text-ink-2 outline-none hover:text-err focus-visible:ring-1 focus-visible:ring-brand"
-        >
-          Delete {port.id}
-        </button>
+        <div className="flex items-center gap-3">
+          <Button
+            aria-pressed={moving}
+            className="h-6! px-2! text-xs"
+            onClick={() => {
+              // Select first: a click that bubbles to the card selects it, and selecting clears the move.
+              selectPort(port.id)
+              setMovingPort(!moving)
+            }}
+          >
+            {moving ? 'Done' : 'Move'}
+          </Button>
+          <button
+            type="button"
+            onClick={() => deletePort(port.id)}
+            className="rounded-sm text-[11px] text-ink-2 outline-none hover:text-err focus-visible:ring-1 focus-visible:ring-brand"
+          >
+            Delete {port.id}
+          </button>
+        </div>
       </div>
       {axes.map((axis, i) => (
         <NumberField
@@ -102,6 +116,7 @@ function PortCard({ port, row, selected }: { port: Port; row: ReturnType<typeof 
         }}
       />
       <p className="num text-ink-2">Direction {row.direction}</p>
+      {moving && <p className="text-ink-1">Drag the arrows in the view, or type X, Y and Z. Press Escape or Done to hide them.</p>}
     </li>
   )
 }
