@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import { STEPS, useStore } from '../../state/store'
 import { Dialog } from '../kit/Dialog'
 import { SHORTCUT_HELP, type ShortcutHelpRow } from './shortcuts'
@@ -22,11 +23,12 @@ export function ShortcutSheet() {
               {SHORTCUT_HELP.filter((row) => row.group === group).map((row) => (
                 <li key={row.id} className="flex items-baseline justify-between gap-3">
                   <span className="text-ink-1">{labelOf(row)}</span>
-                  <span className="flex shrink-0 gap-1">
+                  <span className="flex shrink-0 items-baseline gap-1">
                     {row.keys.map((keys, i) => (
-                      <kbd key={keys} className="num rounded-sm border border-line bg-surface-2 px-1.5 text-[11px] text-ink-0">
-                        {i > 0 ? `or ${keys}` : keys}
-                      </kbd>
+                      <Fragment key={keys}>
+                        {i > 0 && <span className="text-[11px] text-ink-2">or</span>}
+                        <kbd className="num rounded-sm border border-line bg-surface-2 px-1.5 text-[11px] text-ink-0">{keys}</kbd>
+                      </Fragment>
                     ))}
                   </span>
                 </li>

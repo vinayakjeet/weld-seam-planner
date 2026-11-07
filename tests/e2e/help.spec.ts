@@ -15,6 +15,9 @@ test('the shortcut sheet lists the keys, blocks the step keys while open and clo
   await expect(sheet.getByText('Fit view')).toBeVisible()
   await expect(sheet.getByText('Go to Access')).toBeVisible()
   await expect(sheet.getByText('Go to Export')).toBeVisible()
+  // A key cap holds only the key; the word between two caps is plain text.
+  await expect(sheet.locator('kbd', { hasText: /^or\b/ })).toHaveCount(0)
+  await expect(sheet.locator('kbd', { hasText: 'Cmd+E' })).toHaveText('Cmd+E')
 
   await page.keyboard.press('2')
   await expect(current(page)).toContainText('Import')
