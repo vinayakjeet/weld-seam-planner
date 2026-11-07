@@ -9,6 +9,8 @@ const SPRAY = 'WPS-GMAW-SPRAY-FW6'
 const seconds = (text: string) => text.split(':').reduce((total, part) => total * 60 + Number(part), 0)
 
 test('optimises, plays and exports a balanced-heat sequence on double-bottom-cell', async ({ page }) => {
+  // About 20 s alone and close to the 30 s default when the tank reach specs run beside it.
+  test.setTimeout(90_000)
   await page.goto('/')
   await loadSample(page, cell)
 
