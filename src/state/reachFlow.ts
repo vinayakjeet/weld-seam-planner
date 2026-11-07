@@ -22,8 +22,22 @@ export function reachTargets(state: AppState): SeamCandidate[] {
   return seams.filter((seam) => accessFor(state, seam)?.class === 'snake')
 }
 
+// The accepted seams with a result measured under other ports or another arm than the current ones.
+export function staleReachSeams(state: AppState): SeamCandidate[] {
+  const now = reachKey(state.ports, state.arm)
+  return selectPlan(state)
+    .seams.map((planned) => planned.seam)
+    .filter((seam) => seam.id in state.reachKeyById && state.reachKeyById[seam.id] !== now)
+}
+
+// Measures again only the seams whose result is out of date, whatever is selected.
+export async function runStaleReach(client: GeometryClient): Promise<void> {
+  const stale = staleReachSeams(useStore.getState())
+  if (stale.length > 0) await runReach(client, stale)
+}
+
 // Measured one seam per worker call, so each result is kept as it comes; Cancel also stops the seam in flight.
-export async function runReach(client: GeometryClient): Promise<void> {
+export async function runReach(client: GeometryClient, only?: SeamCandidate[]): Promise<void> {
   const state = useStore.getState()
   if (state.ports.length === 0) {
     setNotice({
@@ -33,7 +47,7 @@ export async function runReach(client: GeometryClient): Promise<void> {
     })
     return
   }
-  const targets = reachTargets(state)
+  const targets = only ?? reachTargets(state)
   if (targets.length === 0) {
     setNotice({
       what: 'Reach was not run because there are no snake seams to measure.',

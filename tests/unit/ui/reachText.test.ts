@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { accessTitle, coverageText, REACH_LEGEND, reachLine, reachSummary } from '../../../src/ui/panels/reachText'
+import { accessTitle, coverageText, REACH_LEGEND, reachLine, reachSummary, staleReachText } from '../../../src/ui/panels/reachText'
 import { reachOf } from '../helpers/reach'
 
 describe('coverageText', () => {
@@ -85,5 +85,19 @@ describe('REACH_LEGEND', () => {
     expect(hueName(hexOf('--reach-miss'))).toBe('red')
     expect(REACH_LEGEND).toContain(`coloured ${hueName(hexOf('--reach-ok'))} where the arm reaches them`)
     expect(REACH_LEGEND).toContain(`${hueName(hexOf('--reach-miss'))} where it does not`)
+  })
+})
+
+describe('staleReachText', () => {
+  it('counts the seams whose result is from the old ports or arm, and says how to update them', () => {
+    expect(staleReachText(19)).toBe('19 seams still have results from the old ports or arm. Run reach on all snake seams to update them.')
+  })
+
+  it('writes one seam in the singular', () => {
+    expect(staleReachText(1)).toBe('1 seam still has a result from the old ports or arm. Run reach on all snake seams to update it.')
+  })
+
+  it('is empty when no seam is out of date', () => {
+    expect(staleReachText(0)).toBe('')
   })
 })

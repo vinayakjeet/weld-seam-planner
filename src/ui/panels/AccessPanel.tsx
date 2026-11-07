@@ -1,7 +1,6 @@
 import { ARM_BOUNDS, type Port } from '../../core/snake/arm'
-import { reachKey } from '../../core/snake/reach'
 import type { Explained } from '../../core/job/plan'
-import { cancelReach, reachTargets, runReach } from '../../state/reachFlow'
+import { cancelReach, reachTargets, runReach, runStaleReach, staleReachSeams } from '../../state/reachFlow'
 import { reachFor } from '../../state/reachSlice'
 import { selectPlan } from '../../state/selectors'
 import { useStore } from '../../state/store'
@@ -12,7 +11,7 @@ import { Tooltip } from '../kit/Tooltip'
 import { ARM_FIELDS } from './armFields'
 import { InsertionControls } from './InsertionControls'
 import { portRows } from './portRows'
-import { REACH_LEGEND, reachSummary } from './reachText'
+import { REACH_LEGEND, reachSummary, staleReachText } from './reachText'
 
 export const NEED_PART_FOR_PORT = 'Load a part first. A port is a hole in the part, so there is nothing to place it on yet.'
 
@@ -167,10 +166,8 @@ function ReachSection() {
   const fromSelection = useStore((s) => selectPlan(s).seams.some((p) => s.selectedIds.includes(p.seam.id)))
   const busy = useStore((s) => s.reachBusy)
   const progress = useStore((s) => s.reachProgress)
-  const stale = useStore((s) => {
-    const now = reachKey(s.ports, s.arm)
-    return Object.values(s.reachKeyById).some((key) => key !== now)
-  })
+  const staleCount = useStore((s) => staleReachSeams(s).length)
+  const stale = staleCount > 0
   const summary = useStore((s) =>
     reachSummary(
       selectPlan(s)
@@ -216,7 +213,12 @@ function ReachSection() {
         </div>
       )}
       {stale && !busy && (
-        <p className="text-warn">The ports or the arm changed since the last run, so the earlier results are out of date and are not used. Run reach again.</p>
+        <div className="flex flex-col items-start gap-1.5">
+          <p className="text-warn">{staleReachText(staleCount)}</p>
+          <Button disabled={!hasPorts} onClick={() => void runStaleReach(getGeometryClient())}>
+            {`Update ${staleCount} out-of-date ${staleCount === 1 ? 'seam' : 'seams'}`}
+          </Button>
+        </div>
       )}
       {summary !== '' && !stale && <p className="text-ink-1">{summary}</p>}
       <p className="text-ink-2">{REACH_LEGEND}</p>

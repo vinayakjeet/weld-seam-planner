@@ -75,7 +75,7 @@ test('orbiting the view of the demo, from the port marker itself, leaves P1 wher
   const after = await screenOf(page)
   expect(Math.abs(after.x - at.x) + Math.abs(after.y - at.y), 'the drag should have orbited the view').toBeGreaterThan(10)
   expect(await portFields(page)).toEqual(before)
-  await expect(page.getByText(/The ports or the arm changed since the last run/)).toHaveCount(0)
+  await expect(page.getByText(/from the old ports or arm/)).toHaveCount(0)
 })
 
 test('Move shows the port gizmo, and Escape, Done or leaving Access hides it; typing X, Y and Z works throughout', async ({ page }) => {

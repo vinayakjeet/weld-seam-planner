@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { SeamCandidate } from '../../../src/core/seams/detect'
 import { reachKey, type SeamReach } from '../../../src/core/snake/reach'
-import { cancelReach, insertSelected, reachTargets, runReach } from '../../../src/state/reachFlow'
+import { cancelReach, insertSelected, reachTargets, runReach, runStaleReach, staleReachSeams } from '../../../src/state/reachFlow'
 import { reachFor } from '../../../src/state/reachSlice'
 import { useStore } from '../../../src/state/store'
 import type { ReachOutcome } from '../../../src/worker/geometry.api'
@@ -153,6 +153,54 @@ describe('runReach', () => {
     expect(state().info).toMatch(/changed/)
     expect(state().reachBusy).toBe(false)
     expect(seams.length).toBeGreaterThan(1)
+  })
+})
+
+describe('staleReachSeams', () => {
+  it('is empty before any run and right after a run', async () => {
+    loadSnakeSeams()
+    expect(staleReachSeams(state())).toEqual([])
+    await runReach(fakeClient({ reach: async (batch) => reachAnswer(batch) }))
+    expect(staleReachSeams(state())).toEqual([])
+  })
+
+  it('is the accepted seams whose result was measured with the old ports or arm', async () => {
+    const seams = loadSnakeSeams()
+    await runReach(fakeClient({ reach: async (batch) => reachAnswer(batch) }))
+    state().setArm({ maxBendDeg: 25 })
+    expect(staleReachSeams(state()).map((s) => s.id)).toEqual(seams.map((s) => s.id))
+    useStore.setState({ selectedIds: [seams[0]!.id], selectedId: seams[0]!.id })
+    await runReach(fakeClient({ reach: async (batch) => reachAnswer(batch) }))
+    expect(staleReachSeams(state()).map((s) => s.id)).toEqual(seams.slice(1).map((s) => s.id))
+  })
+
+  it('leaves out a seam that is no longer accepted', async () => {
+    const seams = loadSnakeSeams()
+    await runReach(fakeClient({ reach: async (batch) => reachAnswer(batch) }))
+    state().setArm({ maxBendDeg: 25 })
+    useStore.setState({ statusById: { ...state().statusById, [seams[0]!.id]: 'rejected' } })
+    expect(staleReachSeams(state()).map((s) => s.id)).toEqual(seams.slice(1).map((s) => s.id))
+  })
+})
+
+describe('runStaleReach', () => {
+  it('measures exactly the out-of-date seams, whatever is selected, and none is out of date after', async () => {
+    const seams = loadSnakeSeams()
+    await runReach(fakeClient({ reach: async (batch) => reachAnswer(batch) }))
+    state().setArm({ maxBendDeg: 25 })
+    useStore.setState({ selectedIds: [seams[0]!.id], selectedId: seams[0]!.id })
+    await runReach(fakeClient({ reach: async (batch) => reachAnswer(batch) }))
+    const sent: string[] = []
+    await runStaleReach(fakeClient({ reach: async (batch) => (sent.push(...batch.map((s) => s.id)), reachAnswer(batch)) }))
+    expect(sent).toEqual(seams.slice(1).map((s) => s.id))
+    expect(staleReachSeams(state())).toEqual([])
+  })
+
+  it('calls nothing when no seam is out of date', async () => {
+    loadSnakeSeams()
+    let calls = 0
+    await runStaleReach(fakeClient({ reach: async () => (calls++, reachAnswer([])) }))
+    expect(calls).toBe(0)
   })
 })
 
