@@ -1666,7 +1666,7 @@ describe('copySummary', () => {
     const write = vi.fn<(text: string) => Promise<void>>(async () => {})
     const issues = [err('NO_PROCEDURE', 'a'), { ...err('SHORT_SEAM', 'a'), severity: 'warning' as const }]
     await copySummary(fakeClient({ exportJob: async () => ({ status: 'blocked', issues, summary }) }), write)
-    expect(write.mock.calls[0]![0]).toContain('Pre-flight: 1 errors, 1 warnings.')
+    expect(write.mock.calls[0]![0]).toContain('Pre-flight: 1 error, 1 warning.')
   })
 
   it('does not count an info note as a warning', async () => {
@@ -1675,7 +1675,7 @@ describe('copySummary', () => {
     const write = vi.fn<(text: string) => Promise<void>>(async () => {})
     const issues = [{ ...err('SNAKE_NOT_RUN', null), severity: 'info' as const }, { ...err('SHORT_SEAM', 'a'), severity: 'warning' as const }]
     await copySummary(fakeClient({ exportJob: async () => ({ status: 'blocked', issues, summary }) }), write)
-    expect(write.mock.calls[0]![0]).toContain('Pre-flight: 0 errors, 1 warnings.')
+    expect(write.mock.calls[0]![0]).toContain('Pre-flight: 0 errors, 1 warning.')
   })
 
   it('explains a refused clipboard in the banner', async () => {

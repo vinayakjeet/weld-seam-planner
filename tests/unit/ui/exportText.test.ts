@@ -36,3 +36,12 @@ describe('summaryText', () => {
     expect(text).toContain('arc 1 min 0 s, cycle 2 min 0 s')
   })
 })
+
+describe('summaryText counts', () => {
+  it('writes one error, one warning and one seam in the singular', () => {
+    const summary = { seamCount: 1, weldLengthMm: 200, arcTimeS: 22, cycleTimeS: 30, airTimeS: 2, wireKg: 0.01, gasL: 5 } as Parameters<typeof summaryText>[1]
+    expect(summaryText('t.stl', summary, { errors: 1, warnings: 1 })).toBe(
+      't.stl: 1 seam, 0.20 m of weld, arc 0 min 22 s, cycle 0 min 30 s, wire 0.01 kg, gas 5 L. Pre-flight: 1 error, 1 warning.',
+    )
+  })
+})

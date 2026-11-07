@@ -25,11 +25,13 @@ function minutesSeconds(totalS: number): string {
   return `${Math.floor(rounded / 60)} min ${rounded % 60} s`
 }
 
+const count = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+
 export function summaryText(partName: string, summary: WeldJob['summary'], counts: { errors: number; warnings: number }): string {
   const metres = (summary.weldLengthMm / 1000).toFixed(2)
   return (
-    `${partName}: ${summary.seamCount} seams, ${metres} m of weld, arc ${minutesSeconds(summary.arcTimeS)}, ` +
+    `${partName}: ${count(summary.seamCount, 'seam')}, ${metres} m of weld, arc ${minutesSeconds(summary.arcTimeS)}, ` +
     `cycle ${minutesSeconds(summary.cycleTimeS)}, wire ${summary.wireKg.toFixed(2)} kg, gas ${Math.round(summary.gasL)} L. ` +
-    `Pre-flight: ${counts.errors} errors, ${counts.warnings} warnings.`
+    `Pre-flight: ${count(counts.errors, 'error')}, ${count(counts.warnings, 'warning')}.`
   )
 }
