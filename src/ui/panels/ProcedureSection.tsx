@@ -8,7 +8,7 @@ import { positionFor } from '../../state/torchSlice'
 import { useSelectedSeams } from '../../state/useVisibleSeams'
 import { NumberField } from '../kit/NumberField'
 import { defaultLegText, heatInputReadout, legHints, travelReadout, type Level, type Readout } from './calcText'
-import { missingProcedureIds } from './procedureChoice'
+import { missingProcedureIds, procedureOptionLabel } from './procedureChoice'
 import { OVERRIDE_FIELDS, disabledReason, isOverridden, parseNumberInput, parseOverrideInput, patchFor, sharedValue, valueOf } from './overrideFields'
 
 const LEVEL_TEXT: Record<Level, string> = { ok: 'text-ink-0', amber: 'text-warn', red: 'text-err' }
@@ -135,8 +135,7 @@ export function ProcedureSection() {
           <option value="">Not set</option>
           {ordered.map((p) => (
             <option key={p.id} value={p.id}>
-              {p.name}
-              {iso !== null && (p.positions as string[]).includes(iso) ? ` (matches ${iso})` : ''}
+              {procedureOptionLabel(p, iso, !mixedProcedure && assigned[0] === p.id)}
             </option>
           ))}
         </select>
