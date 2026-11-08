@@ -32,6 +32,11 @@ export interface JointInput {
 // AWS D1.1 asks a lap joint for an overlap of five times the thinner part and never less than 25 mm.
 const LAP_OVERLAP_RATIO = 5
 const MIN_LAP_OVERLAP_MM = 25
+// Each plate of a lap is at least this thick and this share of the other. A narrower free face is where a ray met an
+// edge or a sliver of the tessellation; a thinner touched plate is a ray that started in a gap between two bodies
+// that lie within the contact tolerance and met the near surface.
+const MIN_PLATE_MM = 1
+const MIN_PLATE_SHARE = 0.25
 
 // The free face of a lap is the end face of the lapping plate, so its width is that plate's thickness, and the plate
 // runs back from it at least as far as it is wide and as far as the minimum lap overlap. The thickness of the touched
@@ -40,6 +45,8 @@ const MIN_LAP_OVERLAP_MM = 25
 export function isLap(stripWidthMm: number, touchedThicknessMm: number, stripLengthMm: number): boolean {
   if (!(Number.isFinite(touchedThicknessMm) && touchedThicknessMm > 0)) return false
   if (!(Number.isFinite(stripWidthMm) && Number.isFinite(stripLengthMm) && stripLengthMm >= stripWidthMm)) return false
+  const unsure = (measured: number, other: number) => measured < MIN_PLATE_MM || measured < MIN_PLATE_SHARE * other
+  if (unsure(stripWidthMm, touchedThicknessMm) || unsure(touchedThicknessMm, stripWidthMm)) return false
   return stripLengthMm >= Math.max(MIN_LAP_OVERLAP_MM, LAP_OVERLAP_RATIO * Math.min(stripWidthMm, touchedThicknessMm))
 }
 

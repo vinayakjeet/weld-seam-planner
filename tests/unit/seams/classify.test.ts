@@ -24,14 +24,35 @@ describe('classifyJoint', () => {
 
   it('calls plates of very different thickness a lap whichever one lies on top', () => {
     expect(classifyJoint({ ...base, stripWidthMm: 20, touchedThicknessMm: 6, stripLengthMm: 100 })).toBe('lap')
-    expect(classifyJoint({ ...base, stripWidthMm: 3, touchedThicknessMm: 40, stripLengthMm: 100 })).toBe('lap')
+    expect(classifyJoint({ ...base, stripWidthMm: 10, touchedThicknessMm: 40, stripLengthMm: 100 })).toBe('lap')
+  })
+
+  // Both plates of a real lap are at least 1 mm and a quarter of the other. A narrower free face is a ray that met an
+  // edge or a sliver of the tessellation; a thinner touched plate is a ray that started in a gap between the bodies
+  // and met the near surface. Either way the plate is unknown.
+  it('reads a strip under 1 mm or under a quarter of the plate it lies on as an edge, not a lap', () => {
+    expect(classifyJoint({ ...base, stripWidthMm: 0.67, touchedThicknessMm: 3.18, stripLengthMm: 100 })).toBe('fillet')
+    expect(classifyJoint({ ...base, stripWidthMm: 0.12, touchedThicknessMm: 0.3, stripLengthMm: 100 })).toBe('fillet')
+    expect(classifyJoint({ ...base, stripWidthMm: 0.99, touchedThicknessMm: 2, stripLengthMm: 100 })).toBe('fillet')
+    expect(classifyJoint({ ...base, stripWidthMm: 1, touchedThicknessMm: 2, stripLengthMm: 100 })).toBe('lap')
+    expect(classifyJoint({ ...base, stripWidthMm: 2.49, touchedThicknessMm: 10, stripLengthMm: 100 })).toBe('fillet')
+    expect(classifyJoint({ ...base, stripWidthMm: 2.5, touchedThicknessMm: 10, stripLengthMm: 100 })).toBe('lap')
+  })
+
+  it('reads a touched plate under 1 mm or under a quarter of the strip as a gap between the bodies, not a lap', () => {
+    expect(classifyJoint({ ...base, stripWidthMm: 3.18, touchedThicknessMm: 0.3, stripLengthMm: 400 })).toBe('fillet')
+    expect(classifyJoint({ ...base, stripWidthMm: 3.18, touchedThicknessMm: 0.99, stripLengthMm: 400 })).toBe('fillet')
+    expect(classifyJoint({ ...base, stripWidthMm: 3.18, touchedThicknessMm: 1, stripLengthMm: 400 })).toBe('lap')
+    expect(classifyJoint({ ...base, stripWidthMm: 20, touchedThicknessMm: 4.99, stripLengthMm: 400 })).toBe('fillet')
+    expect(classifyJoint({ ...base, stripWidthMm: 20, touchedThicknessMm: 5, stripLengthMm: 400 })).toBe('lap')
   })
 
   it('needs the strip to be the narrow end of its plate', () => {
     // A web 30 thick and 80 tall on a 6 mm flange runs only 30 behind its 80 mm side.
     expect(classifyJoint({ ...base, stripWidthMm: 80, touchedThicknessMm: 6, stripLengthMm: 30 })).toBe('fillet')
     expect(classifyJoint({ ...base, stripWidthMm: 30, touchedThicknessMm: 6, stripLengthMm: 29.9 })).toBe('fillet')
-    expect(classifyJoint({ ...base, stripWidthMm: 30, touchedThicknessMm: 6, stripLengthMm: 30 })).toBe('lap')
+    expect(classifyJoint({ ...base, stripWidthMm: 30, touchedThicknessMm: 8, stripLengthMm: 39.9 })).toBe('fillet')
+    expect(classifyJoint({ ...base, stripWidthMm: 30, touchedThicknessMm: 8, stripLengthMm: 40 })).toBe('lap')
   })
 
   it('applies the lap rule to contact seams too', () => {

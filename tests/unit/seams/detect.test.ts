@@ -5,7 +5,7 @@ import { buildBodyBvhs } from '../../../src/core/seams/bodyBvh'
 import { DEFAULT_DETECT_SETTINGS, detectSeams, dropDuplicateSeams, type SeamCandidate } from '../../../src/core/seams/detect'
 import { loadSampleModel, loadSoup, transformSoup } from '../helpers/models'
 import { readManifest, readSample } from '../helpers/samples'
-import { cubeTriangles, mergedL, narrowFlangeT, soupOf, steppedLap } from '../helpers/shapes'
+import { cubeTriangles, extrude, mergedL, narrowFlangeT, soupOf, steppedLap } from '../helpers/shapes'
 import { shown } from '../helpers/state'
 
 // Corner candidates are detected but hidden, so everything below counts the visible seams unless it says "all".
@@ -387,6 +387,21 @@ describe('joint classification', () => {
     expect(model.bodies.count).toBe(2)
     const seams = shown(detectSeams(model, DEFAULT_DETECT_SETTINGS))
     expect(seams.map((s) => [s.source, s.jointType])).toEqual([['contact', 'fillet'], ['contact', 'fillet']])
+  })
+
+  it('reads a block with a 0.5 mm chamfer at its foot on a plate as fillets: the chamfer is an edge, not a lapping strip', () => {
+    const plate = cubeTriangles([-20, -20, 0], [140, 100, 10])
+    const block = extrude(
+      [[0.5, 10], [59.5, 10], [60, 10.5], [60, 50], [0, 50], [0, 10.5]],
+      [[0, 1, 2], [0, 2, 3], [0, 3, 4], [0, 4, 5]],
+      100,
+      (y, z, x) => [x, y, z],
+    )
+    const seams = shown(detectSeams(buildMeshModel(soupOf([...plate, ...block]), 1), DEFAULT_DETECT_SETTINGS))
+    // Two long sides along the chamfers and the two block ends.
+    const contact = seams.filter((s) => s.source === 'contact')
+    expect(contact.map((s) => Math.round(s.lengthMm)).sort()).toEqual([100, 100, 59, 59].sort())
+    for (const seam of contact) expect(seam.jointType, `${seam.label} ${seam.lengthMm.toFixed(1)} mm`).toBe('fillet')
   })
 
   it('keeps a web 80 mm tall on a 10 mm plate a fillet', () => {
