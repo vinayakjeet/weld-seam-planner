@@ -123,3 +123,33 @@ describe('orientBodies on bodies without a trustworthy sign', () => {
     expect(model.orientation.flippedTriangles).toBe(0)
   })
 })
+
+// Two solids an exporter wrote with one edge in common: the edge carries four faces, two from each closed shell.
+describe('orientBodies on closed shells that share an edge', () => {
+  const other = cubeTriangles([10, 10, 0], [10, 10, 10])
+
+  it('gives the body a known inside and turns each shell outward on its own', () => {
+    const model = buildMeshModel(soupOf([...cube, ...other.map(reverse)]), 1)
+    expect(model.bodies.count).toBe(1)
+    expect(model.edges.stats.nonManifold).toBe(1)
+    expect(model.orientation.unsignedBodies).toEqual([])
+    expect(model.orientation.flippedTriangles).toBe(12)
+    expect(signedVolume(model)).toBeCloseTo(2000, 6)
+  })
+
+  it('makes a shell outward even when the other shell of the body is larger and inside out', () => {
+    const big = cubeTriangles([10, 10, 0], [30, 30, 10])
+    const model = buildMeshModel(soupOf([...cube.map(reverse), ...big]), 1)
+    expect(model.orientation.unsignedBodies).toEqual([])
+    expect(signedVolume(model)).toBeCloseTo(1000 + 9000, 6)
+  })
+
+  it('keeps the body unsigned when a shell uses the shared edge once, as three faces on one edge do', () => {
+    const quad = (a: number[], b: number[], c: number[], d: number[]) => [[...a, ...b, ...c], [...a, ...c, ...d]]
+    const fin = quad([10, 10, 0], [10, 10, 10], [10, 30, 10], [10, 30, 0])
+    const model = buildMeshModel(soupOf([...cube, ...fin]), 1)
+    expect(model.edges.stats.nonManifold).toBeGreaterThan(0)
+    expect(model.orientation.unsignedBodies).toEqual([0])
+  })
+})
+

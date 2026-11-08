@@ -14,6 +14,32 @@ export interface OrientResult extends Orientation {
   indices: Uint32Array
 }
 
+// Dense shell numbers per triangle, the shells being joined through edges with two faces.
+function shellsOf(triangleCount: number, edges: EdgeMap): { shell: Uint32Array; shellCount: number } {
+  const parent = Uint32Array.from({ length: triangleCount }, (_, f) => f)
+  const find = (f: number): number => {
+    while (parent[f] !== f) {
+      parent[f] = parent[parent[f]!]!
+      f = parent[f]!
+    }
+    return f
+  }
+  for (let e = 0; e < edges.edgeCount; e++) {
+    if (edges.useCount[e] !== 2) continue
+    const [a, b] = [find(edges.faceA[e]!), find(edges.faceB[e]!)]
+    if (a !== b) parent[Math.max(a, b)] = Math.min(a, b)
+  }
+  const number = new Int32Array(triangleCount).fill(-1)
+  const shell = new Uint32Array(triangleCount)
+  let shellCount = 0
+  for (let f = 0; f < triangleCount; f++) {
+    const root = find(f)
+    if (number[root] === -1) number[root] = shellCount++
+    shell[f] = number[root]!
+  }
+  return { shell, shellCount }
+}
+
 // 1 when the triangle runs lo to hi along an edge, -1 when it runs hi to lo, 0 when it does not use the edge.
 function runs(indices: Uint32Array, face: number, lo: number, hi: number): number {
   for (let k = 0; k < 3; k++) {
@@ -26,9 +52,11 @@ function runs(indices: Uint32Array, face: number, lo: number, hi: number): numbe
 }
 
 // Winding decides which side of a surface is outside, so a reversed or mixed body reads concave edges as convex.
-// Per body: make neighbouring triangles agree (a shared edge must be walked in opposite directions), then, for a
-// closed manifold body only, make the signed volume positive. Other bodies keep their relative winding repaired
-// where possible but have no known sign. Flipping a triangle never changes the edge map, so it stays valid.
+// Per body: make neighbouring triangles agree (a shared edge must be walked in opposite directions), then make the
+// signed volume of each shell positive. A shell is the triangles joined through edges with two faces. A body has a known
+// sign when it has no open edge and every shell is closed by itself: two solids an exporter wrote with one edge in
+// common give that edge four faces, two from each shell. Other bodies keep their relative winding repaired where
+// possible but have no known sign. Flipping a triangle never changes the edge map, so it stays valid.
 export function orientBodies(mesh: IndexedMesh, bodies: BodyLabels, edges: EdgeMap): OrientResult {
   const { indices, positions, triangleCount, vertexCount } = mesh
   const { triangleBody, count } = bodies
@@ -92,42 +120,59 @@ export function orientBodies(mesh: IndexedMesh, bodies: BodyLabels, edges: EdgeM
     }
   }
 
-  const volume = new Float64Array(count)
-  const magnitude = new Float64Array(count)
-  const origin = new Float64Array(count * 3)
-  const started = new Uint8Array(count)
+  const { shell, shellCount } = shellsOf(triangleCount, edges)
+  // A shell is closed by itself when it uses each edge with more than two faces exactly twice.
+  const shellCut = new Uint8Array(count)
+  if (nonManifold.includes(1)) {
+    const uses = new Map<number, number>()
+    for (let f = 0; f < triangleCount; f++) {
+      if (!nonManifold[triangleBody[f]!]) continue
+      for (let k = 0; k < 3; k++) {
+        const e = edges.keyToEdge.get(edgeKey(indices[f * 3 + k]!, indices[f * 3 + ((k + 1) % 3)]!, vertexCount))!
+        if (edges.useCount[e]! <= 2) continue
+        const key = e * shellCount + shell[f]!
+        uses.set(key, (uses.get(key) ?? 0) + 1)
+      }
+    }
+    for (const [key, n] of uses) if (n !== 2) shellCut[triangleBody[edges.faceA[Math.floor(key / shellCount)]!]!] = 1
+  }
+
+  const volume = new Float64Array(shellCount)
+  const magnitude = new Float64Array(shellCount)
+  const origin = new Float64Array(shellCount * 3)
+  const started = new Uint8Array(shellCount)
+  const shellBody = new Uint32Array(shellCount)
   for (let f = 0; f < triangleCount; f++) {
     const body = triangleBody[f]!
-    if (open[body] || nonManifold[body] || conflict[body]) continue
+    const s = shell[f]!
+    shellBody[s] = body
+    if (open[body] || shellCut[body] || conflict[body]) continue
     const [a, b, c] = [0, 1, 2].map((k) => indices[f * 3 + k]! * 3) as [number, number, number]
-    if (!started[body]) {
-      started[body] = 1
-      for (let k = 0; k < 3; k++) origin[body * 3 + k] = positions[a + k]!
+    if (!started[s]) {
+      started[s] = 1
+      for (let k = 0; k < 3; k++) origin[s * 3 + k] = positions[a + k]!
     }
-    const p = (v: number, k: number) => positions[v + k]! - origin[body * 3 + k]!
+    const p = (v: number, k: number) => positions[v + k]! - origin[s * 3 + k]!
     const det =
       p(a, 0) * (p(b, 1) * p(c, 2) - p(b, 2) * p(c, 1)) -
       p(a, 1) * (p(b, 0) * p(c, 2) - p(b, 2) * p(c, 0)) +
       p(a, 2) * (p(b, 0) * p(c, 1) - p(b, 1) * p(c, 0))
-    volume[body]! += (flip[f] ? -det : det) / 6
-    magnitude[body]! += Math.abs(det) / 6
+    volume[s]! += (flip[f] ? -det : det) / 6
+    magnitude[s]! += Math.abs(det) / 6
   }
 
-  const unsignedBodies: number[] = []
-  const reverseAll = new Uint8Array(count)
-  for (let body = 0; body < count; body++) {
-    const closed = !open[body] && !nonManifold[body] && !conflict[body]
-    // A closed body whose volume nearly cancels has no inside to speak of.
-    if (!closed || Math.abs(volume[body]!) <= 1e-6 * magnitude[body]!) unsignedBodies.push(body)
-    else if (volume[body]! < 0) reverseAll[body] = 1
-  }
+  const unsigned = Uint8Array.from({ length: count }, (_, body) => (open[body] || shellCut[body] || conflict[body] ? 1 : 0))
+  // A closed shell whose volume nearly cancels has no inside to speak of, and neither has its body.
+  for (let s = 0; s < shellCount; s++) if (Math.abs(volume[s]!) <= 1e-6 * magnitude[s]!) unsigned[shellBody[s]!] = 1
+  const unsignedBodies = Array.from(unsigned.keys()).filter((b) => unsigned[b])
 
   const reoriented = new Uint8Array(count)
   let flippedTriangles = 0
   let out = indices
   for (let f = 0; f < triangleCount; f++) {
     const body = triangleBody[f]!
-    if ((flip[f] ?? 0) ^ (reverseAll[body] ?? 0)) {
+    const reverseShell = !unsigned[body] && volume[shell[f]!]! < 0 ? 1 : 0
+    if ((flip[f] ?? 0) ^ reverseShell) {
       if (out === indices) out = indices.slice()
       const second = out[f * 3 + 1]!
       out[f * 3 + 1] = out[f * 3 + 2]!
