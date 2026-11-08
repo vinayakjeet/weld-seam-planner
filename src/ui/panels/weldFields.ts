@@ -1,7 +1,11 @@
 import type { Explained } from '../../core/job/plan'
 import { WELD_TOLERANCE_RANGE } from '../../core/mesh/weld'
+import { contactTolerance, MAX_TOLERANCE_MM, MIN_TOLERANCE_MM, TOLERANCE_FRACTION } from '../../core/seams/contact'
 
 const significant = (x: number) => String(Number(x.toPrecision(3)))
+
+export const contactToleranceText = (diagonalMm: number) =>
+  `Two bodies count as touching up to ${significant(contactTolerance(diagonalMm))} mm apart on this part: ${TOLERANCE_FRACTION * 100} percent of its ${significant(diagonalMm)} mm diagonal, at most ${MAX_TOLERANCE_MM} mm and at least ${MIN_TOLERANCE_MM} mm.`
 
 export const weldMmText = (weldTolerance: number, diagonalMm: number) => significant(weldTolerance * diagonalMm)
 

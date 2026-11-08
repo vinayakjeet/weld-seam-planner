@@ -1,8 +1,23 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_WELD_TOLERANCE } from '../../../src/core/mesh/weld'
-import { parseWeldMm, weldMmText, weldRangeText } from '../../../src/ui/panels/weldFields'
+import { contactToleranceText, parseWeldMm, weldMmText, weldRangeText } from '../../../src/ui/panels/weldFields'
 
 const DIAGONAL = 250
+
+describe('contactToleranceText', () => {
+  it('gives the value in force on a part where the cap applies, the percentage and where it comes from', () => {
+    expect(contactToleranceText(2250)).toBe('Two bodies count as touching up to 1 mm apart on this part: 0.2 percent of its 2250 mm diagonal, at most 1 mm and at least 0.05 mm.')
+  })
+
+  it('gives the smaller value on a smaller part and the floor on a tiny one', () => {
+    expect(contactToleranceText(250)).toContain('up to 0.5 mm apart')
+    expect(contactToleranceText(10)).toContain('up to 0.05 mm apart')
+  })
+
+  it('never uses an en or em dash', () => {
+    expect(contactToleranceText(250)).not.toMatch(/[\u2013\u2014]/)
+  })
+})
 
 describe('weldMmText', () => {
   it('shows the default tolerance in mm of this part', () => {

@@ -79,7 +79,7 @@ describe('contact seams', () => {
     for (const seam of seams) expect(seam.thicknessMm, seam.label).toEqual([10, 10])
   })
 
-  // On a large part the contact tolerance is wider than a tube wall, but a reading of a whole wall is never a gap.
+  // Past the tolerance the first surface is the bore: a reading of a whole wall is never a gap.
   it('reads the 3.18 mm top wall of a box whose bore is a body of its own as 3.18 on a part 2.4 m across', () => {
     const floor = cubeTriangles([-1200, -100, -40], [2400, 200, 20])
     const box = cubeTriangles([-100, -30, 0], [200, 60, 25.4])

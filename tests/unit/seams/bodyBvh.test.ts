@@ -68,8 +68,15 @@ describe('findContactEdges on one body', () => {
 })
 
 describe('contactTolerance', () => {
-  it('is 0.2% of the diagonal', () => {
-    expect(contactTolerance(951.5)).toBeCloseTo(1.903, 4)
+  it('is 0.2% of the diagonal up to 1 mm, a real fit-up gap', () => {
+    expect(contactTolerance(250)).toBeCloseTo(0.5, 9)
+    expect(contactTolerance(499)).toBeCloseTo(0.998, 9)
+  })
+
+  it('stays at 1 mm on a larger part', () => {
+    expect(contactTolerance(500)).toBe(1)
+    expect(contactTolerance(951.5)).toBe(1)
+    expect(contactTolerance(2250)).toBe(1)
   })
 
   it('never drops below 0.05 mm', () => {

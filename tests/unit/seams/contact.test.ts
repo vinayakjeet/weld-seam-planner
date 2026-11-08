@@ -120,6 +120,31 @@ describe('findContactEdges', () => {
   })
 })
 
+// A real fit-up gap does not grow with the part: the tolerance is capped at 1 mm, so a large frame keeps it too.
+describe('findContactEdges on a part over 500 mm across', () => {
+  const longPlate = cubeTriangles([-1000, -60, 0], [2000, 120, 10])
+  const liftedWeb = (lift: number) => cubeTriangles([-100, -5, 10 + lift], [200, 10, 80])
+
+  it('finds a web 0.9 mm off the plate, a fit-up gap', () => {
+    expect(contactOf(longPlate, liftedWeb(0.9)).found.length).toBeGreaterThan(0)
+  })
+
+  // The land beside an edge still scales with the part: at least 0.2 percent of the diagonal, 4 mm here.
+  it('finds a web with 5 mm of land each side, and treats one with 2 mm as flush', () => {
+    const rail = cubeTriangles([-1000, -15, 0], [2000, 30, 10])
+    const wide = cubeTriangles([-100, -10, 10], [200, 20, 80])
+    expect(contactOf(rail, wide).found.filter((e) => Math.abs(e.length - 200) < 1e-3)).toHaveLength(2)
+    const wider = cubeTriangles([-100, -13, 10], [200, 26, 80])
+    expect(contactOf(rail, wider).found.filter((e) => Math.abs(e.length - 200) < 1e-3)).toHaveLength(0)
+  })
+
+  it('finds no edge across a 3.3 mm gap, which 0.2 percent of this part would have counted as touching', () => {
+    const { found, tolerance } = contactOf(longPlate, liftedWeb(3.3))
+    expect(tolerance).toBe(1)
+    expect(found).toHaveLength(0)
+  })
+})
+
 describe('flush contact edges', () => {
   const flushOf = (...solids: number[][][]) => {
     const model = buildMeshModel(soupOf(solids.flat()), 1)

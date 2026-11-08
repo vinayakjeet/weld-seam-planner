@@ -4,14 +4,16 @@ import type { FaceData } from '../mesh/faces'
 import type { MeshModel } from '../mesh/model'
 import type { BodyBvh } from './bodyBvh'
 
-const TOLERANCE_FRACTION = 0.002
-const MIN_TOLERANCE_MM = 0.05
+export const TOLERANCE_FRACTION = 0.002
+export const MIN_TOLERANCE_MM = 0.05
+// A real fit-up gap does not grow with the part: at 0.2 percent a 2 m frame would call bodies 4 mm apart touching.
+export const MAX_TOLERANCE_MM = 1
 const FLAT_DEG = 10
 // How far beside the edge B must still have surface, in tolerances.
 const OVERHANG_REACH = 2
 
 export function contactTolerance(diagonal: number): number {
-  return Math.max(TOLERANCE_FRACTION * diagonal, MIN_TOLERANCE_MM)
+  return Math.max(Math.min(TOLERANCE_FRACTION * diagonal, MAX_TOLERANCE_MM), MIN_TOLERANCE_MM)
 }
 
 export interface ContactEdges {
@@ -68,6 +70,10 @@ export function findContactEdges(model: MeshModel, faces: FaceData, bvhs: BodyBv
   const { positions } = mesh
   const { normals, centroids } = faces
   const tolerance = contactTolerance(bounds.diagonal)
+  // The surface beside an edge has to take a fillet, which the cap on the gap must not shrink: the 2 mm land between the
+  // coaming of the tank and its manhole is no place for one. A step of twice this distance, with the surface within
+  // this distance of where it lands, asks for a land of at least this much.
+  const landMm = Math.max(TOLERANCE_FRACTION * bounds.diagonal, MIN_TOLERANCE_MM)
   const cosCrease = Math.cos((creaseAngleDeg * Math.PI) / 180)
   const cosFlat = Math.cos(((180 - FLAT_DEG) * Math.PI) / 180)
   const epsilon = 1e-6 * bounds.diagonal
@@ -167,12 +173,12 @@ export function findContactEdges(model: MeshModel, faces: FaceData, bvhs: BodyBv
       const stepLength = Math.hypot(step[0]!, step[1]!, step[2]!)
       if (stepLength === 0) continue
       probe.set(
-        onSurface.x + (step[0]! / stepLength) * OVERHANG_REACH * tolerance,
-        onSurface.y + (step[1]! / stepLength) * OVERHANG_REACH * tolerance,
-        onSurface.z + (step[2]! / stepLength) * OVERHANG_REACH * tolerance,
+        onSurface.x + (step[0]! / stepLength) * OVERHANG_REACH * landMm,
+        onSurface.y + (step[1]! / stepLength) * OVERHANG_REACH * landMm,
+        onSurface.z + (step[2]! / stepLength) * OVERHANG_REACH * landMm,
       )
-      const beside = target.bvh.closestPointToPoint(probe, hit, 0, tolerance)
-      if (beside === null || beside.distance > tolerance) {
+      const beside = target.bvh.closestPointToPoint(probe, hit, 0, landMm)
+      if (beside === null || beside.distance > landMm) {
         flushOn ??= { body, free: aligned === fa ? fb : fa, touched }
         continue
       }

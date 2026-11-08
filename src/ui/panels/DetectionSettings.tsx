@@ -5,7 +5,7 @@ import { selectStats } from '../../state/selectors'
 import { useStore } from '../../state/store'
 import { getGeometryClient } from '../../worker/client'
 import { hiddenAcceptedMessage } from './seamText'
-import { parseWeldMm, weldMmText, weldRangeText } from './weldFields'
+import { contactToleranceText, parseWeldMm, weldMmText, weldRangeText } from './weldFields'
 
 export const CREASE_ANGLE_RANGE = { min: 15, max: 60 } as const
 
@@ -65,6 +65,7 @@ export function DetectionSettings() {
       <p className="text-ink-2">
         An edge counts as a seam candidate when the two faces bend at least this far from flat. Lower finds shallower folds, higher keeps only sharp corners.
       </p>
+      <p className="text-ink-2">{contactToleranceText(diagonalMm)}</p>
       <div className="flex items-start gap-2 border-t border-line pt-3">
         <input
           id="show-corners"

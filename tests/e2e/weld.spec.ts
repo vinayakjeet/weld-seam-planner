@@ -20,6 +20,7 @@ test('a raised weld tolerance removes the short creases a noisy mesh gains, and 
   expect(before, 'the noise adds creases at the default tolerance').toBeGreaterThan(2)
 
   await page.getByRole('tab', { name: 'Detection' }).click()
+  await expect(page.getByText(/Two bodies count as touching up to 0\.\d+ mm apart on this part/)).toBeVisible()
   await page.getByText('Advanced').click()
   const field = page.getByLabel('Weld tolerance')
   await expect(field).toHaveValue(/^0\.0022/)

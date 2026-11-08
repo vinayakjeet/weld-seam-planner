@@ -7,7 +7,7 @@ import type { PlateThickness } from '../process/filletRules'
 import { allAroundLoops, withFlush } from './allAround'
 import { buildBodyBvhs, insideByParity, wholeBvhFor, type BodyBvh } from './bodyBvh'
 import { chainEdges, edgeEnds, type Chain } from './chain'
-import { acrossFace, classifyJoint, isLap, meetsSecondPlate, MIN_PLATE_MM, patchWidth, thicknessBehind, type JointType } from './classify'
+import { acrossFace, classifyJoint, isLap, meetsSecondPlate, patchWidth, thicknessBehind, type JointType } from './classify'
 import { confidence } from './confidence'
 import { contactTolerance, findContactEdges, type ContactEdges } from './contact'
 import { extractCreaseEdges, type CreaseEdges, type CreaseResult } from './crease'
@@ -85,13 +85,9 @@ export function detectSeams(model: MeshModel, settings: DetectSettings, context:
     if (probe === undefined) probe = allBvhs().length > 0 ? probeFromBvhs(allBvhs()) : null
     return probe
   }
-  // Plate thickness across a contact gap: a gap is under the contact tolerance, which counts as touching, and under
-  // the thinnest plate; on a large part the tolerance passes a tube wall, and a whole wall is never a gap.
+  // Plate thickness across a contact gap, which is at most the distance that counts as touching.
   const plateRay = () => {
-    if (plateProbe === undefined) {
-      const gapMm = Math.min(contactTolerance(model.bounds.diagonal), MIN_PLATE_MM)
-      plateProbe = allBvhs().length > 0 ? plateProbeFromBvhs(allBvhs(), gapMm) : null
-    }
+    if (plateProbe === undefined) plateProbe = allBvhs().length > 0 ? plateProbeFromBvhs(allBvhs(), contactTolerance(model.bounds.diagonal)) : null
     return plateProbe
   }
   const depthMm = Math.min(MAX_CORNER_DEPTH_MM, CORNER_DEPTH_FRACTION * model.bounds.diagonal)
