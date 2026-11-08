@@ -120,6 +120,29 @@ function tubeFrame(): Manifold[] {
   return [...rails, ...rungs]
 }
 
+// The same frame as one solid: the ladder outline extruded, so a flush side has no vertex or sliver on it, and the bores
+// cut after. The rails close the rung bores, so each is a shell of its own, as CAD writes a closed cavity.
+function tubeFrameFused(): Manifold[] {
+  const [SIDE, WALL] = [25.4, 3.18]
+  const [Y0, Y1] = [SIDE, 300 - SIDE]
+  // A tenth off the frame of separate tubes: at 50 the edge from a rail end to a rung has its centre at 18.65 mm,
+  // on a 0.1 mm step of the seam id, where the float noise of a part far from the origin flips it.
+  const rungs = [50.1, 300.1, 550.1]
+  // The windows between the rails and the rungs: clockwise, so that they are holes in the outline.
+  const stops = [0, ...rungs.flatMap((x) => [x - SIDE / 2, x + SIDE / 2]), 600]
+  const windows = rungs.concat(600).map((_, k): [number, number][] => {
+    const [x0, x1] = [stops[k * 2]!, stops[k * 2 + 1]!]
+    return [[x0, Y0], [x0, Y1], [x1, Y1], [x1, Y0]]
+  })
+  const frame = M.extrude([[[0, 0], [600, 0], [600, 300], [0, 300]], ...windows], SIDE)
+  const railBores = [[WALL, SIDE - WALL], [300 - SIDE + WALL, 300 - WALL]].map(([y0, y1]) => box(-1, 601, y0!, y1!, WALL, SIDE - WALL))
+  const rungBores = rungs.map((x) => box(x - SIDE / 2 + WALL, x + SIDE / 2 - WALL, Y0, Y1, WALL, SIDE - WALL))
+  // The frame first, by far the most triangles, and then the cavities.
+  return M.difference([frame, ...railBores, ...rungBores])
+    .decompose()
+    .sort((a, b) => b.numTri() - a.numTri())
+}
+
 type Soup = number[]
 
 type Flip = (solid: number, centroid: number[], normal: number[]) => boolean
@@ -330,6 +353,18 @@ const samples: Sample[] = [
     expectedContactSeams: 3 * 2,
     // 5 tubes x 4 inside corners + 6 rung ends x 1 loop round the bore (4 x 19.04 mm), all inside a tube = 26
     expectedHollowSeams: 5 * 4 + 3 * 2,
+  }),
+  sample({
+    id: 'tube-frame-fused',
+    name: 'Tube frame (fused)',
+    description: 'The tube frame exported as one solid: one weld all around each rung end, though each end has only two creases',
+    units: 'mm',
+    solids: tubeFrameFused(),
+    // A cavity comes out wound as a void; written outward, the sample loads without a winding repair.
+    flip: (solid) => solid > 0,
+    // 3 rungs x 2 ends, each one closed loop of 4 x 25.4 mm: two creases and two sides flush with the rail = 6
+    expectedCreaseSeams: 3 * 2,
+    expectedHollowSeams: 2 * 4, // 2 rails x 4 inside corners; the rails close the rung bores into shells of their own = 8
   }),
 ]
 

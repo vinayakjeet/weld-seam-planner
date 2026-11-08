@@ -14,6 +14,7 @@ import { extractCreaseEdges, type CreaseEdges, type CreaseResult } from './creas
 import { buildSeamPoints, pointsFromPolyline, type NormalsOf, type SeamPoint } from './frames'
 import { contactInHollow, creaseInHollow, HOLLOW_STATIONS, type ContactStation } from './hollow'
 import { chainSegments, findIntersectionSegments } from './intersect'
+import { findMemberLoops, type LoopSeed } from './memberLoops'
 import { extractNonManifoldWedges, openBodies, type SolidTest } from './nonManifold'
 import { seamId } from './seamId'
 import { cornerThickness, plateProbeFromBvhs, probeFromBvhs, roundDecimals, seamThickness, type RayProbe } from './thickness'
@@ -124,8 +125,10 @@ export function detectSeams(model: MeshModel, settings: DetectSettings, context:
   const taken = new Set(contact?.edges.edgeIds.subarray(0, contact.flushFrom))
   for (const loop of loops) for (const k of loop.edges) taken.add(contact!.edges.edgeIds[k]!)
 
-  const found: RawSeam[] = seamsFromEdges('crease', creases, model, faces, minLength, {
+  const creaseBody = new Map<RawSeam, number>()
+  const creaseSeams = seamsFromEdges('crease', creases, model, faces, minLength, {
     thicknessOf,
+    made: (seam, chain) => creaseBody.set(seam, model.bodies.triangleBody[model.edges.faceA[creases.edgeIds[chain.edges[0]!]!]!]!),
     jointOf: (edge, seam) => {
       const strip = strips.ofCrease(creases.edgeIds[edge]!)
       return { jointType: classifyJoint({ source: 'crease', ...seam, ...strip, convex: false }), strip }
@@ -135,6 +138,7 @@ export function detectSeams(model: MeshModel, settings: DetectSettings, context:
       return probe !== null && creaseInHollow(surface, lengthMm, probe, depthMm)
     },
   })
+  const found = memberLoopSeams(model, creaseSeams, creaseBody, bvhOf, minLength, thicknessOf)
   if (model.mesh.triangleCount <= (context.maxCornerTriangles ?? LARGE_PART_TRIANGLES)) {
     found.push(...cornerSeams(model, faces, creases, taken, minLength, rayProbe, depthMm, thicknessOf))
   }
@@ -194,6 +198,68 @@ function cornerSeams(
     keep: ({ points }) => meetsSecondPlate(points[points.length >> 1]!, probe, depthMm),
     jointOf: (_, seam) => ({ jointType: classifyJoint({ source: 'crease', ...seam, ...NO_STRIP, convex: true }), strip: NO_STRIP }),
   })
+}
+
+// How far above a surface a fused member is cut to find its outline.
+const MEMBER_CUT_MM = 0.25
+const MEMBER_CUT_FRACTION = 1e-3
+
+// Open creases that run round the end of a member fused to what it meets become one closed seam, whatever the crease
+// count; the creases it takes are dropped. Only a crease with a known inside can be read as a surface and a wall, and
+// the seeds go in order of position so that the pairing does not depend on the order of the triangles.
+function memberLoopSeams(
+  model: MeshModel,
+  creases: RawSeam[],
+  bodyOf: Map<RawSeam, number>,
+  bvhOf: (body: number) => MeshBVH | null,
+  minLength: number,
+  thicknessOf: ThicknessOf,
+): RawSeam[] {
+  const offsetMm = Math.min(MEMBER_CUT_MM, MEMBER_CUT_FRACTION * model.bounds.diagonal)
+  const groups = new Map<number, RawSeam[]>()
+  for (const seam of creases) {
+    if (seam.hidden !== false || seam.closed || seam.concavity !== 'known') continue
+    const body = bodyOf.get(seam)!
+    groups.set(body, [...(groups.get(body) ?? []), seam])
+  }
+  const taken = new Set<RawSeam>()
+  const loops: RawSeam[] = []
+  for (const [body, group] of groups) {
+    const bvh = bvhOf(body)
+    if (!bvh) continue
+    const centre = (seam: RawSeam) => seam.points[seam.points.length >> 1]!.p.map((x) => Math.round(x * 10))
+    const seeds = [...group].sort((a, b) => {
+      const [p, q] = [centre(a), centre(b)]
+      return p[0]! - q[0]! || p[1]! - q[1]! || p[2]! - q[2]!
+    })
+    for (const loop of findMemberLoops(bvh, seeds as LoopSeed[], { offsetMm, turnBreakDeg: TURN_BREAK_DEG })) {
+      for (const k of loop.uses) taken.add(seeds[k]!)
+      const normalsOf: NormalsOf = (segment) => [loop.walls[segment]!, loop.surface]
+      const { points, lengthMm, surface = points } = pointsFromPolyline(loop.polyline, true, normalsOf, { smooth: true, cornerDeg: TURN_BREAK_DEG })
+      if (lengthMm < minLength) continue
+      let weighted = 0
+      loop.polyline.forEach((a, k) => {
+        const cos = Math.max(-1, Math.min(1, dot(loop.walls[k]!, loop.surface)))
+        weighted += length(sub(loop.polyline[(k + 1) % loop.polyline.length]!, a)) * (180 - (Math.acos(cos) * 180) / Math.PI)
+      })
+      const openingAngleDeg = weighted / lengthMm
+      const jointType = classifyJoint({ source: 'crease', closed: true, points, ...NO_STRIP, convex: false })
+      loops.push({
+        id: '',
+        source: 'crease',
+        concavity: 'known',
+        jointType,
+        hidden: false,
+        confidence: confidence({ lengthMm, openingDeg: openingAngleDeg, medianAdjacentAreaMm2: median(loop.areas), diagonal: model.bounds.diagonal, wholeJoint: true }),
+        closed: true,
+        lengthMm,
+        openingAngleDeg,
+        points,
+        thicknessMm: thicknessOf(surface, jointType, NO_STRIP),
+      })
+    }
+  }
+  return [...creases.filter((seam) => !taken.has(seam)), ...loops]
 }
 
 const SAME_SIDE_COS = Math.SQRT1_2
@@ -363,7 +429,7 @@ function intersectionSeams(model: MeshModel, bvhs: BodyBvh[], minLength: number,
       concavity: 'known',
       jointType,
       hidden: false,
-      confidence: confidence({ lengthMm, openingDeg: openingAngleDeg, medianAdjacentAreaMm2: median(line.areas), diagonal, betweenBodies: true }),
+      confidence: confidence({ lengthMm, openingDeg: openingAngleDeg, medianAdjacentAreaMm2: median(line.areas), diagonal, wholeJoint: true }),
       closed: line.closed,
       lengthMm,
       openingAngleDeg,
@@ -398,6 +464,8 @@ interface EdgeOptions {
   keep?: (seam: { closed: boolean; points: SeamPoint[] }) => boolean
   // Whether the seam lies inside a hollow section, from its chain and the samples on the mesh edges. Never when absent.
   hollow?: (chain: Chain, seam: { surface: SeamPoint[]; lengthMm: number }) => boolean
+  // Told of each seam and the chain it came from.
+  made?: (seam: RawSeam, chain: Chain) => void
 }
 
 // Chains the edges, drops chains under minLength and describes the rest. Edge numbers in the options index the edge list.
@@ -414,7 +482,7 @@ function seamsFromChains(
   model: MeshModel,
   faces: FaceData,
   minLength: number,
-  { normalsOfEdge, jointOf, thicknessOf, keep, hollow }: EdgeOptions,
+  { normalsOfEdge, jointOf, thicknessOf, keep, hollow, made }: EdgeOptions,
 ): RawSeam[] {
   const seams: RawSeam[] = []
   for (const chain of chains) {
@@ -436,7 +504,7 @@ function seamsFromChains(
         openingDeg: openingAngleDeg,
         medianAdjacentAreaMm2,
         diagonal: model.bounds.diagonal,
-        betweenBodies: source === 'contact',
+        wholeJoint: source === 'contact',
       }),
       closed: chain.closed,
       lengthMm,
@@ -444,6 +512,7 @@ function seamsFromChains(
       points,
       thicknessMm: thicknessOf(surface, jointType, strip),
     })
+    made?.(seams[seams.length - 1]!, chain)
   }
   return seams
 }

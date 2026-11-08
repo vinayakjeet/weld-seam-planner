@@ -70,8 +70,7 @@ function median(values: number[]): number | null {
 export function seamThickness(points: SeamPoint[], probe: RayProbe, offsetMm = 1): PlateThickness {
   if (points.length === 0) return [null, null]
   const found: [number[], number[]] = [[], []]
-  for (const fraction of SAMPLE_FRACTIONS) {
-    const { p, t, n1, n2 } = besideCorner(points, Math.round(fraction * (points.length - 1)))
+  for (const { p, t, n1, n2 } of stationsOf(points)) {
     const faces: Array<[Vec3, Vec3]> = [[n1, n2], [n2, n1]]
     faces.forEach(([normal, other], k) => {
       let along = normalize(cross(t, normal))
@@ -91,15 +90,14 @@ export function seamThickness(points: SeamPoint[], probe: RayProbe, offsetMm = 1
 // welded all round a member end (see resamplePolyline). A detected chain never turns this far.
 const CORNER_COS = Math.cos((40 * Math.PI) / 180)
 
-// The sample, or on a seam with corners the middle of the side the sample lies on (a corner sample starts the side that
-// leaves it): near a corner a ray through one plate runs down the wall of the other.
-function besideCorner(points: SeamPoint[], k: number): SeamPoint {
+// The samples at 25, 50 and 75 percent, or on a seam with corners the middle of every side: near a corner a ray through
+// one plate runs down the wall of the other, and off a side flush with the other member it meets nothing.
+function stationsOf(points: SeamPoint[]): SeamPoint[] {
   const corners: number[] = []
   for (let i = 1; i < points.length; i++) if (dot(points[i - 1]!.t, points[i]!.t) < CORNER_COS) corners.push(i)
-  if (corners.length === 0) return points[k]!
-  const from = corners.filter((i) => i <= k).pop() ?? 0
-  const to = corners.find((i) => i > k) ?? points.length
-  return points[Math.floor((from + to - 1) / 2)]!
+  if (corners.length === 0) return SAMPLE_FRACTIONS.map((f) => points[Math.round(f * (points.length - 1))]!)
+  const stops = [0, ...corners, points.length]
+  return stops.slice(1).map((to, k) => points[Math.floor((stops[k]! + to - 1) / 2)]!)
 }
 
 // Thickness of the two plates of an outside corner, in the order of n1 and n2. Next to the edge a ray behind either face

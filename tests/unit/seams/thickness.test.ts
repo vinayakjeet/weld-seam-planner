@@ -149,6 +149,16 @@ describe('seamThickness on a loop with corners', () => {
   })
 })
 
+describe('seamThickness on a loop whose sides read differently', () => {
+  it('measures the middle of every side, so a loop with flush sides still reads its one real side', () => {
+    const square: Vec3[] = [[0, 0, 0], [40, 0, 0], [40, 40, 0], [0, 40, 0]]
+    const { points } = pointsFromPolyline(square, true, () => [[0, 0, 1], [0, 1, 0]], { cornerDeg: 40 })
+    // Rays only meet material beside the first side, the one the loop starts on.
+    const probe: RayProbe = (origin) => (origin[1] < 5 && origin[0] > 15 && origin[0] < 25 ? 3.18 : Infinity)
+    expect(seamThickness(points, probe)).toEqual([3.18, 3.18])
+  })
+})
+
 describe('seamThickness on a seam without such a corner', () => {
   it('keeps its three stations at 25, 50 and 75 percent of the samples, even past a 30 degree kink', () => {
     const { points } = pointsFromPolyline([[0, 0, 0], [40, 0, 0], [40 + 40 * Math.cos(Math.PI / 6), 40 * Math.sin(Math.PI / 6), 0]], false, () => [[0, 0, 1], [0, 1, 0]], { cornerDeg: 40 })

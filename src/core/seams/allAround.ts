@@ -1,4 +1,4 @@
-import type { Vec3 } from '../math/vec3'
+import { dot, length, sub, type Vec3 } from '../math/vec3'
 import type { FaceData } from '../mesh/faces'
 import type { MeshModel } from '../mesh/model'
 import { chainEdges, edgeEnds, type Chain } from './chain'
@@ -7,10 +7,10 @@ import type { ContactEdges, ContactResult } from './contact'
 
 // A loop is the end of a compact member, such as a tube or a bar, when its shortest side is at least this share of its
 // longest. The foot of a web or a stiffener, two long sides and two ends a plate thick, is not.
-const COMPACT_SHARE = 0.25
+export const COMPACT_SHARE = 0.25
 // A flush side belongs to the end of a member only when the member runs away from the surface it meets at least this
 // share of the loop's narrowest side; a flat block lying flush with the edge of a plate does not.
-const MEMBER_DEPTH_SHARE = 0.5
+export const MEMBER_DEPTH_SHARE = 0.5
 // Chained this way every vertex that joins exactly two edges is passed through, however sharply the path turns there.
 const ANY_TURN_DEG = 180
 
@@ -56,7 +56,8 @@ export function allAroundLoops(model: MeshModel, faces: FaceData, edges: Contact
       if (!chain.closed) continue
       const ks = chain.edges.map((i) => pair[i]!)
       if (ks.every((k) => k >= flushFrom)) continue
-      const sides = sidesOf(positions, chain.vertices, turnBreakDeg)
+      const ring = chain.vertices.slice(0, -1).map((v): Vec3 => [positions[v * 3]!, positions[v * 3 + 1]!, positions[v * 3 + 2]!])
+      const sides = loopSides(ring, turnBreakDeg)
       const shortest = Math.min(...sides)
       if (shortest < COMPACT_SHARE * Math.max(...sides)) continue
       if (ks.some((k) => k >= flushFrom) && !ks.every((k) => memberDepth(model, faces, edges, k, MEMBER_DEPTH_SHARE * shortest))) continue
@@ -78,23 +79,16 @@ function memberDepth(model: MeshModel, faces: FaceData, edges: ContactEdges, k: 
   return patchWidth(model, faces, edges.freeFace[k]!, mid, [d[0] / span, d[1] / span, d[2] / span], needMm) >= needMm
 }
 
-// Lengths of the runs between turns sharper than turnBreakDeg; one run for a ring. vertices repeats its first at the end.
-function sidesOf(positions: Float32Array, vertices: number[], turnBreakDeg: number): number[] {
-  const n = vertices.length - 1
-  const at = (i: number) => {
-    const v = vertices[((i % n) + n) % n]! * 3
-    return [positions[v]!, positions[v + 1]!, positions[v + 2]!]
-  }
+// Lengths of the runs between turns sharper than turnBreakDeg, round a ring given without a repeated first point; one
+// run when no vertex turns that far.
+export function loopSides(ring: Vec3[], turnBreakDeg: number): number[] {
+  const n = ring.length
+  const at = (i: number) => ring[((i % n) + n) % n]!
+  const step = (i: number) => length(sub(at(i + 1), at(i)))
   const turnDeg = (i: number) => {
-    const [a, b, c] = [at(i - 1), at(i), at(i + 1)]
-    const d1 = [b[0]! - a[0]!, b[1]! - a[1]!, b[2]! - a[2]!]
-    const d2 = [c[0]! - b[0]!, c[1]! - b[1]!, c[2]! - b[2]!]
-    const cos = (d1[0]! * d2[0]! + d1[1]! * d2[1]! + d1[2]! * d2[2]!) / (Math.hypot(d1[0]!, d1[1]!, d1[2]!) * Math.hypot(d2[0]!, d2[1]!, d2[2]!))
-    return (Math.acos(Math.max(-1, Math.min(1, cos))) * 180) / Math.PI
-  }
-  const step = (i: number) => {
-    const [a, b] = [at(i), at(i + 1)]
-    return Math.hypot(b[0]! - a[0]!, b[1]! - a[1]!, b[2]! - a[2]!)
+    const d1 = sub(at(i), at(i - 1))
+    const d2 = sub(at(i + 1), at(i))
+    return (Math.acos(Math.max(-1, Math.min(1, dot(d1, d2) / (length(d1) * length(d2))))) * 180) / Math.PI
   }
   const corners = Array.from({ length: n }, (_, i) => i).filter((i) => turnDeg(i) > turnBreakDeg)
   if (corners.length === 0) return [Array.from({ length: n }, (_, i) => step(i)).reduce((x, y) => x + y, 0)]

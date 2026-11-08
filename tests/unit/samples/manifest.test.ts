@@ -15,6 +15,7 @@ const IDS = [
   'flipped-normals',
   'tank-with-manhole',
   'tube-frame',
+  'tube-frame-fused',
 ]
 
 const entry = {
@@ -65,7 +66,7 @@ describe('public/samples', () => {
   const manifest = readManifest()
   const byId = new Map(manifest.samples.map((s) => [s.id, s]))
 
-  it('lists the twelve samples once each', () => {
+  it('lists the thirteen samples once each', () => {
     expect(manifest.samples.map((s) => s.id).sort()).toEqual([...IDS].sort())
   })
 
@@ -93,7 +94,7 @@ describe('public/samples', () => {
 
   it('declares t-joint-inch in inches and the rest in millimetres', () => {
     expect(byId.get('t-joint-inch')?.units).toBe('in')
-    expect(manifest.samples.filter((s) => s.units === 'mm')).toHaveLength(11)
+    expect(manifest.samples.filter((s) => s.units === 'mm')).toHaveLength(12)
   })
 
   it('describes box-beam as the welded box girder', () => {
@@ -124,7 +125,15 @@ describe('public/samples', () => {
   it('records the hand-derived hollow counts: only the tube frame has the inside of a tube', () => {
     const hollow = Object.fromEntries(manifest.samples.map((s) => [s.id, s.expectedHollowSeams]))
     expect(hollow['tube-frame']).toBe(5 * 4 + 6)
-    expect(Object.entries(hollow).filter(([id]) => id !== 'tube-frame').every(([, n]) => n === 0)).toBe(true)
+    // The rungs of the fused frame are closed off by the rails, so only the 2 rails have inside corners.
+    expect(hollow['tube-frame-fused']).toBe(2 * 4)
+    expect(Object.entries(hollow).filter(([id]) => !id.startsWith('tube-frame')).every(([, n]) => n === 0)).toBe(true)
+  })
+
+  it('labels the fused tube frame card: the frame and the closed bore of each of its 3 rungs are 4 bodies', () => {
+    const frame = byId.get('tube-frame-fused')
+    expect(frame?.name).toBe('Tube frame (fused)')
+    expect([frame?.units, frame?.bodies, frame?.expectedCreaseSeams, frame?.expectedContactSeams]).toEqual(['mm', 4, 6, 0])
   })
 
   it('labels the tube frame card and gives it five bodies', () => {

@@ -483,7 +483,7 @@ describe('corner candidates', () => {
   // Only three samples have an outside corner where two plates meet: the heel of the L bracket, the 12 outer edges of
   // the tank shell and the 4 outer edges of each tube of the tube frame. Every other convex edge in the samples is the
   // edge of one plate, a web or a bar.
-  const CORNERS: Record<string, number> = { 'l-bracket-gussets': 1, 'tank-with-manhole': 12, 'tube-frame': 5 * 4 }
+  const CORNERS: Record<string, number> = { 'l-bracket-gussets': 1, 'tank-with-manhole': 12, 'tube-frame': 5 * 4, 'tube-frame-fused': 2 * (2 + 2 * 4) + 3 * 4 }
 
   it('finds the hidden corners each sample has and keeps them out of the visible counts', () => {
     for (const { id } of readManifest().samples) {
@@ -576,6 +576,32 @@ describe('tube frame', () => {
   })
 })
 
+// The same frame as one solid: what the flat frames of the go-kart are. Each rung end has two creases and flush sides.
+describe('fused tube frame', () => {
+  const all = detectAll('tube-frame-fused')
+  const seams = shown(all)
+
+  it('offers one closed weld all round each of the 6 rung ends and nothing else, as the frame of separate tubes does', () => {
+    expect(seams).toHaveLength(6)
+    for (const seam of seams) {
+      expect([seam.source, seam.jointType, seam.closed], seam.label).toEqual(['crease', 'fillet', true])
+      expect(seam.lengthMm, seam.label).toBeCloseTo(4 * 25.4, 2)
+      expect(seam.openingAngleDeg, seam.label).toBeCloseTo(90, 1)
+      expect(seam.thicknessMm, seam.label).toEqual([3.18, 3.18])
+    }
+  })
+
+  it('scores every joint at 0.8 or more, so accept all above 0.70 takes exactly the 6 joints', () => {
+    for (const seam of seams) expect(seam.confidence, seam.label).toBeGreaterThanOrEqual(0.8)
+    expect(all.filter((s) => s.hidden === false && s.confidence >= 0.7)).toHaveLength(6)
+  })
+
+  it('hides the 4 inside corners of each rail', () => {
+    const hollow = all.filter((s) => s.hidden === 'hollow')
+    expect(hollow.map((s) => [s.source, Math.round(s.lengthMm)])).toEqual(Array(8).fill(['crease', 600]))
+  })
+})
+
 describe('weld all around', () => {
   // A 1 in tube with a 1/8 in wall butting the side of another at x 287.3: its top and bottom are flush with the rail.
   const rail = boxTube(25.4, 25.4, 3.18, 600, (u, v, w) => [w, u, v])
@@ -616,7 +642,7 @@ describe('weld all around', () => {
 describe('seams inside hollow sections', () => {
   // Only the tube frame has a tube or a closed box under 150 mm across: the tank, the double-bottom cell and the box
   // girder are wide or open inside, so none of their seams is hidden as hollow.
-  const HOLLOW: Record<string, number> = { 'tube-frame': 5 * 4 + 6 }
+  const HOLLOW: Record<string, number> = { 'tube-frame': 5 * 4 + 6, 'tube-frame-fused': 2 * 4 }
 
   it('finds the hollow seams each sample has, as fillets kept out of the visible counts', () => {
     for (const { id } of readManifest().samples) {

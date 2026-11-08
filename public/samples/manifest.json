@@ -144,6 +144,18 @@
       "expectedContactSeams": 6,
       "expectedIntersectionSeams": 0,
       "expectedHollowSeams": 26
+    },
+    {
+      "id": "tube-frame-fused",
+      "file": "tube-frame-fused.stl",
+      "name": "Tube frame (fused)",
+      "description": "The tube frame exported as one solid: one weld all around each rung end, though each end has only two creases",
+      "units": "mm",
+      "bodies": 4,
+      "expectedCreaseSeams": 6,
+      "expectedContactSeams": 0,
+      "expectedIntersectionSeams": 0,
+      "expectedHollowSeams": 8
     }
   ]
 }
