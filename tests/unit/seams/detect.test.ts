@@ -67,6 +67,20 @@ describe('contact seams', () => {
     for (const seam of crease) expect(Math.abs(seam.lengthMm - 150)).toBeLessThan(0.5)
   })
 
+  it('scores the contact seams of the T-joint assembly at least as high as the creases of the merged T-joint', () => {
+    const lowest = (seams: SeamCandidate[]) => Math.min(...seams.map((s) => s.confidence))
+    expect(lowest(detect('t-joint-assembly'))).toBeGreaterThanOrEqual(lowest(detect('t-joint-merged')))
+  })
+
+  it('scores every straight 90 degree contact seam of the double-bottom cell and the tank at 0.8 or more', () => {
+    for (const id of ['double-bottom-cell', 'tank-with-manhole']) {
+      for (const seam of detect(id).filter((s) => s.source === 'contact')) {
+        expect(Math.abs(seam.openingAngleDeg - 90), seam.label).toBeLessThan(0.5)
+        expect(seam.confidence, `${id} ${seam.label} ${seam.lengthMm.toFixed(1)} mm`).toBeGreaterThanOrEqual(0.8)
+      }
+    }
+  })
+
   it('keeps one of two contact seams on the same line and side, and both of a line seen from opposite sides', () => {
     const [a, b] = detect('t-joint-assembly')
     const twin = { ...a!, id: `${a!.id}-twin`, lengthMm: a!.lengthMm - 0.01 }

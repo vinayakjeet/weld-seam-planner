@@ -22,6 +22,28 @@ describe('confidence', () => {
     expect(confidence({ ...base, openingDeg: 67.5 })).toBeCloseTo(confidence({ ...base, openingDeg: 112.5 }), 12)
   })
 
+  it('scores a straight 90 degree seam between two bodies at 0.8 or more, however short it is against the part', () => {
+    // One side of a 1 in tube end on a go-kart frame 1700 mm across, between thin faces.
+    const side = { lengthMm: 25.4, openingDeg: 90, medianAdjacentAreaMm2: 0, diagonal: 1700 }
+    expect(confidence({ ...side, betweenBodies: true })).toBeGreaterThanOrEqual(0.8)
+    expect(confidence(side)).toBeLessThan(0.5)
+  })
+
+  it('scores a seam between two bodies at least as high as a crease of the same shape', () => {
+    for (const lengthMm of [10, 25.4, 200, 2000]) {
+      for (const openingDeg of [45, 70, 90, 120]) {
+        for (const medianAdjacentAreaMm2 of [0, 30, 3000]) {
+          const shape = { lengthMm, openingDeg, medianAdjacentAreaMm2, diagonal: 1700 }
+          expect(confidence({ ...shape, betweenBodies: true })).toBeGreaterThanOrEqual(confidence(shape))
+        }
+      }
+    }
+  })
+
+  it('still keeps a seam between two bodies under 0.70 when its opening is far from 90 degrees', () => {
+    expect(confidence({ ...base, openingDeg: 135, betweenBodies: true })).toBeLessThan(0.7)
+  })
+
   it('stays between 0 and 1 for extreme inputs', () => {
     const huge = confidence({ lengthMm: 1e6, openingDeg: 90, medianAdjacentAreaMm2: 1e12, diagonal: 250 })
     const awful = confidence({ lengthMm: 0, openingDeg: 5, medianAdjacentAreaMm2: 0, diagonal: 250 })
