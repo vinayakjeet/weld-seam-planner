@@ -36,7 +36,7 @@ export function seamThickness(points: SeamPoint[], probe: RayProbe, offsetMm = 1
   if (points.length === 0) return [null, null]
   const found: [number[], number[]] = [[], []]
   for (const fraction of SAMPLE_FRACTIONS) {
-    const { p, t, n1, n2 } = points[Math.round(fraction * (points.length - 1))]!
+    const { p, t, n1, n2 } = besideCorner(points, Math.round(fraction * (points.length - 1)))
     const faces: Array<[Vec3, Vec3]> = [[n1, n2], [n2, n1]]
     faces.forEach(([normal, other], k) => {
       let along = normalize(cross(t, normal))
@@ -50,6 +50,21 @@ export function seamThickness(points: SeamPoint[], probe: RayProbe, offsetMm = 1
   }
   const [a, b] = [median(found[0]), median(found[1])]
   return [a === null ? null : roundDecimals(a, 2), b === null ? null : roundDecimals(b, 2)]
+}
+
+// Between two samples whose tangents differ by more than this a corner lies at the second one: a corner of a loop
+// welded all round a member end (see resamplePolyline). A detected chain never turns this far.
+const CORNER_COS = Math.cos((40 * Math.PI) / 180)
+
+// The sample, or on a seam with corners the middle of the side the sample lies on (a corner sample starts the side that
+// leaves it): near a corner a ray through one plate runs down the wall of the other.
+function besideCorner(points: SeamPoint[], k: number): SeamPoint {
+  const corners: number[] = []
+  for (let i = 1; i < points.length; i++) if (dot(points[i - 1]!.t, points[i]!.t) < CORNER_COS) corners.push(i)
+  if (corners.length === 0) return points[k]!
+  const from = corners.filter((i) => i <= k).pop() ?? 0
+  const to = corners.find((i) => i > k) ?? points.length
+  return points[Math.floor((from + to - 1) / 2)]!
 }
 
 // Thickness of the two plates of an outside corner, in the order of n1 and n2. Next to the edge a ray behind either face

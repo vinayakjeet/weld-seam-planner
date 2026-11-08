@@ -130,6 +130,38 @@ function unionProbe(boxes: Box[]): RayProbe {
   }
 }
 
+describe('seamThickness on a loop with corners', () => {
+  // A 40 mm square loop whose corners are samples: at 25, 50 and 75 percent of the samples it stands on a corner.
+  const square: Vec3[] = [[0, 0, 0], [40, 0, 0], [40, 40, 0], [0, 40, 0]]
+  const { points } = pointsFromPolyline(square, true, () => [[0, 0, 1], [0, 1, 0]], { cornerDeg: 40 })
+
+  it('measures in the middle of the side that leaves a corner sample, clear of the wall that ends there', () => {
+    const origins: Vec3[] = []
+    const probe: RayProbe = (origin) => {
+      origins.push(origin)
+      return 3.18
+    }
+    expect(seamThickness(points, probe)).toEqual([3.18, 3.18])
+    for (const o of origins) {
+      const corner = Math.min(...square.map((c) => Math.hypot(o[0] - c[0], o[1] - c[1])))
+      expect(corner, o.join(' ')).toBeGreaterThan(15)
+    }
+  })
+})
+
+describe('seamThickness on a seam without such a corner', () => {
+  it('keeps its three stations at 25, 50 and 75 percent of the samples, even past a 30 degree kink', () => {
+    const { points } = pointsFromPolyline([[0, 0, 0], [40, 0, 0], [40 + 40 * Math.cos(Math.PI / 6), 40 * Math.sin(Math.PI / 6), 0]], false, () => [[0, 0, 1], [0, 1, 0]], { cornerDeg: 40 })
+    const stations: Vec3[] = []
+    seamThickness(points, (origin) => {
+      stations.push(origin)
+      return 5
+    }, 0)
+    const expected = [0.25, 0.5, 0.75].map((f) => points[Math.round(f * (points.length - 1))]!.p)
+    expect(stations.filter((_, i) => i % 2 === 0)).toEqual(expected)
+  })
+})
+
 describe('cornerThickness', () => {
   // The seam is the edge along y at x 0, z 0, plate normals +z and +x.
   const { points } = pointsFromPolyline([[0, 0, 0], [0, 200, 0]], false, () => [[0, 0, 1], [1, 0, 0]])
