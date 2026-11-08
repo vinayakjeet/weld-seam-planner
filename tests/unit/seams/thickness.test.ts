@@ -220,6 +220,53 @@ describe('plateProbeFromBvhs', () => {
   })
 })
 
+describe('plateProbeFromBvhs on a ray that runs along a plate', () => {
+  const parts = (...solids: number[][][]) => buildBodyBvhs(buildMeshModel(soupOf(solids.flat()), 1)).map((b) => b.bvh)
+  // A wall 3 mm thick, 100 mm wide, 60 mm long along y: its end face is at y 0.
+  const wall = cubeTriangles([0, 0, 0], [100, 60, 3])
+  const block = cubeTriangles([200, 200, 200], [10, 10, 10])
+
+  it('gives Infinity for a ray from the cut end of a wall: it has gone along the wall, not through it', () => {
+    const probe = plateProbeFromBvhs(parts(wall, block), 1)
+    expect(probe([50, 0, 1.5], [0, 1, 0])).toBe(Infinity)
+  })
+
+  it('still measures straight through the same wall', () => {
+    const probe = plateProbeFromBvhs(parts(wall, block), 1)
+    expect(probe([50, 30, 3], [0, 0, -1])).toBeCloseTo(3, 4)
+  })
+
+  it('gives Infinity for the length of a bar read from its end, and its diameter across it', () => {
+    const bar = cubeTriangles([0, 0, 0], [20, 200, 20])
+    const probe = plateProbeFromBvhs(parts(bar, block), 1)
+    expect(probe([10, 0, 10], [0, 1, 0])).toBe(Infinity)
+    expect(probe([10, 100, 20], [0, 0, -1])).toBeCloseTo(20, 4)
+  })
+
+  it('gives Infinity for even a short run along a wall, 8.85 mm in 3.18 mm', () => {
+    const stub = cubeTriangles([0, 0, 0], [100, 8.85, 3.18])
+    expect(plateProbeFromBvhs(parts(stub, block), 1)([50, 0, 1.59], [0, 1, 0])).toBe(Infinity)
+  })
+
+  it('keeps a true wall reading with a narrow width beside it, near the end of a tube', () => {
+    const end = cubeTriangles([0, 0, 0], [1.5, 60, 3.2])
+    expect(plateProbeFromBvhs(parts(end, block), 1)([0.75, 30, 3.2], [0, 0, -1])).toBeCloseTo(3.2, 4)
+  })
+
+  it('keeps a reading beside another body, such as a plate 1 mm from a bar through it', () => {
+    const plate = cubeTriangles([0, 0, 0], [150, 150, 10])
+    const post = cubeTriangles([60, 60, -40], [30, 30, 90])
+    const probe = plateProbeFromBvhs(parts(plate, post), 1)
+    expect(probe([59, 75, 10], [0, 0, -1])).toBeCloseTo(10, 4)
+  })
+
+  it('leaves the thickness of that plate unknown in a seam along the cut end', () => {
+    const points = [0.25, 0.5, 0.75].map((f) => ({ s: f * 100, p: [f * 100, 0, 3] as Vec3, t: [1, 0, 0] as Vec3, n1: [0, -1, 0] as Vec3, n2: [0, 0, 1] as Vec3 }))
+    const [endFace] = seamThickness(points, plateProbeFromBvhs(parts(wall, block), 1))
+    expect(endFace).toBeNull()
+  })
+})
+
 describe('probeFromBvhs', () => {
   const bodies = () =>
     buildBodyBvhs(buildMeshModel(soupOf([...cubeTriangles([0, 0, 0], [100, 60, 10]), ...cubeTriangles([20, 10, 10], [10, 40, 40])]), 1))

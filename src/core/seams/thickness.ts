@@ -1,6 +1,6 @@
 import { Box3, DoubleSide, Ray, Vector3 } from 'three'
 import type { MeshBVH } from 'three-mesh-bvh'
-import { cross, dot, normalize, scale, type Vec3 } from '../math/vec3'
+import { add, cross, dot, normalize, scale, sub, type Vec3 } from '../math/vec3'
 import type { PlateThickness } from '../process/filletRules'
 import { cornerFaces, thicknessBehind } from './classify'
 import type { SeamPoint } from './frames'
@@ -43,17 +43,38 @@ function nearestSurface(bvhs: MeshBVH[], origin: Vec3, dir: Vec3): { distance: n
   return best
 }
 
-// The thickness of the plate a ray crosses. Two bodies count as touching within the contact tolerance, so a ray
-// started on one can begin in a gap above the plate of the other; when the first surface it meets, within maxGapMm,
-// is one it enters, the plate is measured from there to the next surface of any body (a bore an exporter wrote as a
-// body of its own included). Otherwise it is the distance to the first surface, as probeFromBvhs gives.
+// The material round the middle of a plate reading is wider than this share of the reading in every direction across
+// the ray. Narrower, and the ray has run along a plate instead of through it: in from the cut end of a wall, or down a
+// bar. Measured on a go-kart frame: 8.85 mm along a 3.18 mm wall is 36 percent, a true 3.17 mm wall 1 mm from a tube end
+// has 1.5 mm beside it, 47 percent.
+const MIN_WIDTH_SHARE = 0.4
+
+function runsThrough(bvhs: MeshBVH[], start: Vec3, dir: Vec3, thicknessMm: number): boolean {
+  const middle = add(start, scale(dir, thicknessMm / 2))
+  const helper: Vec3 = Math.abs(dir[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0]
+  const u = normalize(cross(dir, helper))
+  const v = cross(dir, u)
+  const across: Vec3[] = [u, v, normalize(add(u, v)), normalize(sub(u, v))]
+  return across.every((w) => {
+    const forth = nearestSurface(bvhs, middle, w)?.distance ?? Infinity
+    const back = nearestSurface(bvhs, middle, scale(w, -1))?.distance ?? Infinity
+    return forth + back >= MIN_WIDTH_SHARE * thicknessMm
+  })
+}
+
+// The thickness of the plate a ray crosses, Infinity when the ray runs along a plate instead, since no reading along
+// it is a thickness. Two bodies count as touching within the contact tolerance, so a ray started on one can begin in a
+// gap above the plate of the other; when the first surface it meets, within maxGapMm, is one it enters, the plate is
+// measured from there to the next surface of any body (a bore an exporter wrote as a body of its own included).
+// Otherwise it is the distance to the first surface, as probeFromBvhs gives.
 export function plateProbeFromBvhs(bvhs: MeshBVH[], maxGapMm: number): RayProbe {
   return (origin, direction) => {
     const first = nearestSurface(bvhs, origin, direction)
     if (!first) return Infinity
-    if (!first.entering || first.distance > maxGapMm) return first.distance
-    const entry: Vec3 = [origin[0] + direction[0] * first.distance, origin[1] + direction[1] * first.distance, origin[2] + direction[2] * first.distance]
-    return nearestSurface(bvhs, entry, direction)?.distance ?? Infinity
+    if (!first.entering || first.distance > maxGapMm) return runsThrough(bvhs, origin, direction, first.distance) ? first.distance : Infinity
+    const entry = add(origin, scale(direction, first.distance))
+    const thickness = nearestSurface(bvhs, entry, direction)?.distance ?? Infinity
+    return Number.isFinite(thickness) && runsThrough(bvhs, entry, direction, thickness) ? thickness : Infinity
   }
 }
 
