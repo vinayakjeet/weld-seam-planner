@@ -1,6 +1,6 @@
 name: ci
 
-on: push
+on: [push, workflow_dispatch]
 
 jobs:
   check:
@@ -33,10 +33,10 @@ jobs:
         with:
           name: test-results-chromium
           path: test-results
-  # On main the load, pick, export, isolation, offline and reach specs also run in Firefox and WebKit
-  # (playwright.config.ts picks the specs of each project).
+  # On main and on a manual run the load, pick, export, isolation, offline and reach specs also run in Firefox and
+  # WebKit (playwright.config.ts picks the specs of each project).
   e2e-browsers:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -50,7 +50,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps ${{ matrix.browser }}
-      - run: npx playwright test --project=${{ matrix.browser }}
+      # Without a display server Firefox cannot load GL, even headless, so every WebGL context fails.
+      - run: ${{ matrix.browser == 'firefox' && 'xvfb-run -a' || '' }} npx playwright test --project=${{ matrix.browser }}
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
