@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Vec3 } from '../../../src/core/math/vec3'
 import { pointsFromPolyline } from '../../../src/core/seams/frames'
-import { cornerThickness, probeFromBvhs, seamThickness, type RayProbe } from '../../../src/core/seams/thickness'
+import { cornerThickness, plateProbeFromBvhs, probeFromBvhs, seamThickness, type RayProbe } from '../../../src/core/seams/thickness'
 import { buildBodyBvhs } from '../../../src/core/seams/bodyBvh'
 import { buildMeshModel } from '../../../src/core/mesh/model'
 import { cubeTriangles, soupOf } from '../helpers/shapes'
@@ -180,6 +180,33 @@ describe('cornerThickness', () => {
   it('gives nulls for an empty seam and for a probe that always misses', () => {
     expect(cornerThickness([], unionProbe([flat]), 0.05)).toEqual([null, null])
     expect(cornerThickness(points, () => Infinity, 0.05)).toEqual([null, null])
+  })
+})
+
+describe('plateProbeFromBvhs', () => {
+  // A 10 mm plate, a block 0.3 mm above it, and a 4 mm tube wall whose bore is a body of its own.
+  const plate = cubeTriangles([0, 0, 0], [100, 60, 10])
+  const bvhs = () => buildBodyBvhs(buildMeshModel(soupOf([...plate, ...cubeTriangles([20, 10, 10.3], [10, 40, 40])]), 1)).map((b) => b.bvh)
+
+  it('measures the plate across a gap the ray starts in, from where it enters to where it leaves', () => {
+    const probe = plateProbeFromBvhs(bvhs(), 0.5)
+    expect(probe([60, 30, 10.3], [0, 0, -1])).toBeCloseTo(10, 4)
+    expect(probeFromBvhs(bvhs())([60, 30, 10.3], [0, 0, -1])).toBeCloseTo(0.3, 4)
+  })
+
+  it('measures from the start as before when the ray starts on the plate', () => {
+    expect(plateProbeFromBvhs(bvhs(), 0.5)([60, 30, 10], [0, 0, -1])).toBeCloseTo(10, 4)
+  })
+
+  it('does not cross a gap wider than the given one: the station is not on a plate', () => {
+    expect(plateProbeFromBvhs(bvhs(), 0.2)([60, 30, 10.3], [0, 0, -1])).toBeCloseTo(0.3, 4)
+  })
+
+  it('stops at the next surface of any body after it enters, such as a bore written as a body of its own', () => {
+    const wall = cubeTriangles([0, 0, 0], [100, 60, 20])
+    const bore = cubeTriangles([10, 10, 4], [80, 40, 12])
+    const parts = buildBodyBvhs(buildMeshModel(soupOf([...wall, ...bore]), 1)).map((b) => b.bvh)
+    expect(plateProbeFromBvhs(parts, 0.5)([50, 30, 20.2], [0, 0, -1])).toBeCloseTo(4, 4)
   })
 })
 

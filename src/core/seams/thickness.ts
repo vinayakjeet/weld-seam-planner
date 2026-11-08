@@ -1,3 +1,4 @@
+import { Box3, DoubleSide, Ray, Vector3 } from 'three'
 import type { MeshBVH } from 'three-mesh-bvh'
 import { cross, dot, normalize, scale, type Vec3 } from '../math/vec3'
 import type { PlateThickness } from '../process/filletRules'
@@ -19,6 +20,40 @@ export function probeFromBvhs(bvhs: MeshBVH[]): RayProbe {
     let nearest = Infinity
     for (const bvh of bvhs) nearest = Math.min(nearest, thicknessBehind(bvh, origin, back))
     return nearest
+  }
+}
+
+const RAY = new Ray()
+const BOX = new Box3()
+const SIZE = new Vector3()
+
+// The nearest surface along a ray over all the BVHs, and whether the ray enters material there (its outward normal
+// faces the ray). The ray starts a hair along, past any surface it starts on.
+function nearestSurface(bvhs: MeshBVH[], origin: Vec3, dir: Vec3): { distance: number; entering: boolean } | null {
+  let best: { distance: number; entering: boolean } | null = null
+  for (const bvh of bvhs) {
+    const nudge = Math.max(1e-6, 1e-4 * bvh.getBoundingBox(BOX).getSize(SIZE).length())
+    RAY.origin.set(origin[0] + dir[0] * nudge, origin[1] + dir[1] * nudge, origin[2] + dir[2] * nudge)
+    RAY.direction.set(dir[0], dir[1], dir[2])
+    const hit = bvh.raycastFirst(RAY, DoubleSide)
+    if (!hit || (best && hit.distance + nudge >= best.distance)) continue
+    const n = hit.face?.normal
+    best = { distance: hit.distance + nudge, entering: n ? n.x * dir[0] + n.y * dir[1] + n.z * dir[2] < 0 : false }
+  }
+  return best
+}
+
+// The thickness of the plate a ray crosses. Two bodies count as touching within the contact tolerance, so a ray
+// started on one can begin in a gap above the plate of the other; when the first surface it meets, within maxGapMm,
+// is one it enters, the plate is measured from there to the next surface of any body (a bore an exporter wrote as a
+// body of its own included). Otherwise it is the distance to the first surface, as probeFromBvhs gives.
+export function plateProbeFromBvhs(bvhs: MeshBVH[], maxGapMm: number): RayProbe {
+  return (origin, direction) => {
+    const first = nearestSurface(bvhs, origin, direction)
+    if (!first) return Infinity
+    if (!first.entering || first.distance > maxGapMm) return first.distance
+    const entry: Vec3 = [origin[0] + direction[0] * first.distance, origin[1] + direction[1] * first.distance, origin[2] + direction[2] * first.distance]
+    return nearestSurface(bvhs, entry, direction)?.distance ?? Infinity
   }
 }
 

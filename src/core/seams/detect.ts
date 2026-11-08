@@ -7,7 +7,7 @@ import type { PlateThickness } from '../process/filletRules'
 import { allAroundLoops, withFlush } from './allAround'
 import { buildBodyBvhs, insideByParity, wholeBvhFor, type BodyBvh } from './bodyBvh'
 import { chainEdges, edgeEnds, type Chain } from './chain'
-import { acrossFace, classifyJoint, isLap, meetsSecondPlate, patchWidth, thicknessBehind, type JointType } from './classify'
+import { acrossFace, classifyJoint, isLap, meetsSecondPlate, MIN_PLATE_MM, patchWidth, thicknessBehind, type JointType } from './classify'
 import { confidence } from './confidence'
 import { contactTolerance, findContactEdges, type ContactEdges } from './contact'
 import { extractCreaseEdges, type CreaseEdges, type CreaseResult } from './crease'
@@ -16,7 +16,7 @@ import { contactInHollow, creaseInHollow, HOLLOW_STATIONS, type ContactStation }
 import { chainSegments, findIntersectionSegments } from './intersect'
 import { extractNonManifoldWedges, openBodies, type SolidTest } from './nonManifold'
 import { seamId } from './seamId'
-import { cornerThickness, probeFromBvhs, roundDecimals, seamThickness, type RayProbe } from './thickness'
+import { cornerThickness, plateProbeFromBvhs, probeFromBvhs, roundDecimals, seamThickness, type RayProbe } from './thickness'
 
 export interface DetectSettings {
   creaseAngleDeg: number
@@ -77,19 +77,28 @@ export function detectSeams(model: MeshModel, settings: DetectSettings, context:
   const strips = stripProbe(model, faces, bvhOf)
 
   let probe: RayProbe | null | undefined
+  let plateProbe: RayProbe | null | undefined
+  let all: MeshBVH[] | undefined
+  const allBvhs = () => (all ??= (bvhs.length > 0 ? bvhs : [wholeBvh()].filter((b): b is BodyBvh => b !== null)).map((b) => b.bvh))
   const rayProbe = () => {
-    if (probe === undefined) {
-      const found = bvhs.length > 0 ? bvhs : [wholeBvh()].filter((b): b is BodyBvh => b !== null)
-      probe = found.length > 0 ? probeFromBvhs(found.map((b) => b.bvh)) : null
-    }
+    if (probe === undefined) probe = allBvhs().length > 0 ? probeFromBvhs(allBvhs()) : null
     return probe
+  }
+  // Plate thickness across a contact gap: a gap is under the contact tolerance, which counts as touching, and under
+  // the thinnest plate; on a large part the tolerance passes a tube wall, and a whole wall is never a gap.
+  const plateRay = () => {
+    if (plateProbe === undefined) {
+      const gapMm = Math.min(contactTolerance(model.bounds.diagonal), MIN_PLATE_MM)
+      plateProbe = allBvhs().length > 0 ? plateProbeFromBvhs(allBvhs(), gapMm) : null
+    }
+    return plateProbe
   }
   const depthMm = Math.min(MAX_CORNER_DEPTH_MM, CORNER_DEPTH_FRACTION * model.bounds.diagonal)
   const thicknessOf: ThicknessOf = (points, jointType, strip) => {
     const ray = rayProbe()
     if (!ray) return [null, null]
     if (jointType === 'corner') return cornerThickness(points, ray, depthMm)
-    const pair = seamThickness(points, ray)
+    const pair = seamThickness(points, plateRay() ?? ray)
     const mid = points[points.length >> 1]
     // A lap's strip face is its end face, so its plate thickness is the width of that face, not a ray through it.
     if (jointType === 'lap' && strip.stripNormal && mid && Number.isFinite(strip.stripWidthMm)) {

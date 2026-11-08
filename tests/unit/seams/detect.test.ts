@@ -70,6 +70,27 @@ describe('contact seams', () => {
     for (const seam of crease) expect(Math.abs(seam.lengthMm - 150)).toBeLessThan(0.5)
   })
 
+  // Within the contact tolerance a web can float above the plate; the plate is measured from where the ray enters it.
+  it('measures 10 and 10 on a web lifted 0.25 mm off the plate, not the gap', () => {
+    const plate = cubeTriangles([-100, -60, 0], [200, 120, 10])
+    const web = cubeTriangles([-100, -5, 10.25], [200, 10, 80])
+    const seams = shown(detectSeams(buildMeshModel(soupOf([...plate, ...web]), 1), DEFAULT_DETECT_SETTINGS))
+    expect(seams).toHaveLength(2)
+    for (const seam of seams) expect(seam.thicknessMm, seam.label).toEqual([10, 10])
+  })
+
+  // On a large part the contact tolerance is wider than a tube wall, but a reading of a whole wall is never a gap.
+  it('reads the 3.18 mm top wall of a box whose bore is a body of its own as 3.18 on a part 2.4 m across', () => {
+    const floor = cubeTriangles([-1200, -100, -40], [2400, 200, 20])
+    const box = cubeTriangles([-100, -30, 0], [200, 60, 25.4])
+    const bore = cubeTriangles([-90, -26.82, 3.18], [180, 53.64, 19.04])
+    const web = cubeTriangles([-50, -5, 25.4], [100, 10, 80])
+    const seams = shown(detectSeams(buildMeshModel(soupOf([...floor, ...box, ...bore, ...web]), 1), DEFAULT_DETECT_SETTINGS))
+    const feet = seams.filter((s) => s.source === 'contact' && Math.abs(s.lengthMm - 100) < 0.5)
+    expect(feet).toHaveLength(2)
+    for (const seam of feet) expect([...seam.thicknessMm].sort(), seam.label).toEqual([10, 3.18])
+  })
+
   it('scores the contact seams of the T-joint assembly at least as high as the creases of the merged T-joint', () => {
     const lowest = (seams: SeamCandidate[]) => Math.min(...seams.map((s) => s.confidence))
     expect(lowest(detect('t-joint-assembly'))).toBeGreaterThanOrEqual(lowest(detect('t-joint-merged')))

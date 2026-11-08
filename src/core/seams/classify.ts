@@ -35,7 +35,7 @@ const MIN_LAP_OVERLAP_MM = 25
 // Each plate of a lap is at least this thick and this share of the other. A narrower free face is where a ray met an
 // edge or a sliver of the tessellation; a thinner touched plate is a ray that started in a gap between two bodies
 // that lie within the contact tolerance and met the near surface.
-const MIN_PLATE_MM = 1
+export const MIN_PLATE_MM = 1
 const MIN_PLATE_SHARE = 0.25
 
 // The free face of a lap is the end face of the lapping plate, so its width is that plate's thickness, and the plate
