@@ -229,8 +229,20 @@ describe('plateProbeFromBvhs', () => {
     expect(plateProbeFromBvhs(bvhs(), 0.5)([60, 30, 10], [0, 0, -1])).toBeCloseTo(10, 4)
   })
 
-  it('does not cross a gap wider than the given one: the station is not on a plate', () => {
-    expect(plateProbeFromBvhs(bvhs(), 0.2)([60, 30, 10.3], [0, 0, -1])).toBeCloseTo(0.3, 4)
+  it('gives Infinity across a gap wider than the given one: the station is not on a plate', () => {
+    expect(plateProbeFromBvhs(bvhs(), 0.2)([60, 30, 10.3], [0, 0, -1])).toBe(Infinity)
+  })
+
+  // Off the end of a side flush with another member a ray starts in open air and meets some other part far away.
+  it('gives Infinity for a ray that starts in open air and meets a part 100 mm away', () => {
+    expect(plateProbeFromBvhs(bvhs(), 0.5)([60, 30, 110], [0, 0, -1])).toBe(Infinity)
+  })
+
+  it('still reads a wall whose next surface is a bore written as a body of its own, wider than the gap', () => {
+    const wall = cubeTriangles([0, 0, 0], [100, 60, 20])
+    const bore = cubeTriangles([10, 10, 4], [80, 40, 12])
+    const parts = buildBodyBvhs(buildMeshModel(soupOf([...wall, ...bore]), 1)).map((b) => b.bvh)
+    expect(plateProbeFromBvhs(parts, 0.5)([50, 30, 20], [0, 0, -1])).toBeCloseTo(4, 4)
   })
 
   it('stops at the next surface of any body after it enters, such as a bore written as a body of its own', () => {

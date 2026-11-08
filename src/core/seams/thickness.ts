@@ -2,6 +2,7 @@ import { Box3, DoubleSide, Ray, Vector3 } from 'three'
 import type { MeshBVH } from 'three-mesh-bvh'
 import { add, cross, dot, normalize, scale, sub, type Vec3 } from '../math/vec3'
 import type { PlateThickness } from '../process/filletRules'
+import { insideByParity } from './bodyBvh'
 import { cornerFaces, MIN_PLATE_MM, thicknessBehind } from './classify'
 import type { SeamPoint } from './frames'
 
@@ -71,6 +72,12 @@ export function plateProbeFromBvhs(bvhs: MeshBVH[], maxGapMm: number): RayProbe 
   return (origin, direction) => {
     const first = nearestSurface(bvhs, origin, direction)
     if (!first) return Infinity
+    if (first.entering && first.distance > maxGapMm) {
+      // Past the gap, a surface it enters is a bore written as a body of its own when the ray started in material, and
+      // some other part when it started in open air, off the end of a plate.
+      const halfway = add(origin, scale(direction, first.distance / 2))
+      if (!bvhs.some((bvh) => insideByParity(bvh, halfway))) return Infinity
+    }
     if (!first.entering || first.distance > maxGapMm) return runsThrough(bvhs, origin, direction, first.distance) ? first.distance : Infinity
     const entry = add(origin, scale(direction, first.distance))
     const thickness = nearestSurface(bvhs, entry, direction)?.distance ?? Infinity
