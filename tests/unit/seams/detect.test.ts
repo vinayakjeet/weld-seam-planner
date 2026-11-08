@@ -602,6 +602,54 @@ describe('fused tube frame', () => {
   })
 })
 
+describe('contact seams along the touching stretch of an edge', () => {
+  const rail = cubeTriangles([-500, -50, 0], [1000, 50, 25.4])
+  const contacts = (...solids: number[][][]) => detectSeams(buildMeshModel(soupOf(solids.flat()), 1), DEFAULT_DETECT_SETTINGS).filter((s) => s.source === 'contact')
+  const onSide = (seams: SeamCandidate[], x: number) => seams.filter((s) => s.points.every(({ p }) => Math.abs(p[0] - x) < 1e-3))
+
+  it('gives a tube end 3.3 mm proud of the rail and 0.3 mm off it a seam only along the touching stretch', () => {
+    const tube = boxTube(40, 25.4, 3.18, 200, (u, v, w) => [u - 20, 0.3 + w, 3.3 + v])
+    for (const x of [-20, 20]) {
+      const [side, ...more] = onSide(contacts(rail, tube).filter((s) => s.hidden === false), x)
+      expect(more, String(x)).toEqual([])
+      const z = side!.points.map(({ p }) => p[2])
+      expect(Math.min(...z)).toBeCloseTo(3.3, 3)
+      expect(Math.max(...z)).toBeCloseTo(25.4 + Math.sqrt(1 - 0.09), 1)
+      expect(side!.lengthMm).toBeLessThan(25.4)
+      expect(side!.jointType).toBe('fillet')
+      expect(side!.openingAngleDeg).toBeCloseTo(90, 1)
+      expect(side!.confidence).toBeGreaterThanOrEqual(0.8)
+      expect(side!.thicknessMm.every((t) => t !== null)).toBe(true)
+    }
+  })
+
+  it('gives an edge whose gap grows from 0.3 to 3.3 mm a seam from the near end to where the gap passes 1 mm', () => {
+    // A block on the rail's top, its 300 mm foot edges rising 3 mm from one end to the other.
+    const rise = 3 / 300
+    const wedge = extrude(
+      [[0, 0.3], [300, 0.3 + 3], [300, 60], [0, 60]],
+      [[0, 1, 2], [0, 2, 3]],
+      40,
+      (x, z, y) => [x - 150, y - 45, 25.4 + z],
+    )
+    const seams = contacts(rail, wedge).filter((s) => s.points.every(({ p }) => Math.abs(Math.abs(p[1] + 25) - 20) < 1e-3))
+    expect(seams).toHaveLength(2)
+    for (const seam of seams) expect(seam.lengthMm).toBeCloseTo((1 - 0.3) / rise, -1)
+  })
+
+  it('removes the whole seam when the edge is over the tolerance away all along', () => {
+    const lifted = boxTube(40, 25.4, 3.18, 200, (u, v, w) => [u - 20, 3.3 + w, 3.3 + v])
+    expect(contacts(rail, lifted)).toEqual([])
+  })
+
+  it('hides a stretch inside the bore of a tube, like the rest of a bore', () => {
+    const wide = boxTube(60, 60, 3, 300, (u, v, w) => [u - 30, 0.3 + w, -33 + v + 3.3 + 25.4 + 4.3])
+    const inside = contacts(cubeTriangles([-500, -50, -40], [1000, 50, 65.4]), wide).filter((s) => s.points.every(({ p }) => Math.abs(Math.abs(p[0]) - 27) < 1e-3))
+    expect(inside.length).toBeGreaterThan(0)
+    for (const seam of inside) expect(seam.hidden, seam.label).toBe('hollow')
+  })
+})
+
 describe('weld all around', () => {
   // A 1 in tube with a 1/8 in wall butting the side of another at x 287.3: its top and bottom are flush with the rail.
   const rail = boxTube(25.4, 25.4, 3.18, 600, (u, v, w) => [w, u, v])

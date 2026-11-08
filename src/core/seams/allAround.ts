@@ -3,7 +3,7 @@ import type { FaceData } from '../mesh/faces'
 import type { MeshModel } from '../mesh/model'
 import { chainEdges, edgeEnds, type Chain } from './chain'
 import { patchWidth } from './classify'
-import type { ContactEdges, ContactResult } from './contact'
+import type { ContactEdges, ContactResult, ContactStretch } from './contact'
 
 // A loop is the end of a compact member, such as a tube or a bar, when its shortest side is at least this share of its
 // longest. The foot of a web or a stiffener, two long sides and two ends a plate thick, is not.
@@ -15,7 +15,7 @@ export const MEMBER_DEPTH_SHARE = 0.5
 const ANY_TURN_DEG = 180
 
 // The contact edges followed by the flush ones, in one list; entries from flushFrom on are flush.
-export function withFlush(contact: ContactResult): { edges: ContactEdges; flushFrom: number } {
+export function withFlush(contact: ContactResult): { edges: ContactEdges; flushFrom: number; stretches: ContactStretch[] } {
   const { flush } = contact
   const join = <T extends Uint32Array | Int32Array | Float32Array>(a: T, b: T, make: (n: number) => T): T => {
     const out = make(a.length + b.length)
@@ -31,6 +31,7 @@ export function withFlush(contact: ContactResult): { edges: ContactEdges; flushF
       touchedBody: join(contact.touchedBody, flush.touchedBody, (n) => new Uint32Array(n)),
     },
     flushFrom: contact.edgeIds.length,
+    stretches: contact.stretches,
   }
 }
 

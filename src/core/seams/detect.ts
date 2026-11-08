@@ -9,7 +9,7 @@ import { buildBodyBvhs, insideByParity, wholeBvhFor, type BodyBvh } from './body
 import { chainEdges, edgeEnds, type Chain } from './chain'
 import { acrossFace, classifyJoint, isLap, meetsSecondPlate, patchWidth, thicknessBehind, type JointType } from './classify'
 import { confidence } from './confidence'
-import { contactTolerance, findContactEdges, type ContactEdges } from './contact'
+import { contactTolerance, findContactEdges, type ContactEdges, type ContactStretch } from './contact'
 import { extractCreaseEdges, type CreaseEdges, type CreaseResult } from './crease'
 import { buildSeamPoints, pointsFromPolyline, type NormalsOf, type SeamPoint } from './frames'
 import { contactInHollow, creaseInHollow, HOLLOW_STATIONS, type ContactStation } from './hollow'
@@ -115,11 +115,12 @@ export function detectSeams(model: MeshModel, settings: DetectSettings, context:
   }
 
   const creases = extractCreaseEdges(model, faces, settings.creaseAngleDeg)
-  const contact = bvhs.length > 1 ? withFlush(findContactEdges(model, faces, bvhs, settings.creaseAngleDeg)) : null
+  const contact = bvhs.length > 1 ? withFlush(findContactEdges(model, faces, bvhs, settings.creaseAngleDeg, minLength)) : null
   const loops = contact ? allAroundLoops(model, faces, contact.edges, contact.flushFrom, TURN_BREAK_DEG) : []
   // A convex edge that is part of a contact seam is already listed as one, so it is not a corner as well.
   const taken = new Set(contact?.edges.edgeIds.subarray(0, contact.flushFrom))
   for (const loop of loops) for (const k of loop.edges) taken.add(contact!.edges.edgeIds[k]!)
+  for (const stretch of contact?.stretches ?? []) taken.add(stretch.edge)
 
   const creaseBody = new Map<RawSeam, number>()
   const creaseSeams = seamsFromEdges('crease', creases, model, faces, minLength, {
@@ -141,7 +142,10 @@ export function detectSeams(model: MeshModel, settings: DetectSettings, context:
   found.push(...nonManifoldSeams(model, faces, settings, minLength, bvhOf, thicknessOf))
 
   if (contact) {
-    const touching = contactSeams(model, faces, contact.edges, contact.flushFrom, loops, minLength, strips, thicknessOf, hollowProbe, depthMm)
+    const touching = [
+      ...contactSeams(model, faces, contact.edges, contact.flushFrom, loops, minLength, strips, thicknessOf, hollowProbe, depthMm),
+      ...contact.stretches.map((stretch) => stretchSeam(model, faces, stretch, strips, thicknessOf, hollowProbe, depthMm)),
+    ]
     found.push(...dropDuplicateSeams(touching, contactTolerance(model.bounds.diagonal)), ...intersectionSeams(model, bvhs, minLength, thicknessOf))
   }
 
@@ -365,6 +369,43 @@ function contactSeams(
   })
 }
 
+// The touching stretch of an edge: a straight seam between the points where the edge was split.
+function stretchSeam(
+  model: MeshModel,
+  faces: FaceData,
+  stretch: ContactStretch,
+  strips: StripProbe,
+  thicknessOf: ThicknessOf,
+  hollowProbe: (body: number) => RayProbe | null,
+  offsetMm: number,
+): RawSeam {
+  const { from, to, freeFace, touchedNormal: touched, touchedBody } = stretch
+  const free: Vec3 = [faces.normals[freeFace * 3]!, faces.normals[freeFace * 3 + 1]!, faces.normals[freeFace * 3 + 2]!]
+  const { points, lengthMm } = pointsFromPolyline([from, to], false, () => [free, touched])
+  const t = normalize(sub(to, from))
+  const middle = scale(add(from, to), 0.5)
+  const strip = strips.atContact(freeFace, touched, touchedBody, middle, t)
+  const jointType = classifyJoint({ source: 'contact', closed: false, points, ...strip, convex: false })
+  const openingAngleDeg = 180 - (Math.acos(Math.max(-1, Math.min(1, dot(free, touched)))) * 180) / Math.PI
+  const area = (faces.areas[model.edges.faceA[stretch.edge]!]! + faces.areas[model.edges.faceB[stretch.edge]!]!) / 2
+  const own = hollowProbe(model.bodies.triangleBody[freeFace]!)
+  const stations = HOLLOW_STATIONS.map((f): ContactStation => ({ p: add(from, scale(sub(to, from), f)), t, free, touched }))
+  const inBore = own !== null && contactInHollow(stations, (widestMm) => patchWidth(model, faces, freeFace, middle, t, widestMm) >= widestMm, own, offsetMm)
+  return {
+    id: '',
+    source: 'contact',
+    concavity: 'known',
+    jointType,
+    hidden: inBore ? 'hollow' : false,
+    confidence: confidence({ lengthMm, openingDeg: openingAngleDeg, medianAdjacentAreaMm2: area, diagonal: model.bounds.diagonal, wholeJoint: true }),
+    closed: false,
+    lengthMm,
+    openingAngleDeg,
+    points,
+    thicknessMm: thicknessOf(points, jointType, strip),
+  }
+}
+
 // Wedges of one edge run along the same line, so each rank is chained on its own; chaining them together would
 // join the two coincident seams of a fused T into a loop.
 function nonManifoldSeams(
@@ -533,6 +574,8 @@ const STRIP_CAP_FRACTION = 0.1
 interface StripProbe {
   ofCrease: (edge: number) => Strip
   ofContact: (contact: ContactEdges, k: number) => Strip
+  // At a given place on the seam, for a stretch of an edge, whose middle may be off the touched body.
+  atContact: (freeFace: number, touched: Vec3, body: number, mid: Vec3, t: Vec3) => Strip
 }
 
 function stripProbe(model: MeshModel, faces: FaceData, bvhOf: (body: number) => MeshBVH | null): StripProbe {
@@ -581,6 +624,7 @@ function stripProbe(model: MeshModel, faces: FaceData, bvhOf: (body: number) => 
       }
       return best
     },
+    atContact: measure,
     ofContact(contact, k) {
       const { mid, t } = ends(contact.edgeIds[k]!)
       const o = k * 3

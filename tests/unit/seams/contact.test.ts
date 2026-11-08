@@ -145,6 +145,47 @@ describe('findContactEdges on a part over 500 mm across', () => {
   })
 })
 
+describe('contact stretches of an edge that touches along part of its length', () => {
+  const stretchesOf = (minMm: number, ...solids: number[][][]) => {
+    const model = buildMeshModel(soupOf(solids.flat()), 1)
+    const found = findContactEdges(model, computeFaceData(model.mesh), buildBodyBvhs(model), CREASE_DEG, minMm)
+    const whole = Array.from(found.edgeIds)
+    return { whole, stretches: found.stretches.map((s) => ({ ...s, lengthMm: Math.hypot(s.to[0] - s.from[0], s.to[1] - s.from[1], s.to[2] - s.from[2]) })) }
+  }
+  const rail = cubeTriangles([-500, -50, 0], [1000, 50, 25.4])
+  // A block butting the rail's side, 0.3 mm off it, standing 3.3 mm proud of the rail's top. The rail's top is at z 25.4.
+  const proud = cubeTriangles([-20, 0.3, 3.3], [40, 200, 25.4])
+
+  it('keeps the stretch within the tolerance of a side that stands proud of the surface at one end', () => {
+    const { stretches } = stretchesOf(10, rail, proud)
+    const sides = stretches.filter((s) => Math.abs(s.from[0]) === 20)
+    expect(sides).toHaveLength(2)
+    for (const side of sides) {
+      const [low, high] = [Math.min(side.from[2], side.to[2]), Math.max(side.from[2], side.to[2])]
+      expect(low).toBeCloseTo(3.3, 3)
+      // Past the rail's top the gap grows from 0.3 mm: 1 mm off is sqrt(1 - 0.3 x 0.3) above it.
+      expect(high).toBeCloseTo(25.4 + Math.sqrt(1 - 0.09), 1)
+    }
+  })
+
+  it('finds no stretch where the whole edge is over the tolerance away', () => {
+    const lifted = cubeTriangles([-20, 3.3, 3.3], [40, 200, 25.4])
+    expect(stretchesOf(10, rail, lifted).stretches).toEqual([])
+  })
+
+  it('drops a stretch shorter than the minimum', () => {
+    expect(stretchesOf(23.5, rail, proud).stretches.filter((s) => Math.abs(s.from[0]) === 20)).toEqual([])
+  })
+
+  it('finds none unless asked, and no stretch on an edge that touches along its whole length', () => {
+    expect(stretchesOf(Infinity, rail, proud).stretches).toEqual([])
+    const web = cubeTriangles([-100, -5, 25.4], [200, 10, 80])
+    const { whole, stretches } = stretchesOf(10, rail.map((t) => t.map((x, i) => (i % 3 === 1 ? x + 25 : x))), web)
+    expect(whole.length).toBeGreaterThan(0)
+    expect(stretches.filter((s) => whole.includes(s.edge))).toEqual([])
+  })
+})
+
 describe('flush contact edges', () => {
   const flushOf = (...solids: number[][][]) => {
     const model = buildMeshModel(soupOf(solids.flat()), 1)
