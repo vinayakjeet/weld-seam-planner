@@ -10,6 +10,8 @@ export const sampleEntrySchema = z.object({
   expectedCreaseSeams: z.number().int().nonnegative(),
   expectedContactSeams: z.number().int().nonnegative().default(0),
   expectedIntersectionSeams: z.number().int().nonnegative().default(0),
+  // Seams detected but hidden as inside a hollow section.
+  expectedHollowSeams: z.number().int().nonnegative().default(0),
 })
 
 export const sampleManifestSchema = z

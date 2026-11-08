@@ -89,6 +89,37 @@ function tankWithManhole(): Manifold[] {
   return [shell, ...transverse, ...longitudinal, coaming]
 }
 
+// 1 in square tube with a 1/8 in wall along one axis, from a to b, centred on (c1, c2) in the other two axes in
+// increasing axis order. Open at both ends, as cut from stock.
+function squareTube(axis: 0 | 1 | 2, a: number, b: number, centre: [number, number]): Manifold {
+  const SIDE = 25.4
+  const WALL = 3.18
+  const outer: number[][] = []
+  const inner: number[][] = []
+  let other = 0
+  for (let c = 0; c < 3; c++) {
+    if (c === axis) {
+      outer.push([a, b])
+      inner.push([a - 1, b + 1])
+    } else {
+      const mid = centre[other++]!
+      outer.push([mid - SIDE / 2, mid + SIDE / 2])
+      inner.push([mid - SIDE / 2 + WALL, mid + SIDE / 2 - WALL])
+    }
+  }
+  const [x, y, z] = outer as [number[], number[], number[]]
+  const [ix, iy, iz] = inner as [number[], number[], number[]]
+  return box(x[0]!, x[1]!, y[0]!, y[1]!, z[0]!, z[1]!).subtract(box(ix[0]!, ix[1]!, iy[0]!, iy[1]!, iz[0]!, iz[1]!))
+}
+
+// Ladder frame 600 x 300 mm: two rails along x and three rungs along y butting the rails' inner faces, five separate
+// bodies. Rung and rail are the same tube, so the top and bottom of each rung end lie flush with the rail.
+function tubeFrame(): Manifold[] {
+  const rails = [12.7, 287.3].map((y) => squareTube(0, 0, 600, [y, 12.7]))
+  const rungs = [50, 300, 550].map((x) => squareTube(1, 25.4, 274.6, [x, 12.7]))
+  return [...rails, ...rungs]
+}
+
 type Soup = number[]
 
 type Flip = (solid: number, centroid: number[], normal: number[]) => boolean
@@ -161,17 +192,18 @@ interface Sample extends SampleEntry {
   ascii: boolean
 }
 
-type Counted = 'expectedContactSeams' | 'expectedIntersectionSeams'
+type Counted = 'expectedContactSeams' | 'expectedIntersectionSeams' | 'expectedHollowSeams'
 
 function sample(
   fields: Omit<SampleEntry, 'file' | 'bodies' | Counted> &
     Partial<Pick<SampleEntry, Counted>> & { solids: Manifold[]; scale?: number; ascii?: boolean; flip?: Flip },
 ): Sample {
-  const { solids, scale = 1, ascii = false, flip, expectedContactSeams = 0, expectedIntersectionSeams = 0, ...entry } = fields
+  const { solids, scale = 1, ascii = false, flip, expectedContactSeams = 0, expectedIntersectionSeams = 0, expectedHollowSeams = 0, ...entry } = fields
   return {
     ...entry,
     expectedContactSeams,
     expectedIntersectionSeams,
+    expectedHollowSeams,
     file: `${entry.id}.stl`,
     bodies: solids.length,
     soup: toSoup(solids, flip).map((x) => x * scale),
@@ -287,6 +319,18 @@ const samples: Sample[] = [
     // adds its outer loop on the roof; its inner edge fails the overhang test (2 mm land to the hole rim).
     expectedContactSeams: 4 * 2 + 1,
   }),
+  sample({
+    id: 'tube-frame',
+    name: 'Tube frame',
+    description: 'Ladder frame of 1 in square tubes with a 1/8 in wall, rungs butting the rails: one weld all around each rung end',
+    units: 'mm',
+    solids: tubeFrame(),
+    expectedCreaseSeams: 0, // every crease is an inside corner of a tube, hidden as hollow = 0
+    // 3 rungs x 2 ends, each one closed loop of 4 x 25.4 mm: two fillet sides and two sides flush with the rail = 6
+    expectedContactSeams: 3 * 2,
+    // 5 tubes x 4 inside corners + 6 rung ends x 1 loop round the bore (4 x 19.04 mm), all inside a tube = 26
+    expectedHollowSeams: 5 * 4 + 3 * 2,
+  }),
 ]
 
 mkdirSync(OUT_DIR, { recursive: true })
@@ -307,6 +351,7 @@ const manifest = sampleManifestSchema.parse({
     expectedCreaseSeams: s.expectedCreaseSeams,
     expectedContactSeams: s.expectedContactSeams,
     expectedIntersectionSeams: s.expectedIntersectionSeams,
+    expectedHollowSeams: s.expectedHollowSeams,
   })),
 })
 writeFileSync(`${OUT_DIR}manifest.json`, `${JSON.stringify(manifest, null, 2)}\n`)

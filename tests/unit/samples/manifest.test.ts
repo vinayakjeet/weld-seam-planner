@@ -14,6 +14,7 @@ const IDS = [
   'bar-through-plate',
   'flipped-normals',
   'tank-with-manhole',
+  'tube-frame',
 ]
 
 const entry = {
@@ -41,13 +42,14 @@ describe('sampleManifestSchema', () => {
     expect(sampleManifestSchema.safeParse(bad).success).toBe(false)
   })
 
-  it('defaults the contact and intersection counts to 0', () => {
+  it('defaults the contact, intersection and hollow counts to 0', () => {
     const parsed = sampleManifestSchema.parse({ version: 1, samples: [entry] })
-    expect([parsed.samples[0]!.expectedContactSeams, parsed.samples[0]!.expectedIntersectionSeams]).toEqual([0, 0])
+    const [s] = parsed.samples
+    expect([s!.expectedContactSeams, s!.expectedIntersectionSeams, s!.expectedHollowSeams]).toEqual([0, 0, 0])
   })
 
   it('rejects a negative expected contact or intersection count', () => {
-    for (const field of ['expectedContactSeams', 'expectedIntersectionSeams']) {
+    for (const field of ['expectedContactSeams', 'expectedIntersectionSeams', 'expectedHollowSeams']) {
       const bad = { version: 1, samples: [{ ...entry, [field]: -1 }] }
       expect(sampleManifestSchema.safeParse(bad).success, field).toBe(false)
     }
@@ -63,7 +65,7 @@ describe('public/samples', () => {
   const manifest = readManifest()
   const byId = new Map(manifest.samples.map((s) => [s.id, s]))
 
-  it('lists the eleven samples once each', () => {
+  it('lists the twelve samples once each', () => {
     expect(manifest.samples.map((s) => s.id).sort()).toEqual([...IDS].sort())
   })
 
@@ -91,7 +93,7 @@ describe('public/samples', () => {
 
   it('declares t-joint-inch in inches and the rest in millimetres', () => {
     expect(byId.get('t-joint-inch')?.units).toBe('in')
-    expect(manifest.samples.filter((s) => s.units === 'mm')).toHaveLength(10)
+    expect(manifest.samples.filter((s) => s.units === 'mm')).toHaveLength(11)
   })
 
   it('describes box-beam as the welded box girder', () => {
@@ -114,7 +116,21 @@ describe('public/samples', () => {
       'pipe-on-plate': 0,
       'double-bottom-cell': 50,
       'tank-with-manhole': 9,
+      'tube-frame': 6,
     })
+  })
+
+  // 2 rails and 3 rungs of hollow tube, 4 inside corners each, and the bore of each of the 6 rung ends.
+  it('records the hand-derived hollow counts: only the tube frame has the inside of a tube', () => {
+    const hollow = Object.fromEntries(manifest.samples.map((s) => [s.id, s.expectedHollowSeams]))
+    expect(hollow['tube-frame']).toBe(5 * 4 + 6)
+    expect(Object.entries(hollow).filter(([id]) => id !== 'tube-frame').every(([, n]) => n === 0)).toBe(true)
+  })
+
+  it('labels the tube frame card and gives it five bodies', () => {
+    const frame = byId.get('tube-frame')
+    expect(frame?.name).toBe('Tube frame')
+    expect([frame?.units, frame?.bodies]).toEqual(['mm', 5])
   })
 
   it('names the tank sample and gives it six bodies', () => {
@@ -153,6 +169,7 @@ describe('public/samples', () => {
       'bar-through-plate': [2, 0],
       'flipped-normals': [2, 4],
       'tank-with-manhole': [6, 12],
+      'tube-frame': [5, 0],
     }
     for (const [id, [bodies, seams]] of Object.entries(expected)) {
       expect([byId.get(id)?.bodies, byId.get(id)?.expectedCreaseSeams], id).toEqual([bodies, seams])

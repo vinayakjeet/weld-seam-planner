@@ -24,6 +24,7 @@ describe('detectSeams against the hand-derived manifest', () => {
     expect(countBy(seams, 'contact'), 'contact').toBe(entry.expectedContactSeams)
     expect(countBy(seams, 'intersection'), 'intersection').toBe(entry.expectedIntersectionSeams)
     expect(seams, 'total').toHaveLength(entry.expectedCreaseSeams + entry.expectedContactSeams + entry.expectedIntersectionSeams)
+    expect(detectAll(id).filter((s) => s.hidden === 'hollow'), 'hollow').toHaveLength(entry.expectedHollowSeams)
   })
 })
 
@@ -458,9 +459,10 @@ describe('corner candidates', () => {
     for (const seam of detect('t-joint-merged')) expect(seam.hidden).toBe(false)
   })
 
-  // Only two samples have an outside corner where two plates meet: the heel of the L bracket and the 12 outer edges of
-  // the tank shell. Every other convex edge in the samples is the edge of one plate, a web or a bar.
-  const CORNERS: Record<string, number> = { 'l-bracket-gussets': 1, 'tank-with-manhole': 12 }
+  // Only three samples have an outside corner where two plates meet: the heel of the L bracket, the 12 outer edges of
+  // the tank shell and the 4 outer edges of each tube of the tube frame. Every other convex edge in the samples is the
+  // edge of one plate, a web or a bar.
+  const CORNERS: Record<string, number> = { 'l-bracket-gussets': 1, 'tank-with-manhole': 12, 'tube-frame': 5 * 4 }
 
   it('finds the hidden corners each sample has and keeps them out of the visible counts', () => {
     for (const { id } of readManifest().samples) {
@@ -523,6 +525,36 @@ describe('corner candidates', () => {
   })
 })
 
+// The regression part for the four fixes found on a go-kart frame: tube interiors hidden, tube joints scored and taken
+// by accept all, no lap read from an edge, and one weld all round each tube end.
+describe('tube frame', () => {
+  const all = detectAll('tube-frame')
+  const seams = shown(all)
+
+  it('offers one closed weld all round each of the 6 rung ends and nothing else', () => {
+    expect(seams).toHaveLength(6)
+    for (const seam of seams) {
+      expect([seam.source, seam.jointType, seam.closed], seam.label).toEqual(['contact', 'fillet', true])
+      expect(seam.lengthMm, seam.label).toBeCloseTo(4 * 25.4, 2)
+      expect(seam.openingAngleDeg, seam.label).toBeCloseTo(90, 1)
+      expect(seam.thicknessMm, seam.label).toEqual([3.18, 3.18])
+    }
+  })
+
+  it('scores every joint at 0.8 or more, so accept all above 0.70 takes exactly the 6 joints', () => {
+    for (const seam of seams) expect(seam.confidence, seam.label).toBeGreaterThanOrEqual(0.8)
+    const taken = all.filter((s) => s.hidden !== 'hollow' && s.hidden !== 'corner' && s.confidence >= 0.7)
+    expect(taken.map((s) => s.id).sort()).toEqual(seams.map((s) => s.id).sort())
+  })
+
+  it('hides the 4 inside corners of every tube and the bore of every rung end, and reads no lap', () => {
+    const hollow = all.filter((s) => s.hidden === 'hollow')
+    expect(hollow.filter((s) => s.source === 'crease')).toHaveLength(5 * 4)
+    expect(hollow.filter((s) => s.source === 'contact').map((s) => [s.closed, Math.round(s.lengthMm * 100) / 100])).toEqual(Array(6).fill([true, 76.16]))
+    expect(all.filter((s) => s.jointType === 'lap')).toEqual([])
+  })
+})
+
 describe('weld all around', () => {
   // A 1 in tube with a 1/8 in wall butting the side of another at x 287.3: its top and bottom are flush with the rail.
   const rail = boxTube(25.4, 25.4, 3.18, 600, (u, v, w) => [w, u, v])
@@ -561,9 +593,9 @@ describe('weld all around', () => {
 })
 
 describe('seams inside hollow sections', () => {
-  // No sample has a tube or a closed box under 150 mm across: the tank, the double-bottom cell and the box girder are
-  // wide or open inside, so none of their seams is hidden as hollow.
-  const HOLLOW: Record<string, number> = {}
+  // Only the tube frame has a tube or a closed box under 150 mm across: the tank, the double-bottom cell and the box
+  // girder are wide or open inside, so none of their seams is hidden as hollow.
+  const HOLLOW: Record<string, number> = { 'tube-frame': 5 * 4 + 6 }
 
   it('finds the hollow seams each sample has, as fillets kept out of the visible counts', () => {
     for (const { id } of readManifest().samples) {

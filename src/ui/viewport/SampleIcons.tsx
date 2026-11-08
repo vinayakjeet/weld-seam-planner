@@ -119,6 +119,23 @@ export function TankWithManholeIcon() {
   )
 }
 
+// Top view: two rails, three rungs, a bead round each rung end.
+export function TubeFrameIcon() {
+  return (
+    <Frame>
+      <rect x="10" y="12" width="76" height="6" />
+      <rect x="10" y="46" width="76" height="6" />
+      {[18, 45, 72].map((x) => (
+        <rect key={x} x={x} y="18" width="6" height="28" />
+      ))}
+      {[18, 45, 72].flatMap((x) => [
+        <Bead key={`t-${x}`} x={x} y={18} dx={-1} dy={1} size={4} />,
+        <Bead key={`b-${x}`} x={x + 6} y={46} dx={1} dy={-1} size={4} />,
+      ])}
+    </Frame>
+  )
+}
+
 export function GenericPartIcon() {
   return (
     <Frame>
@@ -138,6 +155,7 @@ const ICONS_BY_PREFIX: [string, ComponentType][] = [
   ['flipped-normals', FlippedNormalsIcon],
   ['double-bottom-cell', DoubleBottomCellIcon],
   ['tank-with-manhole', TankWithManholeIcon],
+  ['tube-frame', TubeFrameIcon],
 ]
 
 export function iconForSample(id: string): ComponentType {

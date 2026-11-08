@@ -73,13 +73,16 @@ describe('allAroundLoops', () => {
     expect(loopsOf(modelOf(plate, cubeTriangles([-41, -10, 10], [82, 20, 50]))).loops).toEqual([])
   })
 
-  it('finds no new loop on the samples: the only one is the coaming ring of the tank, already a closed seam', () => {
+  it('finds a new loop only on the tube frame: elsewhere the only one is the coaming ring of the tank, already a closed seam', () => {
+    const expected: Record<string, number[]> = {
+      // The coaming is a 64-gon of radius 308 mm: 64 chords of 2 x 308 sin(pi / 64).
+      'tank-with-manhole': [Math.round(128 * 308 * Math.sin(Math.PI / 64) * 100) / 100],
+      // Each of the 6 rung ends: the bore and the outside.
+      'tube-frame': [...Array(6).fill(76.16), ...Array(6).fill(101.6)],
+    }
     for (const { id } of readManifest().samples) {
       const model = loadSampleModel(id)
-      if (model.bodies.count < 2) continue
-      const { lengths } = loopsOf(model)
-      // The coaming is a 64-gon of radius 308 mm: 64 chords of 2 x 308 sin(pi / 64).
-      expect(lengths, id).toEqual(id === 'tank-with-manhole' ? [Math.round(128 * 308 * Math.sin(Math.PI / 64) * 100) / 100] : [])
+      if (model.bodies.count > 1) expect(loopsOf(model).lengths, id).toEqual(expected[id] ?? [])
     }
   })
 })

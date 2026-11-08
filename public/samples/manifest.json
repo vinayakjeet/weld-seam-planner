@@ -10,7 +10,8 @@
       "bodies": 1,
       "expectedCreaseSeams": 2,
       "expectedContactSeams": 0,
-      "expectedIntersectionSeams": 0
+      "expectedIntersectionSeams": 0,
+      "expectedHollowSeams": 0
     },
     {
       "id": "t-joint-assembly",
@@ -21,7 +22,8 @@
       "bodies": 2,
       "expectedCreaseSeams": 0,
       "expectedContactSeams": 2,
-      "expectedIntersectionSeams": 0
+      "expectedIntersectionSeams": 0,
+      "expectedHollowSeams": 0
     },
     {
       "id": "t-joint-inch",
@@ -32,7 +34,8 @@
       "bodies": 1,
       "expectedCreaseSeams": 2,
       "expectedContactSeams": 0,
-      "expectedIntersectionSeams": 0
+      "expectedIntersectionSeams": 0,
+      "expectedHollowSeams": 0
     },
     {
       "id": "t-joint-ascii",
@@ -43,7 +46,8 @@
       "bodies": 1,
       "expectedCreaseSeams": 2,
       "expectedContactSeams": 0,
-      "expectedIntersectionSeams": 0
+      "expectedIntersectionSeams": 0,
+      "expectedHollowSeams": 0
     },
     {
       "id": "l-bracket-gussets",
@@ -54,7 +58,8 @@
       "bodies": 1,
       "expectedCreaseSeams": 16,
       "expectedContactSeams": 0,
-      "expectedIntersectionSeams": 0
+      "expectedIntersectionSeams": 0,
+      "expectedHollowSeams": 0
     },
     {
       "id": "box-beam",
@@ -65,7 +70,8 @@
       "bodies": 1,
       "expectedCreaseSeams": 8,
       "expectedContactSeams": 0,
-      "expectedIntersectionSeams": 0
+      "expectedIntersectionSeams": 0,
+      "expectedHollowSeams": 0
     },
     {
       "id": "pipe-on-plate",
@@ -76,7 +82,8 @@
       "bodies": 1,
       "expectedCreaseSeams": 2,
       "expectedContactSeams": 0,
-      "expectedIntersectionSeams": 0
+      "expectedIntersectionSeams": 0,
+      "expectedHollowSeams": 0
     },
     {
       "id": "double-bottom-cell",
@@ -87,7 +94,8 @@
       "bodies": 7,
       "expectedCreaseSeams": 6,
       "expectedContactSeams": 50,
-      "expectedIntersectionSeams": 0
+      "expectedIntersectionSeams": 0,
+      "expectedHollowSeams": 0
     },
     {
       "id": "bar-through-plate",
@@ -98,7 +106,8 @@
       "bodies": 2,
       "expectedCreaseSeams": 0,
       "expectedContactSeams": 0,
-      "expectedIntersectionSeams": 2
+      "expectedIntersectionSeams": 2,
+      "expectedHollowSeams": 0
     },
     {
       "id": "flipped-normals",
@@ -109,7 +118,8 @@
       "bodies": 2,
       "expectedCreaseSeams": 4,
       "expectedContactSeams": 0,
-      "expectedIntersectionSeams": 0
+      "expectedIntersectionSeams": 0,
+      "expectedHollowSeams": 0
     },
     {
       "id": "tank-with-manhole",
@@ -120,7 +130,20 @@
       "bodies": 6,
       "expectedCreaseSeams": 12,
       "expectedContactSeams": 9,
-      "expectedIntersectionSeams": 0
+      "expectedIntersectionSeams": 0,
+      "expectedHollowSeams": 0
+    },
+    {
+      "id": "tube-frame",
+      "file": "tube-frame.stl",
+      "name": "Tube frame",
+      "description": "Ladder frame of 1 in square tubes with a 1/8 in wall, rungs butting the rails: one weld all around each rung end",
+      "units": "mm",
+      "bodies": 5,
+      "expectedCreaseSeams": 0,
+      "expectedContactSeams": 6,
+      "expectedIntersectionSeams": 0,
+      "expectedHollowSeams": 26
     }
   ]
 }

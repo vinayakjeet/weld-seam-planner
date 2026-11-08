@@ -11,7 +11,7 @@ Author: Vinayakjeet Singh Karki, f20221641@pilani.bits-pilani.ac.in
 - Live app: https://weld-seam-planner.vercel.app
 - Snake-arm demo in one click: https://weld-seam-planner.vercel.app/?sample=tank-with-manhole&demo=1
 
-The demo link loads the tank sample, accepts its seams with the spray procedure, places a port on the manhole, runs reach, and stops the arm at a reached station on seam S16, inside the tank where no rigid torch fits. `demo=1` is defined only for `tank-with-manhole`; on any other sample the link loads the sample normally and says so in a notice. `?sample=<id>` alone opens any of the eleven built-in samples. An unknown id shows a readable error: the id is only ever compared with the ids in the sample manifest, so no value in the address can reach a fetch. The `main` branch deploys to the production URL; every other branch gets its own Vercel preview URL.
+The demo link loads the tank sample, accepts its seams with the spray procedure, places a port on the manhole, runs reach, and stops the arm at a reached station on seam S16, inside the tank where no rigid torch fits. `demo=1` is defined only for `tank-with-manhole`; on any other sample the link loads the sample normally and says so in a notice. `?sample=<id>` alone opens any of the twelve built-in samples. An unknown id shows a readable error: the id is only ever compared with the ids in the sample manifest, so no value in the address can reach a fetch. The `main` branch deploys to the production URL; every other branch gets its own Vercel preview URL.
 
 ## Quick start
 
@@ -377,7 +377,7 @@ Measured with `npx tsx scripts/key-numbers.ts` in Node 24 on an Intel i7-14700HX
 
 - **Unit guess:** the split between inches and metres for a part about 1 unit across needs real SolidWorks exports to choose; the app asks when it is unsure.
 - **Bodies:** an STL has no body ids, so bodies that share a welded vertex fuse into one, and contact and intersection passes trust the winding of open or non-orientable bodies.
-- **Vertex noise:** with 0.02 mm of noise on every vertex at the default weld tolerance, short low-confidence creases appear beside holes on some samples (8 of 20 runs on l-bracket-gussets, 12 on box-beam, 15 on pipe-on-plate, 1 on the tank). Raising the weld tolerance removes most of them; box-beam keeps a spurious crease in 7 of 20 runs. Seams found again keep their ids (99.4 percent of 5,200 comparisons).
+- **Vertex noise:** with 0.02 mm of noise on every vertex at the default weld tolerance, short low-confidence creases appear beside holes on some samples (8 of 20 runs on l-bracket-gussets, 12 on box-beam, 15 on pipe-on-plate, 1 on the tank). Raising the weld tolerance removes most of them; box-beam keeps a spurious crease in 7 of 20 runs. Seams found again keep their ids (99.4 percent of 5,200 comparisons). Hidden seams are the exception: the inside corners of the tube frame lie 0.03 mm from a 0.1 mm step of the id, because its 3.18 mm wall puts them 3.18 and 22.22 mm from the box corner, so this noise moved 2 of their ids in 545 comparisons over 3 seeds; no visible seam's id moved.
 - **Faceted curves:** a faceted 50 mm bar measures 49.97 mm; the true cylinder is not in the file.
 - **Drawn seams on open surface** read "Fillet ?": with no second plate, inside and outside are undefined. Plate thickness is set per seam, not for a selection.
 - **Positions:** PE (groove overhead) is not produced; groove welds are out of scope, so overhead fillets report PD.

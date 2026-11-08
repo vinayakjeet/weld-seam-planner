@@ -4,7 +4,8 @@ import type { SeamPoint } from './frames'
 // Positions are quantised to 0.1 mm. The length is quantised to 1 mm: it is a difference of the seam's end points, so
 // it moves by the noise of two vertices while a centre moves by a fraction of it. Measured on the 11 samples with 0.02 mm
 // of noise on every vertex (2600 seam comparisons, loops started elsewhere, part moved far away): 0 id changes with the
-// length at 1 mm, 3 with it at 0.1 mm.
+// length at 1 mm, 3 with it at 0.1 mm. The tube frame added later has inside corners 0.03 mm from a step (its wall is
+// 3.18 mm): 2 of its hidden seams changed id in 545 comparisons over the 12 samples, no visible one.
 const POSITION_STEP_MM = 0.1
 const LENGTH_STEP_MM = 1
 
