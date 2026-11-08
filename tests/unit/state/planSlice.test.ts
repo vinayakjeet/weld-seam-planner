@@ -313,7 +313,7 @@ describe('multi-select', () => {
   })
 
   it('follows the visible order: hidden corner candidates are not in a range', () => {
-    useStore.setState({ seams: [seam('a'), { ...seam('h'), hidden: true }, seam('b')] })
+    useStore.setState({ seams: [seam('a'), { ...seam('h'), hidden: 'corner' }, seam('b')] })
     state().select('a')
     state().select('b', 'range')
     expect(state().selectedIds).toEqual(['a', 'b'])

@@ -55,7 +55,8 @@ function selectMode(e: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }
 }
 
 function EmptyMessage({ partLoaded, busy }: { partLoaded: boolean; busy: boolean }) {
-  const hiddenCorners = useStore((s) => s.seams.reduce((n, seam) => n + (seam.hidden ? 1 : 0), 0))
+  const hiddenCorners = useStore((s) => s.seams.reduce((n, seam) => n + (seam.hidden === 'corner' ? 1 : 0), 0))
+  const hiddenHollow = useStore((s) => s.seams.reduce((n, seam) => n + (seam.hidden === 'hollow' ? 1 : 0), 0))
   if (!partLoaded) {
     return (
       <p>
@@ -66,7 +67,7 @@ function EmptyMessage({ partLoaded, busy }: { partLoaded: boolean; busy: boolean
     )
   }
   if (busy) return <p>Detecting seams.</p>
-  return <p>{noSeamsMessage(hiddenCorners)}</p>
+  return <p>{noSeamsMessage(hiddenCorners, hiddenHollow)}</p>
 }
 
 function AcceptAll() {

@@ -4,7 +4,7 @@ import { DEFAULT_WELD_TOLERANCE } from '../core/mesh/weld'
 import { DEFAULT_DETECT_SETTINGS, type DetectSettings, type SeamCandidate } from '../core/seams/detect'
 import { isManualError, mergeSeams, reverseSeam, splitSeam, trimSeam, type ManualError } from '../core/seams/manual'
 import { replaceInOrder } from '../core/sequence/order'
-import { selectAllSeams, visibleSeams } from './selectors'
+import { selectAllSeams, visibleSeams, type ShowHidden } from './selectors'
 import type { AppState } from './store'
 
 export type SeamStatus = 'accepted' | 'rejected'
@@ -27,8 +27,9 @@ export interface SeamsSlice {
   supersededIds: string[]
   // Numbering for drawn seams. Not history, so a number is never reused after an undo.
   nextDrawnId: number
-  // A view setting, so it is not part of undo history.
+  // View settings, so they are not part of undo history.
   showCorners: boolean
+  showHollow: boolean
   // The primary seam: the one the viewport and the torch preview follow, and the last one clicked.
   selectedId: string | null
   // Every selected seam. selectedId is one of them, or null when none is selected.
@@ -58,6 +59,7 @@ export interface SeamsSlice {
   // Only manual seams can be deleted; a detected one is rejected instead.
   remove: (id: string) => ManualError | null
   setShowCorners: (show: boolean) => void
+  setShowHollow: (show: boolean) => void
   // Ctrl or Cmd click toggles, Shift click selects the visible range from the anchor.
   select: (id: string | null, mode?: SelectMode) => void
   hover: (id: string | null) => void
@@ -154,6 +156,21 @@ function replaceSeams(state: AppState, parents: SeamCandidate[], children: SeamC
   }
 }
 
+// Turns a kind of hidden seam on or off; a seam that goes out of view with it leaves the selection and the hover.
+function switchHidden(state: AppState, change: Partial<ShowHidden>): Partial<AppState> {
+  const show = { showCorners: state.showCorners, showHollow: state.showHollow, ...change }
+  if (show.showCorners === state.showCorners && show.showHollow === state.showHollow) return state
+  const visible = new Set(visibleSeams(state.seams, show, state.statusById).map((seam) => seam.id))
+  const gone = (id: string | null) => id !== null && !visible.has(id) && state.seams.some((seam) => seam.id === id)
+  return {
+    ...change,
+    selectedId: gone(state.selectedId) ? null : state.selectedId,
+    selectedIds: state.selectedIds.some(gone) ? state.selectedIds.filter((id) => !gone(id)) : state.selectedIds,
+    rangeAnchor: gone(state.rangeAnchor) ? null : state.rangeAnchor,
+    hoverId: gone(state.hoverId) ? null : state.hoverId,
+  }
+}
+
 export const createSeamsSlice: StateCreator<AppState, [], [], SeamsSlice> = (set, get) => ({
   seams: [],
   statusById: {},
@@ -162,6 +179,7 @@ export const createSeamsSlice: StateCreator<AppState, [], [], SeamsSlice> = (set
   supersededIds: [],
   nextDrawnId: 1,
   showCorners: false,
+  showHollow: false,
   selectedId: null,
   selectedIds: [],
   rangeAnchor: null,
@@ -183,8 +201,9 @@ export const createSeamsSlice: StateCreator<AppState, [], [], SeamsSlice> = (set
     set((state) => {
       const statusById = { ...state.statusById }
       let changed = false
-      for (const seam of visibleSeams(selectAllSeams(state), state.showCorners, state.statusById)) {
-        if (seam.confidence >= minConfidence && statusById[seam.id] !== 'accepted') {
+      // No torch fits inside a tube or a closed box, so a seam there is only ever accepted on its own.
+      for (const seam of visibleSeams(selectAllSeams(state), state, state.statusById)) {
+        if (seam.hidden !== 'hollow' && seam.confidence >= minConfidence && statusById[seam.id] !== 'accepted') {
           statusById[seam.id] = 'accepted'
           changed = true
         }
@@ -334,18 +353,8 @@ export const createSeamsSlice: StateCreator<AppState, [], [], SeamsSlice> = (set
     return null
   },
 
-  setShowCorners: (showCorners) =>
-    set((state) => {
-      if (state.showCorners === showCorners) return state
-      const hiddenNow = (id: string | null) => !showCorners && id !== null && state.statusById[id] !== 'accepted' && state.seams.some((s) => s.id === id && s.hidden)
-      return {
-        showCorners,
-        selectedId: hiddenNow(state.selectedId) ? null : state.selectedId,
-        selectedIds: state.selectedIds.filter((id) => !hiddenNow(id)),
-        rangeAnchor: hiddenNow(state.rangeAnchor) ? null : state.rangeAnchor,
-        hoverId: hiddenNow(state.hoverId) ? null : state.hoverId,
-      }
-    }),
+  setShowCorners: (showCorners) => set((state) => switchHidden(state, { showCorners })),
+  setShowHollow: (showHollow) => set((state) => switchHidden(state, { showHollow })),
 
   select: (id, mode = 'replace') =>
     set((state) => {
@@ -360,7 +369,7 @@ export const createSeamsSlice: StateCreator<AppState, [], [], SeamsSlice> = (set
         const selectedId = state.selectedId === id ? (selectedIds[selectedIds.length - 1] ?? null) : state.selectedId
         return { selectedId, selectedIds, rangeAnchor: selectedId }
       }
-      const order = visibleSeams(selectAllSeams(state), state.showCorners, state.statusById).map((seam) => seam.id)
+      const order = visibleSeams(selectAllSeams(state), state, state.statusById).map((seam) => seam.id)
       const from = state.rangeAnchor === null ? -1 : order.indexOf(state.rangeAnchor)
       const to = order.indexOf(id)
       if (from < 0 || to < 0) return only(id)

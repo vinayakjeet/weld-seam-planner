@@ -4,7 +4,7 @@ import { isManualError } from '../../../src/core/seams/manual'
 import type { SeamCandidate } from '../../../src/core/seams/detect'
 import { selectAllSeams } from '../../../src/state/selectors'
 import { STEPS, useStore } from '../../../src/state/store'
-import { corner, resetStore, seam } from '../helpers/state'
+import { corner, hollow, resetStore, seam } from '../helpers/state'
 
 const temporal = () => useStore.temporal.getState()
 const state = () => useStore.getState()
@@ -217,6 +217,56 @@ describe('corner candidates in the store', () => {
     state().select('a')
     state().setShowCorners(false)
     expect(state().selectedId).toBe('a')
+  })
+})
+
+describe('seams inside hollow sections in the store', () => {
+  beforeEach(() => {
+    useStore.setState({ seams: [seam('a', 0.9), hollow('h', 0.95), corner('c', 0.95)] })
+  })
+
+  it('keeps them hidden by default', () => {
+    expect(state().showHollow).toBe(false)
+  })
+
+  it('never accepts them with accept all, even when they are shown', () => {
+    state().setShowHollow(true)
+    state().setShowCorners(true)
+    state().acceptAbove(0.5)
+    expect(state().statusById).toEqual({ a: 'accepted', c: 'accepted' })
+  })
+
+  it('lets the user accept one by hand once they are shown', () => {
+    state().setShowHollow(true)
+    state().toggleAccepted('h')
+    expect(state().statusById).toEqual({ h: 'accepted' })
+  })
+
+  it('does not make the switch an undo step', () => {
+    state().setShowHollow(true)
+    state().setShowHollow(false)
+    expect(temporal().pastStates).toHaveLength(0)
+  })
+
+  it('clears a selected or hovered hollow seam when they are hidden again, and keeps a visible one', () => {
+    state().setShowHollow(true)
+    state().select('h')
+    state().hover('h')
+    state().setShowHollow(false)
+    expect(state().selectedId).toBeNull()
+    expect(state().hoverId).toBeNull()
+    state().setShowHollow(true)
+    state().select('a')
+    state().setShowHollow(false)
+    expect(state().selectedId).toBe('a')
+  })
+
+  it('keeps corner candidates hidden when only hollow seams are shown', () => {
+    state().setShowCorners(true)
+    state().select('c')
+    state().setShowHollow(true)
+    state().setShowHollow(false)
+    expect(state().selectedId).toBe('c')
   })
 })
 

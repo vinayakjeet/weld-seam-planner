@@ -27,7 +27,8 @@ const seamSchema = z.object({
   source: z.enum(SEAM_SOURCES),
   concavity: z.enum(['known', 'unknown']),
   jointType: z.enum(JOINT_TYPES),
-  hidden: z.boolean(),
+  // Manual seams are never hidden; the reasons are listed so that the type matches detected seams.
+  hidden: z.union([z.literal(false), z.enum(['corner', 'hollow'])]),
   confidence: z.number(),
   closed: z.boolean(),
   lengthMm: z.number().min(0),

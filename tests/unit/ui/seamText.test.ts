@@ -41,7 +41,20 @@ describe('noSeamsMessage', () => {
     expect(noSeamsMessage(12)).toContain('Show corner candidates')
   })
 
+  it('points to the hollow switch when seams inside hollow sections are hidden, in singular and plural', () => {
+    expect(noSeamsMessage(0, 1)).toContain('1 seam inside a hollow section is hidden')
+    expect(noSeamsMessage(0, 4)).toContain('4 seams inside hollow sections are hidden')
+    expect(noSeamsMessage(0, 4)).toContain('Show seams inside hollow sections')
+    expect(noSeamsMessage(0, 4)).not.toContain('corner')
+  })
+
+  it('names both switches when both kinds are hidden', () => {
+    const text = noSeamsMessage(1, 4)
+    expect(text).toContain('1 corner candidate and 4 seams inside hollow sections are hidden')
+    expect(text).toContain('Show corner candidates or Show seams inside hollow sections')
+  })
+
   it('never uses an en or em dash', () => {
-    for (const n of [0, 1, 5]) expect(noSeamsMessage(n)).not.toMatch(/[\u2013\u2014]/)
+    for (const n of [0, 1, 5]) for (const h of [0, 1, 5]) expect(noSeamsMessage(n, h)).not.toMatch(/[\u2013\u2014]/)
   })
 })

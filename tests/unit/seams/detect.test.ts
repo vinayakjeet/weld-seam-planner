@@ -387,7 +387,7 @@ describe('corner candidates', () => {
   it('offers the heel of a merged L as the one hidden corner, beside its inside fillet', () => {
     const all = detectSeams(l(), DEFAULT_DETECT_SETTINGS)
     expect(shown(all).map((s) => [s.source, s.jointType])).toEqual([['crease', 'fillet']])
-    const corners = all.filter((s) => s.hidden)
+    const corners = all.filter((s) => s.hidden === 'corner')
     expect(corners).toHaveLength(1)
     const [heel] = corners
     expect(heel!.jointType).toBe('corner')
@@ -410,16 +410,16 @@ describe('corner candidates', () => {
 
   it('offers no corner on the plate and web edges of the T-joints', () => {
     for (const id of ['t-joint-merged', 't-joint-assembly', 'flipped-normals']) {
-      expect(detectAll(id).filter((s) => s.hidden), id).toEqual([])
+      expect(detectAll(id).filter((s) => s.hidden === 'corner'), id).toEqual([])
     }
   })
 
   it('skips the corner pass on a part above the triangle limit and keeps the fillets', () => {
     const model = l()
     const all = detectSeams(model, DEFAULT_DETECT_SETTINGS, { maxCornerTriangles: model.mesh.triangleCount - 1 })
-    expect(all.filter((s) => s.hidden)).toEqual([])
+    expect(all.filter((s) => s.hidden === 'corner')).toEqual([])
     expect(shown(all)).toHaveLength(1)
-    expect(detectSeams(model, DEFAULT_DETECT_SETTINGS, { maxCornerTriangles: model.mesh.triangleCount }).filter((s) => s.hidden)).toHaveLength(1)
+    expect(detectSeams(model, DEFAULT_DETECT_SETTINGS, { maxCornerTriangles: model.mesh.triangleCount }).filter((s) => s.hidden === 'corner')).toHaveLength(1)
   })
 
   it('marks visible seams as not hidden', () => {
@@ -433,17 +433,17 @@ describe('corner candidates', () => {
   it('finds the hidden corners each sample has and keeps them out of the visible counts', () => {
     for (const { id } of readManifest().samples) {
       const all = detectAll(id)
-      expect(all.filter((s) => s.hidden).length, id).toBe(CORNERS[id] ?? 0)
-      expect(all.filter((s) => s.hidden).every((s) => s.jointType === 'corner'), id).toBe(true)
-      expect(all.filter((s) => !s.hidden).every((s) => s.jointType !== 'corner'), id).toBe(true)
+      expect(all.filter((s) => s.hidden === 'corner').length, id).toBe(CORNERS[id] ?? 0)
+      expect(all.filter((s) => s.hidden === 'corner').every((s) => s.jointType === 'corner'), id).toBe(true)
+      expect(all.filter((s) => s.hidden === false).every((s) => s.jointType !== 'corner'), id).toBe(true)
     }
   })
 
   it('offers the heel of the L bracket and the 12 outer edges of the tank shell', () => {
-    const [heel] = detectAll('l-bracket-gussets').filter((s) => s.hidden)
+    const [heel] = detectAll('l-bracket-gussets').filter((s) => s.hidden === 'corner')
     expect(heel!.lengthMm).toBeCloseTo(120, 1)
     for (const { p } of heel!.points) expect([p[1], p[2]]).toEqual([0, 0])
-    const shell = detectAll('tank-with-manhole').filter((s) => s.hidden)
+    const shell = detectAll('tank-with-manhole').filter((s) => s.hidden === 'corner')
     const onBox = (p: number[]) => [p[0] === 0 || p[0] === 1600, p[1] === 0 || p[1] === 1000, p[2] === 0 || p[2] === 1000].filter(Boolean).length >= 2
     expect(shell.every((s) => s.points.every(({ p }) => onBox(p)))).toBe(true)
     expect(shell.map((s) => Math.round(s.lengthMm)).sort((a, b) => a - b)).toEqual([...Array(8).fill(1000), ...Array(4).fill(1600)])
@@ -452,7 +452,7 @@ describe('corner candidates', () => {
   it('offers no corner on the edges of a plate that another body passes through', () => {
     const plate = cubeTriangles([-75, -75, 0], [150, 150, 10])
     const post = cubeTriangles([-25, -25, -25], [50, 50, 60])
-    expect(detectSeams(buildMeshModel(soupOf([...plate, ...post]), 1), DEFAULT_DETECT_SETTINGS).filter((s) => s.hidden)).toEqual([])
+    expect(detectSeams(buildMeshModel(soupOf([...plate, ...post]), 1), DEFAULT_DETECT_SETTINGS).filter((s) => s.hidden === 'corner')).toEqual([])
   })
 
   it('does not list a contact seam a second time as a hidden corner', () => {
@@ -461,7 +461,7 @@ describe('corner candidates', () => {
       const contact = all.filter((s) => s.source === 'contact')
       expect(contact.length, id).toBeGreaterThan(0)
       const middle = (s: SeamCandidate) => s.points[s.points.length >> 1]!.p
-      for (const seam of all.filter((s) => s.hidden)) {
+      for (const seam of all.filter((s) => s.hidden === 'corner')) {
         for (const c of contact) {
           const d = Math.hypot(...(middle(seam).map((x, i) => x - middle(c)[i]!) as [number, number, number]))
           expect(d > 1 || Math.abs(seam.lengthMm - c.lengthMm) > 1, `${seam.id} vs ${c.id}`).toBe(true)
@@ -472,10 +472,10 @@ describe('corner candidates', () => {
 
   it('numbers visible seams first so that their labels do not move when corners are shown', () => {
     const all = detectAll('tank-with-manhole')
-    const visible = all.filter((s) => !s.hidden)
+    const visible = all.filter((s) => s.hidden === false)
     expect(visible.map((s) => s.label)).toEqual(visible.map((_, i) => `S${i + 1}`))
-    expect(all.filter((s) => s.hidden)).toHaveLength(12)
-    const hidden = all.filter((s) => s.hidden)
+    expect(all.filter((s) => s.hidden === 'corner')).toHaveLength(12)
+    const hidden = all.filter((s) => s.hidden === 'corner')
     expect(hidden.map((s) => s.label)).toEqual(hidden.map((_, i) => `S${visible.length + i + 1}`))
     expect(new Set(all.map((s) => s.id)).size).toBe(all.length)
   })
@@ -487,7 +487,21 @@ describe('corner candidates', () => {
       ...quad([0, 40, 0], [40, 40, 0], [40, 40, 40], [0, 40, 40]),
     ])
     const all = detectSeams(buildMeshModel(sheet, 1), DEFAULT_DETECT_SETTINGS)
-    expect(all.filter((s) => s.hidden)).toHaveLength(0)
+    expect(all.filter((s) => s.hidden === 'corner')).toHaveLength(0)
+  })
+})
+
+describe('seams inside hollow sections', () => {
+  // No sample has a tube or a closed box under 150 mm across: the tank, the double-bottom cell and the box girder are
+  // wide or open inside, so none of their seams is hidden as hollow.
+  const HOLLOW: Record<string, number> = {}
+
+  it('finds the hollow seams each sample has, as fillet creases kept out of the visible counts', () => {
+    for (const { id } of readManifest().samples) {
+      const hollow = detectAll(id).filter((s) => s.hidden === 'hollow')
+      expect(hollow.length, id).toBe(HOLLOW[id] ?? 0)
+      for (const seam of hollow) expect([seam.source, seam.jointType], id).toEqual(['crease', 'fillet'])
+    }
   })
 })
 
@@ -574,11 +588,11 @@ describe('plate thickness per seam', () => {
   // Next to the edge a ray behind either face of a corner runs through the other plate and reads its extent (100 on
   // the L, 80 on the bracket, 1000 or 1600 on the tank), so each plate is measured across the span of its face.
   it('measures the plate thickness behind each face of a corner, not the extent of the other plate', () => {
-    const [heel] = detectSeams(buildMeshModel(soupOf(mergedL()), 1), DEFAULT_DETECT_SETTINGS).filter((s) => s.hidden)
+    const [heel] = detectSeams(buildMeshModel(soupOf(mergedL()), 1), DEFAULT_DETECT_SETTINGS).filter((s) => s.hidden === 'corner')
     expect(heel!.thicknessMm).toEqual([10, 10])
-    const [bracket] = detectAll('l-bracket-gussets').filter((s) => s.hidden)
+    const [bracket] = detectAll('l-bracket-gussets').filter((s) => s.hidden === 'corner')
     expect(bracket!.thicknessMm).toEqual([8, 8])
-    const shell = detectAll('tank-with-manhole').filter((s) => s.hidden)
+    const shell = detectAll('tank-with-manhole').filter((s) => s.hidden === 'corner')
     expect(shell).toHaveLength(12)
     for (const c of shell) expect(c.thicknessMm, c.label).toEqual([8, 8])
   })

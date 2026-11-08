@@ -381,7 +381,7 @@ describe('corner thickness that measured plate extent', () => {
   // A ray through the end face of a plate edge reads the plate extent: [10, 200] on a 10 mm plate. Detection no longer
   // offers plate edges as corners, but a seam set to corner by hand, or one in an older saved plan, can carry such a pair.
   const seams = detectSeams(loadSampleModel('t-joint-merged'), DEFAULT_DETECT_SETTINGS)
-  const corner: SeamCandidate = { ...seams.find((s) => !s.hidden)!, jointType: 'corner', hidden: true, thicknessMm: [10, 200] }
+  const corner: SeamCandidate = { ...seams.find((s) => !s.hidden)!, jointType: 'corner', hidden: 'corner', thicknessMm: [10, 200] }
 
   it('is no longer offered by detection on the edges of the t-joint-merged plates', () => {
     expect(seams.filter((s) => s.hidden)).toEqual([])

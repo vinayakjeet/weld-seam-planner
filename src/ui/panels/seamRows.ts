@@ -135,6 +135,14 @@ export function acceptAllState(
   if (seams.length === 0) {
     return { disabled: true, label, reason: 'There are no seams to accept. Load a part, or lower the crease angle in the Detection tab.' }
   }
-  if (seams.every((seam) => statusById[seam.id] === 'accepted')) return { disabled: true, label: 'All seams accepted', reason: null }
+  const takeable = seams.filter((seam) => seam.hidden !== 'hollow')
+  if (takeable.length === 0) {
+    return {
+      disabled: true,
+      label,
+      reason: 'Seams inside hollow sections are never accepted all at once, because no torch fits inside. Click one and accept it on its own if it is welded.',
+    }
+  }
+  if (takeable.every((seam) => statusById[seam.id] === 'accepted')) return { disabled: true, label: 'All seams accepted', reason: null }
   return { disabled: false, label, reason: null }
 }

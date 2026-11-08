@@ -11,6 +11,7 @@ import { confidence } from './confidence'
 import { contactTolerance, findContactEdges, type ContactEdges } from './contact'
 import { extractCreaseEdges, type CreaseEdges, type CreaseResult } from './crease'
 import { buildSeamPoints, pointsFromPolyline, type NormalsOf, type SeamPoint } from './frames'
+import { creaseInHollow, type HollowProbe } from './hollow'
 import { chainSegments, findIntersectionSegments } from './intersect'
 import { extractNonManifoldWedges, openBodies, type SolidTest } from './nonManifold'
 import { seamId } from './seamId'
@@ -33,6 +34,9 @@ export interface DetectContext {
 
 export type SeamSource = 'crease' | 'contact' | 'intersection' | 'nonmanifold' | 'manual'
 
+// Why a detected seam is kept out of the list: an outside corner, or the inside of a tube or closed box.
+export type HiddenAs = 'corner' | 'hollow'
+
 export interface SeamCandidate {
   id: string
   label: string
@@ -40,8 +44,9 @@ export interface SeamCandidate {
   // Unknown when the body has no known inside, so a fillet could equally be a convex corner.
   concavity: 'known' | 'unknown'
   jointType: JointType
-  // Corner candidates are found but kept out of the list, counts and accept all until the user asks for them.
-  hidden: boolean
+  // Hidden seams are found but kept out of the list and the counts until the user asks for them; accept all never
+  // takes a hollow one.
+  hidden: false | HiddenAs
   confidence: number
   closed: boolean
   lengthMm: number
@@ -92,6 +97,16 @@ export function detectSeams(model: MeshModel, settings: DetectSettings, context:
     return pair
   }
 
+  const probes = new Map<number, HollowProbe | null>()
+  const hollowProbe = (body: number): HollowProbe | null => {
+    if (!probes.has(body)) {
+      const own = bvhOf(body)
+      const others = bvhs.filter((_, i) => i !== body).map((b) => b.bvh)
+      probes.set(body, own ? { own: probeFromBvhs([own]), others: others.length > 0 ? probeFromBvhs(others) : null } : null)
+    }
+    return probes.get(body)!
+  }
+
   const creases = extractCreaseEdges(model, faces, settings.creaseAngleDeg)
   const contact = bvhs.length > 1 ? findContactEdges(model, faces, bvhs, settings.creaseAngleDeg) : null
 
@@ -100,6 +115,10 @@ export function detectSeams(model: MeshModel, settings: DetectSettings, context:
     jointOf: (edge, seam) => {
       const strip = strips.ofCrease(creases.edgeIds[edge]!)
       return { jointType: classifyJoint({ source: 'crease', ...seam, ...strip, convex: false }), strip }
+    },
+    hollow: (edge, { surface, lengthMm }) => {
+      const probe = hollowProbe(model.bodies.triangleBody[model.edges.faceA[creases.edgeIds[edge]!]!]!)
+      return probe !== null && creaseInHollow(surface, lengthMm, probe, depthMm)
     },
   })
   if (model.mesh.triangleCount <= (context.maxCornerTriangles ?? LARGE_PART_TRIANGLES)) {
@@ -115,7 +134,7 @@ export function detectSeams(model: MeshModel, settings: DetectSettings, context:
   for (const seam of found) seam.id = seamId(seam, model.bounds.min)
   found.sort(
     (a, b) =>
-      Number(a.hidden) - Number(b.hidden) ||
+      Number(a.hidden !== false) - Number(b.hidden !== false) ||
       Math.round(b.lengthMm * 1000) - Math.round(a.lengthMm * 1000) ||
       a.id.localeCompare(b.id),
   )
@@ -335,6 +354,9 @@ interface EdgeOptions {
   jointOf?: (edge: number, seam: { closed: boolean; points: SeamPoint[] }) => JointInfo
   // Whether a chain that is long enough is a seam at all. Every chain is when absent.
   keep?: (seam: { closed: boolean; points: SeamPoint[] }) => boolean
+  // Whether the seam lies inside a hollow section, decided from its middle entry of the edge list and the samples on
+  // the mesh edges. Never when absent.
+  hollow?: (edge: number, seam: { surface: SeamPoint[]; lengthMm: number }) => boolean
 }
 
 // Chains the edges, drops chains under minLength and describes the rest. Edge numbers in the options index the edge list.
@@ -344,7 +366,7 @@ function seamsFromEdges(
   model: MeshModel,
   faces: FaceData,
   minLength: number,
-  { normalsOfEdge, jointOf, thicknessOf, keep }: EdgeOptions,
+  { normalsOfEdge, jointOf, thicknessOf, keep, hollow }: EdgeOptions,
 ): RawSeam[] {
   const chains = chainEdges(model.mesh.positions, edgeEnds(model.edges, edges.edgeIds), TURN_BREAK_DEG)
   const seams: RawSeam[] = []
@@ -354,15 +376,14 @@ function seamsFromEdges(
     if (lengthMm < minLength) continue
     if (keep && !keep({ closed: chain.closed, points: surface })) continue
     const { openingAngleDeg, medianAdjacentAreaMm2 } = describeChain(chain, edges, model, faces)
-    const { jointType, strip } = jointOf
-      ? jointOf(chain.edges[chain.edges.length >> 1]!, { closed: chain.closed, points })
-      : { jointType: 'fillet' as const, strip: NO_STRIP }
+    const middle = chain.edges[chain.edges.length >> 1]!
+    const { jointType, strip } = jointOf ? jointOf(middle, { closed: chain.closed, points }) : { jointType: 'fillet' as const, strip: NO_STRIP }
     seams.push({
       id: '',
       source,
       concavity: chain.edges.some((i) => edges.unknown[i] === 1) ? 'unknown' : 'known',
       jointType,
-      hidden: jointType === 'corner',
+      hidden: jointType === 'corner' ? 'corner' : hollow?.(middle, { surface, lengthMm }) ? 'hollow' : false,
       confidence: confidence({ lengthMm, openingDeg: openingAngleDeg, medianAdjacentAreaMm2, diagonal: model.bounds.diagonal }),
       closed: chain.closed,
       lengthMm,

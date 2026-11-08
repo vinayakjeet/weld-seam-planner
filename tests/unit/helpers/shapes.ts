@@ -78,6 +78,33 @@ export const narrowFlangeT = () =>
     (y, z, x) => [x, y, z],
   )
 
+// A rectangular hollow section, open at both ends as cut from stock: outer width by height in profile u and v from
+// (0, 0), a wall all round, from depth w 0 to length. place maps (u, v, w) to x, y, z.
+export function boxTube(width: number, height: number, wall: number, length: number, place: (u: number, v: number, w: number) => number[]): Tri[] {
+  const outer: Array<[number, number]> = [[0, 0], [width, 0], [width, height], [0, height]]
+  const inner: Array<[number, number]> = [[wall, wall], [width - wall, wall], [width - wall, height - wall], [wall, height - wall]]
+  const at = ([u, v]: [number, number], w: number) => place(u, v, w)
+  const quad = (a: number[], b: number[], c: number[], d: number[]) => [[...a, ...b, ...c], [...a, ...c, ...d]]
+  const tris: Tri[] = []
+  for (let i = 0; i < 4; i++) {
+    const j = (i + 1) % 4
+    tris.push(...quad(at(outer[i]!, 0), at(outer[j]!, 0), at(outer[j]!, length), at(outer[i]!, length)))
+    tris.push(...quad(at(inner[j]!, 0), at(inner[i]!, 0), at(inner[i]!, length), at(inner[j]!, length)))
+    tris.push(...quad(at(outer[j]!, 0), at(outer[i]!, 0), at(inner[i]!, 0), at(inner[j]!, 0)))
+    tris.push(...quad(at(outer[i]!, length), at(outer[j]!, length), at(inner[j]!, length), at(inner[i]!, length)))
+  }
+  return tris
+}
+
+// A U channel 60 wide and 40 tall with 6 mm walls, open on top (profile in y and z, extruded along x).
+export const channel = (length = 600) =>
+  extrude(
+    [[0, 0], [60, 0], [60, 40], [54, 40], [54, 6], [6, 6], [6, 40], [0, 40]],
+    [[0, 1, 4], [0, 4, 5], [1, 2, 3], [1, 3, 4], [0, 5, 6], [0, 6, 7]],
+    length,
+    (y, z, x) => [x, y, z],
+  )
+
 // The T-joint (a 100 x 10 plate, a 10 x 80 web, 200 mm long along x) cut into thin slices along its length, so that a
 // single body has as many triangles as a large scan: 16 per slice and 12 for the two end caps.
 export function slicedTJoint(slices: number): Tri[] {

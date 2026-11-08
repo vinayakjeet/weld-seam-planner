@@ -5,11 +5,13 @@ import { selectAllSeams, selectPlan, selectStats, visibleSeams } from '../../../
 import { useStore } from '../../../src/state/store'
 import { CREATED_AT } from '../helpers/jobs'
 import { loadSnakeSeams, reachOf, SNAKE } from '../helpers/reach'
-import { corner, partInfo, resetStore, seam } from '../helpers/state'
+import { corner, hollow, partInfo, resetStore, seam } from '../helpers/state'
+
+const show = (showCorners = false, showHollow = false) => ({ showCorners, showHollow })
 
 describe('selectStats', () => {
   it('is all zeros with no part and no seams', () => {
-    expect(selectStats({ part: null, seams: [], statusById: {}, showCorners: false })).toEqual({
+    expect(selectStats({ part: null, seams: [], statusById: {}, showCorners: false, showHollow: false })).toEqual({
       triangles: 0,
       bodies: 0,
       accepted: 0,
@@ -22,13 +24,13 @@ describe('selectStats', () => {
   it('counts candidates and sums the accepted weld length', () => {
     const seams = [seam('a', 0.9, 200), seam('b', 0.9, 200), seam('c', 0.5, 35)]
     const part = partInfo({ triangles: 1234, bodies: 3 })
-    expect(selectStats({ part, seams, statusById: {}, showCorners: false })).toMatchObject({ triangles: 1234, bodies: 3, accepted: 0, candidates: 3 })
-    const accepted = selectStats({ part, seams, statusById: { a: 'accepted', b: 'accepted' }, showCorners: false })
+    expect(selectStats({ part, seams, statusById: {}, showCorners: false, showHollow: false })).toMatchObject({ triangles: 1234, bodies: 3, accepted: 0, candidates: 3 })
+    const accepted = selectStats({ part, seams, statusById: { a: 'accepted', b: 'accepted' }, showCorners: false, showHollow: false })
     expect(accepted).toMatchObject({ accepted: 2, candidates: 1, acceptedLengthMm: 400 })
   })
 
   it('counts rejected seams as neither accepted nor candidate', () => {
-    const stats = selectStats({ part: null, seams: [seam('a'), seam('b')], statusById: { a: 'rejected' }, showCorners: false })
+    const stats = selectStats({ part: null, seams: [seam('a'), seam('b')], statusById: { a: 'rejected' }, showCorners: false, showHollow: false })
     expect(stats).toMatchObject({ accepted: 0, candidates: 1, acceptedLengthMm: 0 })
   })
 
@@ -38,6 +40,7 @@ describe('selectStats', () => {
       seams: [seam('b', 0.9, 100)],
       statusById: { a: 'accepted', b: 'accepted', z: 'rejected' },
       showCorners: false,
+      showHollow: false,
     })
     expect(stats).toMatchObject({ accepted: 1, hiddenAccepted: 1, acceptedLengthMm: 100 })
   })
@@ -47,21 +50,41 @@ describe('visibleSeams', () => {
   const seams = [seam('a'), corner('c'), seam('b')]
 
   it('leaves out hidden corner candidates by default', () => {
-    expect(visibleSeams(seams, false).map((s) => s.id)).toEqual(['a', 'b'])
+    expect(visibleSeams(seams, show()).map((s) => s.id)).toEqual(['a', 'b'])
   })
 
   it('lists them, in order, once corners are shown', () => {
-    expect(visibleSeams(seams, true).map((s) => s.id)).toEqual(['a', 'c', 'b'])
+    expect(visibleSeams(seams, show(true)).map((s) => s.id)).toEqual(['a', 'c', 'b'])
   })
 
   it('returns the same array when nothing is hidden', () => {
     const all = [seam('a'), seam('b')]
-    expect(visibleSeams(all, false)).toBe(all)
+    expect(visibleSeams(all, show())).toBe(all)
   })
 
   it('keeps an accepted corner while corners are switched off, since it is part of the plan', () => {
-    expect(visibleSeams(seams, false, { c: 'accepted' }).map((s) => s.id)).toEqual(['a', 'c', 'b'])
-    expect(visibleSeams(seams, false, { c: 'rejected' }).map((s) => s.id)).toEqual(['a', 'b'])
+    expect(visibleSeams(seams, show(), { c: 'accepted' }).map((s) => s.id)).toEqual(['a', 'c', 'b'])
+    expect(visibleSeams(seams, show(), { c: 'rejected' }).map((s) => s.id)).toEqual(['a', 'b'])
+  })
+})
+
+describe('visibleSeams with seams inside hollow sections', () => {
+  const seams = [seam('a'), hollow('h'), corner('c')]
+
+  it('leaves them out until they are shown, on their own switch', () => {
+    expect(visibleSeams(seams, show()).map((s) => s.id)).toEqual(['a'])
+    expect(visibleSeams(seams, show(true)).map((s) => s.id)).toEqual(['a', 'c'])
+    expect(visibleSeams(seams, show(false, true)).map((s) => s.id)).toEqual(['a', 'h'])
+    expect(visibleSeams(seams, show(true, true)).map((s) => s.id)).toEqual(['a', 'h', 'c'])
+  })
+
+  it('keeps an accepted hollow seam while they are switched off, since it is part of the plan', () => {
+    expect(visibleSeams(seams, show(), { h: 'accepted' }).map((s) => s.id)).toEqual(['a', 'h'])
+  })
+
+  it('leaves them out of the candidate count until they are shown', () => {
+    expect(selectStats({ part: null, seams, statusById: {}, ...show() })).toMatchObject({ candidates: 1 })
+    expect(selectStats({ part: null, seams, statusById: {}, ...show(false, true) })).toMatchObject({ candidates: 2 })
   })
 })
 
@@ -69,7 +92,7 @@ describe('selectPlan with an accepted corner', () => {
   beforeEach(() => resetStore())
 
   it('keeps the corner in the plan when corners are switched off again', () => {
-    useStore.setState({ part: partInfo(), seams: [seam('a'), corner('k', 0.9, 200)], showCorners: true })
+    useStore.setState({ part: partInfo(), seams: [seam('a'), corner('k', 0.9, 200)], showCorners: true, showHollow: false })
     useStore.getState().setStatus(['a', 'k'], 'accepted')
     useStore.getState().setShowCorners(false)
     expect(selectPlan(useStore.getState()).seams.map((p) => p.seam.id).sort()).toEqual(['a', 'k'])
@@ -80,16 +103,16 @@ describe('selectStats with corner candidates', () => {
   const seams = [seam('a', 0.9, 200), corner('c', 0.9, 100)]
 
   it('leaves hidden corners out of the candidate count', () => {
-    expect(selectStats({ part: null, seams, statusById: {}, showCorners: false })).toMatchObject({ candidates: 1, accepted: 0 })
+    expect(selectStats({ part: null, seams, statusById: {}, showCorners: false, showHollow: false })).toMatchObject({ candidates: 1, accepted: 0 })
   })
 
   it('counts them once they are shown', () => {
-    const stats = selectStats({ part: null, seams, statusById: { c: 'accepted' }, showCorners: true })
+    const stats = selectStats({ part: null, seams, statusById: { c: 'accepted' }, showCorners: true, showHollow: false })
     expect(stats).toMatchObject({ candidates: 1, accepted: 1, acceptedLengthMm: 100 })
   })
 
   it('counts an accepted corner while corners are hidden, because it stays in the plan, and does not call it hidden by the angle', () => {
-    const stats = selectStats({ part: null, seams, statusById: { c: 'accepted' }, showCorners: false })
+    const stats = selectStats({ part: null, seams, statusById: { c: 'accepted' }, showCorners: false, showHollow: false })
     expect(stats).toMatchObject({ accepted: 1, acceptedLengthMm: 100, hiddenAccepted: 0 })
   })
 })
@@ -116,6 +139,7 @@ describe('selectStats with manual seams', () => {
       supersededIds: ['a'],
       statusById: { 'a/a': 'accepted', 'a/b': 'accepted', a: 'accepted' },
       showCorners: false,
+      showHollow: false,
     })
     expect(stats).toMatchObject({ accepted: 2, candidates: 1, acceptedLengthMm: 200, hiddenAccepted: 0 })
   })
@@ -136,7 +160,7 @@ describe('selectPlan', () => {
   it('holds only accepted, non-superseded seams in table order, an accepted corner with corners on or off', () => {
     load()
     expect(selectPlan(useStore.getState()).seams.map((p) => p.seam.id)).toEqual(['a', 'h', 'c', 'm'])
-    useStore.setState({ showCorners: true })
+    useStore.setState({ showCorners: true, showHollow: false })
     expect(selectPlan(useStore.getState()).seams.map((p) => p.seam.id)).toEqual(['a', 'h', 'c', 'm'])
   })
 

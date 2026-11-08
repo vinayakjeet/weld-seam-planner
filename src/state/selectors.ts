@@ -43,16 +43,22 @@ export function selectAllSeams(state: Pick<AppState, 'seams' | 'manualSeams' | '
   return [...all, ...loose]
 }
 
-// Corner candidates are detected but stay out of the list, the counts and accept all until the user shows them.
-// An accepted corner stays visible with corners switched off: it is in the plan, and a plan seam is never out of view.
-export function visibleSeams(seams: SeamCandidate[], showCorners: boolean, statusById: AppState['statusById'] = {}): SeamCandidate[] {
-  return showCorners || !seams.some((seam) => seam.hidden) ? seams : seams.filter((seam) => !seam.hidden || statusById[seam.id] === 'accepted')
+// The switches for the two kinds of hidden seam.
+export type ShowHidden = Pick<AppState, 'showCorners' | 'showHollow'>
+
+const kindShown = (seam: SeamCandidate, show: ShowHidden) => seam.hidden === false || (seam.hidden === 'corner' ? show.showCorners : show.showHollow)
+
+// Corner candidates and seams inside hollow sections are detected but stay out of the list and the counts until the
+// user shows their kind. An accepted one stays visible with its kind switched off: it is in the plan, and a plan seam
+// is never out of view.
+export function visibleSeams(seams: SeamCandidate[], show: ShowHidden, statusById: AppState['statusById'] = {}): SeamCandidate[] {
+  return seams.every((seam) => kindShown(seam, show)) ? seams : seams.filter((seam) => kindShown(seam, show) || statusById[seam.id] === 'accepted')
 }
 
 // Counts only the visible seams in the current detection result. Accepted ids that the current settings no longer
 // produce are reported separately so the UI can say they will return.
 export function selectStats(
-  state: Pick<AppState, 'part' | 'seams' | 'statusById' | 'showCorners'> & Partial<Pick<AppState, 'manualSeams' | 'supersededIds'>>,
+  state: Pick<AppState, 'part' | 'seams' | 'statusById' | 'showCorners' | 'showHollow'> & Partial<Pick<AppState, 'manualSeams' | 'supersededIds'>>,
 ): Stats {
   let accepted = 0
   let candidates = 0
@@ -62,7 +68,7 @@ export function selectStats(
   for (const seam of selectAllSeams({ seams: state.seams, manualSeams: state.manualSeams ?? [], supersededIds: superseded })) {
     present.add(seam.id)
     const status = state.statusById[seam.id]
-    if (seam.hidden && !state.showCorners && status !== 'accepted') continue
+    if (!kindShown(seam, state) && status !== 'accepted') continue
     if (status === 'accepted') {
       accepted++
       acceptedLengthMm += seam.lengthMm
@@ -147,12 +153,12 @@ export function selectSequenceOrder(state: AppState): OrderEntry[] {
 // same object, and hover, selection and view changes do not give a new one.
 export function selectPlan(state: AppState): Plan {
   const deps = [
-    state.part, state.seams, state.manualSeams, state.supersededIds, state.showCorners, state.statusById, state.typeById,
+    state.part, state.seams, state.manualSeams, state.supersededIds, state.showCorners, state.showHollow, state.statusById, state.typeById,
     state.thicknessById, state.procedures, state.procedureById, state.overridesById, state.legById, state.accessById, state.accessPointsById, state.reachById, state.reachPointsById, state.reachKeyById, state.strategy, state.order, state.ports, state.arm, state.gravity,
     state.detectSettings.creaseAngleDeg, state.jobSettings, state.weldTolerance,
   ]
   if (cachedPlan && cachedPlan.deps.every((d, i) => d === deps[i])) return cachedPlan.plan
-  const seams = visibleSeams(selectAllSeams(state), state.showCorners, state.statusById)
+  const seams = visibleSeams(selectAllSeams(state), state, state.statusById)
     .filter((seam) => state.statusById[seam.id] === 'accepted')
     .map((seam) => plannedSeam(state, seam))
   const plan: Plan = {

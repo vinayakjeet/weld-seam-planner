@@ -3,7 +3,7 @@ import type { SeamPosition } from '../../../src/core/torch/positions'
 import type { SeamAccess } from '../../../src/core/job/schema'
 import { acceptAllState, filterRows, positionLines, seamRows, type RowFilter } from '../../../src/ui/panels/seamRows'
 import { reachOf } from '../helpers/reach'
-import { seam } from '../helpers/state'
+import { hollow, seam } from '../helpers/state'
 
 describe('seamRows type column', () => {
   it('capitalises the computed joint type', () => {
@@ -156,6 +156,16 @@ describe('acceptAllState', () => {
     expect(state.disabled).toBe(true)
     expect(state.label).toBe('Accept all above 0.70')
     expect(state.reason).toBe('There are no seams to accept. Load a part, or lower the crease angle in the Detection tab.')
+  })
+
+  it('leaves seams inside hollow sections out, because accept all never takes them', () => {
+    expect(acceptAllState([seam('a'), hollow('h')], { a: 'accepted' }, 0.7)).toEqual({ disabled: true, label: 'All seams accepted', reason: null })
+  })
+
+  it('says why it is disabled when only seams inside hollow sections are listed', () => {
+    const state = acceptAllState([hollow('h')], {}, 0.7)
+    expect(state.disabled).toBe(true)
+    expect(state.reason).toBe('Seams inside hollow sections are never accepted all at once, because no torch fits inside. Click one and accept it on its own if it is welded.')
   })
 })
 

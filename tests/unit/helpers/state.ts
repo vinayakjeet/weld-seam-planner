@@ -25,11 +25,15 @@ export function seam(id: string, confidence = 0.9, lengthMm = 200, overrides: Pa
   }
 }
 
-// Corner candidates come back from detection but stay hidden, so counts in tests are of the visible seams.
+// Corner candidates and seams inside hollow sections come back from detection but stay hidden, so counts in tests are
+// of the visible seams.
 export const shown = (seams: SeamCandidate[]): SeamCandidate[] => seams.filter((s) => !s.hidden)
 
 export const corner = (id: string, confidence = 0.9, lengthMm = 100): SeamCandidate =>
-  seam(id, confidence, lengthMm, { jointType: 'corner', hidden: true })
+  seam(id, confidence, lengthMm, { jointType: 'corner', hidden: 'corner' })
+
+// An inside corner of a tube or closed box: a fillet, hidden for being inside a hollow section.
+export const hollow = (id: string, confidence = 0.9, lengthMm = 600): SeamCandidate => seam(id, confidence, lengthMm, { hidden: 'hollow' })
 
 export function partInfo(overrides: Partial<PartInfo> = {}): PartInfo {
   return {

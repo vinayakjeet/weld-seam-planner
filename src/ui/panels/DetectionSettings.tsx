@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { HOLLOW_SPAN_MM } from '../../core/seams/hollow'
 import { runReweld, scheduleDetect, showError } from '../../state/flows'
 import { selectStats } from '../../state/selectors'
 import { useStore } from '../../state/store'
@@ -15,7 +16,10 @@ export function DetectionSettings() {
   const hidden = hiddenAcceptedMessage(useStore((s) => selectStats(s).hiddenAccepted))
   const showCorners = useStore((s) => s.showCorners)
   const setShowCorners = useStore((s) => s.setShowCorners)
-  const cornerCount = useStore((s) => s.seams.reduce((n, seam) => n + (seam.hidden ? 1 : 0), 0))
+  const cornerCount = useStore((s) => s.seams.reduce((n, seam) => n + (seam.hidden === 'corner' ? 1 : 0), 0))
+  const showHollow = useStore((s) => s.showHollow)
+  const setShowHollow = useStore((s) => s.setShowHollow)
+  const hollowCount = useStore((s) => s.seams.reduce((n, seam) => n + (seam.hidden === 'hollow' ? 1 : 0), 0))
   const weldTolerance = useStore((s) => s.weldTolerance)
   const bbox = useStore((s) => s.part?.bbox ?? null)
   const loading = useStore((s) => s.importState.phase === 'loading')
@@ -74,6 +78,22 @@ export function DetectionSettings() {
           <span className="text-ink-0">Show corner candidates</span>
           <span className="text-ink-2">
             Outside edges where two plates meet, offered for corner joints. {cornerCount === 1 ? '1 found' : `${cornerCount} found`}; hidden by default because most are not welded.
+          </span>
+        </label>
+      </div>
+      <div className="flex items-start gap-2">
+        <input
+          id="show-hollow"
+          type="checkbox"
+          role="switch"
+          checked={showHollow}
+          onChange={(e) => setShowHollow(e.target.checked)}
+          className="mt-0.5 accent-brand"
+        />
+        <label htmlFor="show-hollow" className="flex flex-col gap-0.5">
+          <span className="text-ink-0">Show seams inside hollow sections</span>
+          <span className="text-ink-2">
+            Inside corners of tubes and closed boxes under {HOLLOW_SPAN_MM} mm across. {hollowCount === 1 ? '1 found' : `${hollowCount} found`}; hidden because no torch fits inside, and never taken by Accept all.
           </span>
         </label>
       </div>

@@ -61,7 +61,7 @@ Internal units are mm, degrees and seconds everywhere; units are converted only 
 ## Detection pipeline
 
 1. **Parse and weld.** Binary and ASCII STL are read in the worker and scaled to mm. Vertices are welded on a grid whose cell is the weld tolerance times the bounding box diagonal, degenerate triangles are dropped, edges and bodies are labelled, and each closed body is oriented outward.
-2. **Creases.** An edge whose two faces bend by more than the crease angle (30 degrees by default) and that is concave becomes a crease candidate: the inside corner of a single merged body, such as a T-joint exported as one solid.
+2. **Creases.** An edge whose two faces bend by more than the crease angle (30 degrees by default) and that is concave becomes a crease candidate: the inside corner of a single merged body, such as a T-joint exported as one solid. A crease whose free space its own body closes off within 150 mm in every direction across the seam, along a seam at least as long as that width, is the inside of a tube or a closed box: it is hidden as inside a hollow section, has its own switch and count in the Detection tab, and Accept all never takes it.
 3. **Contact.** Where two bodies touch, faces of one that lie on the other are found with a BVH per body; the boundary of the shared area is the fillet line.
 4. **Intersection.** Where bodies penetrate (a pipe pushed through a plate), the triangle pair intersections are chained into curves.
 5. **Non-manifold and corner edges.** Edges shared by more than two faces, and the outside corners of plate ends, give the remaining candidates.
