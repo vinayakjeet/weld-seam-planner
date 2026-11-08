@@ -3,7 +3,8 @@ import { dot, type Vec3 } from '../../../src/core/math/vec3'
 import { buildMeshModel } from '../../../src/core/mesh/model'
 import { DEFAULT_DETECT_SETTINGS, detectSeams, type SeamCandidate } from '../../../src/core/seams/detect'
 import type { SeamPoint } from '../../../src/core/seams/frames'
-import { contactInHollow, creaseInHollow, HOLLOW_SPAN_MM, type ContactStation, type HollowProbe } from '../../../src/core/seams/hollow'
+import { contactInHollow, creaseInHollow, HOLLOW_SPAN_MM, type ContactStation } from '../../../src/core/seams/hollow'
+import type { RayProbe } from '../../../src/core/seams/thickness'
 import type { Tri } from '../helpers/stl'
 import { boxTube, channel, cubeTriangles, soupOf } from '../helpers/shapes'
 
@@ -13,7 +14,7 @@ const creases = (seams: SeamCandidate[]) => seams.filter((s) => s.source === 'cr
 describe('creaseInHollow', () => {
   // A 90 degree inside corner along x between a plate facing +z and one facing +y.
   const corner: SeamPoint[] = Array.from({ length: 5 }, (_, i) => ({ s: i * 10, p: [i * 10, 0, 0], t: [1, 0, 0], n1: [0, 0, 1], n2: [0, 1, 0] }))
-  const probe = (own: number, others: number | null = null): HollowProbe => ({ own: () => own, others: others === null ? null : () => others })
+  const probe = (own: number): RayProbe => () => own
 
   it('calls a corner hollow when every ray meets its own body within the span and the seam is at least that long', () => {
     expect(creaseInHollow(corner, 40, probe(27), 0.05)).toBe(true)
@@ -25,12 +26,15 @@ describe('creaseInHollow', () => {
     expect(creaseInHollow(corner, 1000, probe(Infinity), 0.05)).toBe(false)
   })
 
-  it('is not hollow when another body is met first', () => {
-    expect(creaseInHollow(corner, 40, probe(27, 26), 0.05)).toBe(false)
-    expect(creaseInHollow(corner, 40, probe(27, 28), 0.05)).toBe(true)
+  // Straight across a 19 mm bore from its corner, and 26.9 mm to the far corner.
+  const bore: RayProbe = (_, dir) => 19.04 / Math.max(dir[1], dir[2])
+
+  it('is hollow when the seam is at least as long as the narrowest ray across: a stub as long as its bore is wide', () => {
+    expect(creaseInHollow(corner, 25.4, bore, 0.05)).toBe(true)
+    expect(creaseInHollow(corner, 19, bore, 0.05)).toBe(false)
   })
 
-  it('is not hollow when the seam is shorter than the widest ray: a window in a frame, not a prism', () => {
+  it('is not hollow when the seam is shorter than the narrowest ray: a window in a frame, not a prism', () => {
     expect(creaseInHollow(corner, 26, probe(27), 0.05)).toBe(false)
   })
 
@@ -40,7 +44,7 @@ describe('creaseInHollow', () => {
       rays.push({ origin, dir })
       return 20
     }
-    creaseInHollow(corner, 40, { own, others: null }, 0.05)
+    creaseInHollow(corner, 40, own, 0.05)
     expect(rays.length).toBeGreaterThanOrEqual(9)
     for (const { origin, dir } of rays) {
       expect(dot(dir, [1, 0, 0])).toBeCloseTo(0, 12)
@@ -75,7 +79,22 @@ describe('creases inside a hollow section', () => {
     for (const seam of inside) expect(seam.hidden).toBe(false)
   })
 
-  it('keeps the inside corners of a channel closed by a separate lid: the lid is another body', () => {
+  // The bar is another body, but the tube still closes the space round it: no torch gets in.
+  it('hides the inside corners of a tube with a bar through its bore', () => {
+    const tube = boxTube(25.4, 25.4, 3.18, 600, (u, v, w) => [w, u, v])
+    const bar = cubeTriangles([-50, 7.7, 7.7], [700, 10, 10])
+    const inside = creases(detectTris([...tube, ...bar]))
+    expect(inside).toHaveLength(4)
+    for (const seam of inside) expect(seam.hidden).toBe('hollow')
+  })
+
+  it('hides the inside corners of a stub as long as its bore is wide', () => {
+    const inside = creases(detectTris(boxTube(25.4, 25.4, 3.18, 25.4, (u, v, w) => [w, u, v])))
+    expect(inside).toHaveLength(4)
+    for (const seam of inside) expect(seam.hidden).toBe('hollow')
+  })
+
+  it('keeps the inside corners of a channel closed by a separate lid: the channel itself is open', () => {
     const inside = creases(detectTris([...channel(), ...cubeTriangles([-10, -10, 40], [620, 80, 6])]))
     expect(inside).toHaveLength(2)
     for (const seam of inside) expect(seam.hidden).toBe(false)
@@ -85,7 +104,7 @@ describe('creases inside a hollow section', () => {
 describe('contactInHollow', () => {
   // The inside edge of a tube wall along x, standing on a surface facing +z: the wall's free face faces +y.
   const stations: ContactStation[] = [{ p: [0, 0, 0], t: [1, 0, 0], free: [0, 1, 0], touched: [0, 0, 1] }]
-  const probe = (own: number, others: number | null = null): HollowProbe => ({ own: () => own, others: others === null ? null : () => others })
+  const probe = (own: number): RayProbe => () => own
   const deep = () => true
 
   it('calls the inside of a member end hollow when every ray meets the member within the span and its bore is deep enough', () => {
@@ -93,10 +112,9 @@ describe('contactInHollow', () => {
     expect(contactInHollow(stations, (widest) => widest <= 20, probe(27), 0.05)).toBe(false)
   })
 
-  it('is not hollow when a ray runs past the span, leaves the part or meets another body first', () => {
+  it('is not hollow when a ray runs past the span or leaves the part', () => {
     expect(contactInHollow(stations, deep, probe(HOLLOW_SPAN_MM + 1), 0.05)).toBe(false)
     expect(contactInHollow(stations, deep, probe(Infinity), 0.05)).toBe(false)
-    expect(contactInHollow(stations, deep, probe(27, 26), 0.05)).toBe(false)
   })
 
   it('fans the rays across the touched surface on the free side, from just off the edge', () => {
@@ -105,7 +123,7 @@ describe('contactInHollow', () => {
       rays.push({ origin, dir })
       return 20
     }
-    contactInHollow(stations, deep, { own, others: null }, 0.05)
+    contactInHollow(stations, deep, own, 0.05)
     expect(rays.length).toBeGreaterThanOrEqual(5)
     for (const { origin, dir } of rays) {
       expect(dot(dir, [0, 0, 1])).toBeCloseTo(0, 12)

@@ -12,7 +12,7 @@ import { confidence } from './confidence'
 import { contactTolerance, findContactEdges, type ContactEdges } from './contact'
 import { extractCreaseEdges, type CreaseEdges, type CreaseResult } from './crease'
 import { buildSeamPoints, pointsFromPolyline, type NormalsOf, type SeamPoint } from './frames'
-import { contactInHollow, creaseInHollow, HOLLOW_STATIONS, type ContactStation, type HollowProbe } from './hollow'
+import { contactInHollow, creaseInHollow, HOLLOW_STATIONS, type ContactStation } from './hollow'
 import { chainSegments, findIntersectionSegments } from './intersect'
 import { extractNonManifoldWedges, openBodies, type SolidTest } from './nonManifold'
 import { seamId } from './seamId'
@@ -98,12 +98,12 @@ export function detectSeams(model: MeshModel, settings: DetectSettings, context:
     return pair
   }
 
-  const probes = new Map<number, HollowProbe | null>()
-  const hollowProbe = (body: number): HollowProbe | null => {
+  // Rays against one body alone, for the hollow section tests.
+  const probes = new Map<number, RayProbe | null>()
+  const hollowProbe = (body: number): RayProbe | null => {
     if (!probes.has(body)) {
       const own = bvhOf(body)
-      const others = bvhs.filter((_, i) => i !== body).map((b) => b.bvh)
-      probes.set(body, own ? { own: probeFromBvhs([own]), others: others.length > 0 ? probeFromBvhs(others) : null } : null)
+      probes.set(body, own ? probeFromBvhs([own]) : null)
     }
     return probes.get(body)!
   }
@@ -244,7 +244,7 @@ function contactSeams(
   minLength: number,
   strips: StripProbe,
   thicknessOf: ThicknessOf,
-  hollowProbe: (body: number) => HollowProbe | null,
+  hollowProbe: (body: number) => RayProbe | null,
   offsetMm: number,
 ): RawSeam[] {
   const normalsOfEdge = (k: number): [Vec3, Vec3] => {
