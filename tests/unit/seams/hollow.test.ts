@@ -122,20 +122,17 @@ describe('contact seams inside the end of a hollow member', () => {
   const standing = (height: number) => boxTube(25.4, 25.4, 3.18, height, (u, v, w) => [u - 12.7, v - 12.7, 10 + w])
   const contact = (seams: SeamCandidate[]) => seams.filter((s) => s.source === 'contact')
 
-  it('hides the inside edges of an open tube end standing on a plate and keeps the outside ones', () => {
+  const loop = (seams: SeamCandidate[], lengthMm: number) => seams.filter((s) => s.closed && Math.abs(s.lengthMm - lengthMm) < 0.05)
+
+  it('hides the loop round the bore of an open tube end standing on a plate and keeps the loop round its outside', () => {
     const seams = contact(detectTris([...plate, ...standing(300)]))
-    const inside = seams.filter((s) => Math.abs(s.lengthMm - 19.04) < 0.05)
-    const outside = seams.filter((s) => Math.abs(s.lengthMm - 25.4) < 0.05)
-    expect(inside).toHaveLength(4)
-    expect(outside).toHaveLength(4)
-    for (const seam of inside) expect(seam.hidden, seam.label).toBe('hollow')
-    for (const seam of outside) expect(seam.hidden, seam.label).toBe(false)
+    expect(seams).toHaveLength(2)
+    expect(loop(seams, 76.16).map((s) => s.hidden)).toEqual(['hollow'])
+    expect(loop(seams, 101.6).map((s) => s.hidden)).toEqual([false])
   })
 
-  it('keeps the inside edges of a stub shallower than its bore is wide: the torch reaches in from the open end', () => {
+  it('keeps the loop round the bore of a stub shallower than its bore is wide: the torch reaches in from the open end', () => {
     const seams = contact(detectTris([...plate, ...standing(15)]))
-    const inside = seams.filter((s) => Math.abs(s.lengthMm - 19.04) < 0.05)
-    expect(inside).toHaveLength(4)
-    for (const seam of inside) expect(seam.hidden, seam.label).toBe(false)
+    expect(loop(seams, 76.16).map((s) => s.hidden)).toEqual([false])
   })
 })

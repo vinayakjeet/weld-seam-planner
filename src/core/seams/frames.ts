@@ -22,6 +22,8 @@ export type NormalsOf = (segment: number) => [Vec3, Vec3]
 export interface PolylineOptions {
   // Follow the curve a tessellated polyline was cut from, keeping its corners (see smoothVertices).
   smooth?: boolean
+  // Keep every vertex that turns by more than this as a sample, so the path goes into a corner (see resamplePolyline).
+  cornerDeg?: number
 }
 
 export interface SeamPolyline {
@@ -46,7 +48,7 @@ export function pointsFromPolyline(
     const smoothed = smoothPoints(polyline, closed, normalsOf)
     if (smoothed) return { ...smoothed, surface: pointsFromPolyline(polyline, closed, normalsOf).points }
   }
-  const resampled = resamplePolyline(polyline, closed)
+  const resampled = resamplePolyline(polyline, closed, undefined, options.cornerDeg)
   const points = resampled.p.map((p, k): SeamPoint => {
     const segment = resampled.segment[k]!
     const t = normalize(sub(polyline[(segment + 1) % polyline.length]!, polyline[segment]!))

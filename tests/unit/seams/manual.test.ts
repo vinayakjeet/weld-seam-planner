@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { cross, length, sub, type Vec3 } from '../../../src/core/math/vec3'
 import type { SeamCandidate } from '../../../src/core/seams/detect'
 import { pointsFromPolyline } from '../../../src/core/seams/frames'
-import { isManualError, mergeSeams, reverseSeam, splitSeam, trimSeam, type ManualError } from '../../../src/core/seams/manual'
+import { isManualError, mergeSeams, openLoop, reverseSeam, splitSeam, trimSeam, type ManualError } from '../../../src/core/seams/manual'
 import { seam } from '../helpers/state'
 
 const along = (polyline: Vec3[], closed = false, id = 's1', walls: [Vec3, Vec3][] = [[[0, 1, 0], [0, 0, 1]]]): SeamCandidate => {
@@ -137,9 +137,55 @@ describe('splitSeam', () => {
     expect(expectReadable(splitSeam(original, 1))).toMatchObject({ what: expect.stringContaining('S1') })
   })
 
-  it('refuses to split a closed loop', () => {
+  it('refuses to split a closed loop in two at one point, and says to open it first', () => {
     const loop = along([[0, 0, 0], [40, 0, 0], [40, 40, 0], [0, 40, 0]], true)
-    expectReadable(splitSeam(loop, 20))
+    expect(expectReadable(splitSeam(loop, 20)).next).toMatch(/open/i)
+  })
+})
+
+describe('openLoop', () => {
+  const square: Vec3[] = [[0, 0, 0], [40, 0, 0], [40, 40, 0], [0, 40, 0]]
+  const loop = along(square, true, 'all', [
+    [[0, 0, 1], [0, -1, 0]],
+    [[0, 0, 1], [1, 0, 0]],
+    [[0, 0, 1], [0, 1, 0]],
+    [[0, 0, 1], [-1, 0, 0]],
+  ])
+
+  it('opens a loop at the cut into one open seam as long as the loop, starting and ending at the cut', () => {
+    const open = ok(openLoop(loop, 50))
+    expect(open.closed).toBe(false)
+    expect(open.lengthMm).toBeCloseTo(160, 9)
+    expect(open.points[0]!.s).toBe(0)
+    expect(open.points[0]!.p).toEqual([40, 10, 0])
+    expect(open.points[open.points.length - 1]!.p).toEqual([40, 10, 0])
+    expect([open.id, open.label, open.source]).toEqual(['all/o', loop.label, 'manual'])
+    expectConsistent(open)
+  })
+
+  it('keeps every corner of the loop and the frame of each side', () => {
+    const open = ok(openLoop(loop, 50))
+    for (const corner of square) expect(open.points.some(({ p }) => p.every((x, c) => Math.abs(x - corner[c]!) < 1e-9)), corner.join(' ')).toBe(true)
+    const wall = (x: number, y: number) => {
+      const { n1, n2 } = open.points.find(({ p }) => Math.abs(p[0] - x) < 1e-9 && Math.abs(p[1] - y) < 1e-9)!
+      return [n1, n2].find((n) => n[2] === 0)
+    }
+    expect([wall(20, 0), wall(40, 20), wall(20, 40), wall(0, 20)]).toEqual([[0, -1, 0], [1, 0, 0], [0, 1, 0], [-1, 0, 0]])
+  })
+
+  it('opens at the start of the loop when cut at 0 or at its full length', () => {
+    for (const s of [0, 160]) {
+      const open = ok(openLoop(loop, s))
+      expect(open.points[0]!.p).toEqual([0, 0, 0])
+      expect(open.points[open.points.length - 1]!.p).toEqual([0, 0, 0])
+      expect(open.lengthMm).toBeCloseTo(160, 9)
+    }
+  })
+
+  it('refuses an open seam or a cut off the loop', () => {
+    expectReadable(openLoop(line(0, 200), 50))
+    expectReadable(openLoop(loop, -1))
+    expectReadable(openLoop(loop, 161))
   })
 })
 

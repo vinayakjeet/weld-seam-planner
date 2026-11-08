@@ -2,7 +2,7 @@ import type { StateCreator } from 'zustand'
 import type { JointType } from '../core/seams/classify'
 import { DEFAULT_WELD_TOLERANCE } from '../core/mesh/weld'
 import { DEFAULT_DETECT_SETTINGS, type DetectSettings, type SeamCandidate } from '../core/seams/detect'
-import { isManualError, mergeSeams, reverseSeam, splitSeam, trimSeam, type ManualError } from '../core/seams/manual'
+import { isManualError, mergeSeams, openLoop, reverseSeam, splitSeam, trimSeam, type ManualError } from '../core/seams/manual'
 import { replaceInOrder } from '../core/sequence/order'
 import { selectAllSeams, visibleSeams, type ShowHidden } from './selectors'
 import type { AppState } from './store'
@@ -260,9 +260,10 @@ export const createSeamsSlice: StateCreator<AppState, [], [], SeamsSlice> = (set
   splitAt: (id, at) => {
     const seam = locate(get(), id)
     if (!seam) return unknownSeam(id)
-    const result = splitSeam(seam, at)
+    // One cut opens a loop; a second cut on the open seam divides it.
+    const result = seam.closed ? openLoop(seam, at) : splitSeam(seam, at)
     if (isManualError(result)) return result
-    set((state) => replaceSeams(state, [seam], result))
+    set((state) => replaceSeams(state, [seam], Array.isArray(result) ? result : [result]))
     return null
   },
 

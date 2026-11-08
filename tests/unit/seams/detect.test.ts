@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { buildMeshModel } from '../../../src/core/mesh/model'
 import { parseStl } from '../../../src/core/mesh/parseStl'
 import { buildBodyBvhs } from '../../../src/core/seams/bodyBvh'
+import { angleBetweenQuat } from '../../../src/core/math/quat'
+import { DEFAULT_TORCH, torchPoses } from '../../../src/core/torch/frames'
 import { DEFAULT_DETECT_SETTINGS, detectSeams, dropDuplicateSeams, type SeamCandidate } from '../../../src/core/seams/detect'
 import { loadSampleModel, loadSoup, transformSoup } from '../helpers/models'
 import { readManifest, readSample } from '../helpers/samples'
-import { cubeTriangles, extrude, mergedL, narrowFlangeT, soupOf, steppedLap } from '../helpers/shapes'
+import { boxTube, cubeTriangles, extrude, mergedL, narrowFlangeT, soupOf, steppedLap } from '../helpers/shapes'
 import { shown } from '../helpers/state'
 
 // Corner candidates are detected but hidden, so everything below counts the visible seams unless it says "all".
@@ -389,18 +391,19 @@ describe('joint classification', () => {
     expect(seams.map((s) => [s.source, s.jointType])).toEqual([['contact', 'fillet'], ['contact', 'fillet']])
   })
 
+  // 300 mm long, so its foot is not compact enough to be welded all round and each side is read on its own.
   it('reads a block with a 0.5 mm chamfer at its foot on a plate as fillets: the chamfer is an edge, not a lapping strip', () => {
-    const plate = cubeTriangles([-20, -20, 0], [140, 100, 10])
+    const plate = cubeTriangles([-20, -20, 0], [340, 100, 10])
     const block = extrude(
       [[0.5, 10], [59.5, 10], [60, 10.5], [60, 50], [0, 50], [0, 10.5]],
       [[0, 1, 2], [0, 2, 3], [0, 3, 4], [0, 4, 5]],
-      100,
+      300,
       (y, z, x) => [x, y, z],
     )
     const seams = shown(detectSeams(buildMeshModel(soupOf([...plate, ...block]), 1), DEFAULT_DETECT_SETTINGS))
     // Two long sides along the chamfers and the two block ends.
     const contact = seams.filter((s) => s.source === 'contact')
-    expect(contact.map((s) => Math.round(s.lengthMm)).sort()).toEqual([100, 100, 59, 59].sort())
+    expect(contact.map((s) => Math.round(s.lengthMm)).sort()).toEqual([300, 300, 59, 59].sort())
     for (const seam of contact) expect(seam.jointType, `${seam.label} ${seam.lengthMm.toFixed(1)} mm`).toBe('fillet')
   })
 
@@ -517,6 +520,43 @@ describe('corner candidates', () => {
     ])
     const all = detectSeams(buildMeshModel(sheet, 1), DEFAULT_DETECT_SETTINGS)
     expect(all.filter((s) => s.hidden === 'corner')).toHaveLength(0)
+  })
+})
+
+describe('weld all around', () => {
+  // A 1 in tube with a 1/8 in wall butting the side of another at x 287.3: its top and bottom are flush with the rail.
+  const rail = boxTube(25.4, 25.4, 3.18, 600, (u, v, w) => [w, u, v])
+  const rung = boxTube(25.4, 25.4, 3.18, 249.2, (u, v, w) => [287.3 + u, 25.4 + w, v])
+  const all = detectSeams(buildMeshModel(soupOf([...rail, ...rung]), 1), DEFAULT_DETECT_SETTINGS)
+  const loop = shown(all).find((s) => s.source === 'contact')!
+
+  it('offers the four sides of the tube end as one closed fillet of 101.6 mm, above 0.80', () => {
+    expect(shown(all).map((s) => [s.source, s.jointType, s.closed])).toEqual([['contact', 'fillet', true]])
+    expect(loop.lengthMm).toBeCloseTo(101.6, 2)
+    expect(loop.openingAngleDeg).toBeCloseTo(90, 1)
+    expect(loop.confidence).toBeGreaterThanOrEqual(0.8)
+  })
+
+  it('hides the loop round the bore and the inside corners of both tubes as hollow', () => {
+    const hollow = all.filter((s) => s.hidden === 'hollow')
+    expect(hollow.filter((s) => s.source === 'contact').map((s) => [s.closed, Math.round(s.lengthMm * 100) / 100])).toEqual([[true, 76.16]])
+    expect(hollow.filter((s) => s.source === 'crease')).toHaveLength(8)
+  })
+
+  it('keeps the four corners of the tube end on the seam', () => {
+    for (const [x, z] of [[287.3, 0], [312.7, 0], [312.7, 25.4], [287.3, 25.4]]) {
+      const nearest = Math.min(...loop.points.map(({ p }) => Math.hypot(p[0] - x!, p[1] - 25.4, p[2] - z!)))
+      expect(nearest, `${x} ${z}`).toBeLessThan(1e-3)
+    }
+  })
+
+  it('blends the torch at the four corners instead of turning on the spot', () => {
+    const steps = (blendMm: number) => {
+      const poses = torchPoses(loop.points, true, { ...DEFAULT_TORCH, cornerBlendMm: blendMm })
+      return poses.map((pose, i) => angleBetweenQuat(pose.q, poses[(i + 1) % poses.length]!.q))
+    }
+    expect(steps(0).filter((deg) => deg > 10)).toHaveLength(4)
+    expect(Math.max(...steps(DEFAULT_TORCH.cornerBlendMm))).toBeLessThan(Math.max(...steps(0)) / 2)
   })
 })
 

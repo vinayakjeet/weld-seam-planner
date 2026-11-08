@@ -18,22 +18,52 @@ export interface ContactEdges {
   edgeIds: Uint32Array
   // Global triangle of the adjacent face that does not lie on the touched body.
   freeFace: Int32Array
-  // Surface normal of the touched body at the edge midpoint, 3 per edge.
+  // Surface normal of the touched body at the edge midpoint, or a little way under the contact face where the midpoint
+  // lies on an edge of that body; 3 per edge.
   touchedNormal: Float32Array
   touchedBody: Uint32Array
 }
 
-const EMPTY: ContactEdges = {
+export interface ContactResult extends ContactEdges {
+  // Edges that pass every test but the overhang one: the touched body ends at the edge, flush with it. Not a fillet
+  // on its own, but it can close a weld all around the end of a member.
+  flush: ContactEdges
+}
+
+const NONE: ContactEdges = {
   edgeIds: new Uint32Array(0),
   freeFace: new Int32Array(0),
   touchedNormal: new Float32Array(0),
   touchedBody: new Uint32Array(0),
 }
 
+class EdgeList {
+  edgeIds: number[] = []
+  freeFace: number[] = []
+  touchedNormal: number[] = []
+  touchedBody: number[] = []
+
+  push(edge: number, free: number, touched: number[], body: number) {
+    this.edgeIds.push(edge)
+    this.freeFace.push(free)
+    this.touchedNormal.push(...touched)
+    this.touchedBody.push(body)
+  }
+
+  build(): ContactEdges {
+    return {
+      edgeIds: Uint32Array.from(this.edgeIds),
+      freeFace: Int32Array.from(this.freeFace),
+      touchedNormal: Float32Array.from(this.touchedNormal),
+      touchedBody: Uint32Array.from(this.touchedBody),
+    }
+  }
+}
+
 // Convex crease edges of one body that lie on another body, with one adjacent face flat on it. An edge whose
-// touched body ends at the edge (flush or overhanging) is not a fillet and is dropped, see the overhang test below.
-export function findContactEdges(model: MeshModel, faces: FaceData, bvhs: BodyBvh[], creaseAngleDeg: number): ContactEdges {
-  if (bvhs.length < 2) return EMPTY
+// touched body ends at the edge (flush or overhanging) is not a fillet; it is returned apart, see the overhang test.
+export function findContactEdges(model: MeshModel, faces: FaceData, bvhs: BodyBvh[], creaseAngleDeg: number): ContactResult {
+  if (bvhs.length < 2) return { ...NONE, flush: NONE }
   const { edges, mesh, bounds, bodies } = model
   const { positions } = mesh
   const { normals, centroids } = faces
@@ -42,10 +72,8 @@ export function findContactEdges(model: MeshModel, faces: FaceData, bvhs: BodyBv
   const cosFlat = Math.cos(((180 - FLAT_DEG) * Math.PI) / 180)
   const epsilon = 1e-6 * bounds.diagonal
 
-  const edgeIds: number[] = []
-  const freeFace: number[] = []
-  const touchedNormal: number[] = []
-  const touchedBody: number[] = []
+  const found = new EdgeList()
+  const flush = new EdgeList()
 
   const hit: HitPointInfo = { point: new Vector3(), distance: 0, faceIndex: 0 }
   const probe = new Vector3()
@@ -68,6 +96,8 @@ export function findContactEdges(model: MeshModel, faces: FaceData, bvhs: BodyBv
     if (outward >= -epsilon) continue
 
     const owner = bodies.triangleBody[fa]!
+    let flushOn: { body: number; free: number; touched: number[] } | null = null
+    let fillet = false
     for (let body = 0; body < bvhs.length; body++) {
       if (body === owner) continue
       const target = bvhs[body]!
@@ -86,28 +116,49 @@ export function findContactEdges(model: MeshModel, faces: FaceData, bvhs: BodyBv
         return found !== null && found.distance <= tolerance
       }
       if (!near(p0) || !near(p1) || !near(mid)) continue
-
-      const touchedFace = target.triangles[hit.faceIndex]! * 3
-      const touched = [normals[touchedFace]!, normals[touchedFace + 1]!, normals[touchedFace + 2]!]
       onSurface.copy(hit.point)
-
-      // The adjacent face most nearly antiparallel to the touched surface is the contact face.
-      const alignment = (n: number[]) => n[0]! * touched[0]! + n[1]! * touched[1]! + n[2]! * touched[2]!
-      const aligned = alignment(nA) <= alignment(nB) ? fa : fb
-      if (Math.min(alignment(nA), alignment(nB)) > cosFlat) continue
-
+      const normalOfHit = () => {
+        const touchedFace = target.triangles[hit.faceIndex]! * 3
+        return [normals[touchedFace]!, normals[touchedFace + 1]!, normals[touchedFace + 2]!]
+      }
+      const alignment = (n: readonly number[], touched: number[]) => n[0]! * touched[0]! + n[1]! * touched[1]! + n[2]! * touched[2]!
       const dir = [(p1[0]! - p0[0]!), (p1[1]! - p0[1]!), (p1[2]! - p0[2]!)]
       const dirLength = Math.hypot(dir[0]!, dir[1]!, dir[2]!)
       const along = dir.map((x) => x / dirLength)
-      const into = [0, 1, 2].map((c) => centroids[aligned * 3 + c]! - mid[c]!)
-      const alongPart = into[0]! * along[0]! + into[1]! * along[1]! + into[2]! * along[2]!
-      const away = [0, 1, 2].map((c) => -(into[c]! - alongPart * along[c]!))
+      // A little way into a face, short of the far side of its triangle, and the direction from there back away from it.
+      const intoFace = (face: number) => {
+        const into = [0, 1, 2].map((c) => centroids[face * 3 + c]! - mid[c]!)
+        const alongPart = into[0]! * along[0]! + into[1]! * along[1]! + into[2]! * along[2]!
+        const away = [0, 1, 2].map((c) => -(into[c]! - alongPart * along[c]!))
+        const depth = Math.hypot(away[0]!, away[1]!, away[2]!)
+        const inward = Math.min(OVERHANG_REACH * tolerance, 1.5 * depth) / depth
+        return { away, point: mid.map((x, c) => x - away[c]! * inward) }
+      }
 
-      // The contact face has to lie on B, not only face it: a little way into the face, short of the far side of its
-      // triangle, B must still be within tolerance. Blocks that touch edge to edge share only the line.
-      const depth = Math.hypot(away[0]!, away[1]!, away[2]!)
-      const inward = Math.min(OVERHANG_REACH * tolerance, 1.5 * depth) / depth
-      if (!near(mid.map((x, c) => x - away[c]! * inward))) continue
+      // The adjacent face most nearly antiparallel to the touched surface is the contact face. It has to lie on B, not
+      // only face it: a little way into the face B must still be within tolerance. Blocks that touch edge to edge share
+      // only the line.
+      let contactFace: { face: number; touched: number[]; away: number[] } | null = null
+      const midTouched = normalOfHit()
+      const best = alignment(nA, midTouched) <= alignment(nB, midTouched) ? fa : fb
+      if (Math.min(alignment(nA, midTouched), alignment(nB, midTouched)) <= cosFlat) {
+        const { away, point } = intoFace(best)
+        if (near(point)) contactFace = { face: best, touched: midTouched, away }
+      } else {
+        // Where the edge lies on an edge of B, as the flush side of a tube end butting a tube of the same size does, the
+        // surface nearest its midpoint can be the wrong face of B. Inside each face it is one face.
+        let closest = cosFlat
+        for (const [face, n] of [[fa, nA], [fb, nB]] as const) {
+          const { away, point } = intoFace(face)
+          if (!near(point)) continue
+          const touched = normalOfHit()
+          if (alignment(n, touched) > closest) continue
+          closest = alignment(n, touched)
+          contactFace = { face, touched, away }
+        }
+      }
+      if (!contactFace) continue
+      const { face: aligned, touched, away } = contactFace
 
       // Step from the edge across the touched surface, away from the contact face: if B ends there, this is a
       // flush or overhanging edge (a groove or corner weld), not a fillet.
@@ -121,20 +172,17 @@ export function findContactEdges(model: MeshModel, faces: FaceData, bvhs: BodyBv
         onSurface.z + (step[2]! / stepLength) * OVERHANG_REACH * tolerance,
       )
       const beside = target.bvh.closestPointToPoint(probe, hit, 0, tolerance)
-      if (beside === null || beside.distance > tolerance) continue
+      if (beside === null || beside.distance > tolerance) {
+        flushOn ??= { body, free: aligned === fa ? fb : fa, touched }
+        continue
+      }
 
-      edgeIds.push(e)
-      freeFace.push(aligned === fa ? fb : fa)
-      touchedNormal.push(...touched)
-      touchedBody.push(body)
+      found.push(e, aligned === fa ? fb : fa, touched, body)
+      fillet = true
       break
     }
+    if (!fillet && flushOn) flush.push(e, flushOn.free, flushOn.touched, flushOn.body)
   }
 
-  return {
-    edgeIds: Uint32Array.from(edgeIds),
-    freeFace: Int32Array.from(freeFace),
-    touchedNormal: Float32Array.from(touchedNormal),
-    touchedBody: Uint32Array.from(touchedBody),
-  }
+  return { ...found.build(), flush: flush.build() }
 }

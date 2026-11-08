@@ -64,9 +64,9 @@ function derive(seam: SeamCandidate, over: Partial<SeamCandidate> & Pick<SeamCan
 export function splitSeam(seam: SeamCandidate, s: number): [SeamCandidate, SeamCandidate] | ManualError {
   if (seam.closed) {
     return {
-      what: `Seam ${seam.label} cannot be split.`,
-      why: 'It is a closed loop, so it has no ends to measure the split point from.',
-      next: 'Delete the loop and draw it again as two open seams.',
+      what: `Seam ${seam.label} cannot be split in two at one point.`,
+      why: 'It is a closed loop, so one cut leaves a single seam with both ends at the cut.',
+      next: 'Open the loop with one cut first, then cut the open seam where it should divide.',
     }
   }
   if (!(s >= MIN_END_MM && s <= seam.lengthMm - MIN_END_MM)) {
@@ -80,6 +80,33 @@ export function splitSeam(seam: SeamCandidate, s: number): [SeamCandidate, SeamC
     derive(seam, { id: `${seam.id}/a`, label: `${seam.label}a`, points: slice(seam.points, 0, s) }),
     derive(seam, { id: `${seam.id}/b`, label: `${seam.label}b`, points: slice(seam.points, s, seam.lengthMm) }),
   ]
+}
+
+// A closed loop cut at s: one open seam that starts and ends at the cut and runs the whole way round, keeping every
+// sample of the loop. The arc length is measured from the cut.
+export function openLoop(seam: SeamCandidate, s: number): SeamCandidate | ManualError {
+  if (!seam.closed) {
+    return {
+      what: `Seam ${seam.label} is not a loop to open.`,
+      why: 'It already has two ends.',
+      next: 'Split it instead to divide it in two.',
+    }
+  }
+  if (!(s >= 0 && s <= seam.lengthMm)) {
+    return {
+      what: `Seam ${seam.label} was not opened.`,
+      why: `The cut at ${mm(s)} is not on the loop, which is ${mm(seam.lengthMm)} long.`,
+      next: 'Put the cut on the loop.',
+    }
+  }
+  const total = seam.lengthMm
+  // The loop's first sample again at the end, so that the closing stretch can be cut and interpolated like any other.
+  const ring = [...seam.points, { ...seam.points[0]!, s: total }]
+  const cut = s >= total - SAME_POINT_MM ? 0 : s
+  const before = slice(ring, cut, total)
+  const after = cut <= SAME_POINT_MM ? [] : slice(ring, 0, cut).slice(1)
+  const points = [...before, ...after.map((pt) => ({ ...pt, s: pt.s + total - cut }))]
+  return derive(seam, { id: `${seam.id}/o`, label: seam.label, points, closed: false })
 }
 
 export function trimSeam(seam: SeamCandidate, startMm: number, endMm: number): SeamCandidate | ManualError {

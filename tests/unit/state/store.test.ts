@@ -317,6 +317,16 @@ describe('manual seam operations', () => {
     expect(ids()).toEqual(['a/a', 'a/b', 'b', 'c'])
   })
 
+  it('opens a closed seam at the cut, so the user can split an all-around loop, and a second cut divides it', () => {
+    const { points, lengthMm } = pointsFromPolyline([[0, 0, 0], [25.4, 0, 0], [25.4, 25.4, 0], [0, 25.4, 0]], true, () => [[0, 1, 0], [0, 0, 1]])
+    useStore.setState({ seams: [seam('ring', 0.9, lengthMm, { points, closed: true, source: 'contact' })], statusById: { ring: 'accepted' } })
+    expect(state().splitAt('ring', 30)).toBeNull()
+    expect(selectAllSeams(state()).map((s) => [s.id, s.closed, Math.round(s.lengthMm * 10) / 10])).toEqual([['ring/o', false, 101.6]])
+    expect(state().statusById['ring/o']).toBe('accepted')
+    expect(state().splitAt('ring/o', 50.8)).toBeNull()
+    expect(selectAllSeams(state()).map((s) => Math.round(s.lengthMm * 10) / 10)).toEqual([50.8, 50.8])
+  })
+
   it('keeps an edited seam where it was: children of a detected seam take its row, later edits keep the row', () => {
     state().splitAt('b', 50)
     expect(ids()).toEqual(['a', 'b/a', 'b/b', 'c'])

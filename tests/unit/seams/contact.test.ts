@@ -5,7 +5,7 @@ import { buildBodyBvhs } from '../../../src/core/seams/bodyBvh'
 import { contactTolerance, findContactEdges } from '../../../src/core/seams/contact'
 import { Vector3 } from 'three'
 import { loadSampleModel, transformSoup } from '../helpers/models'
-import { cubeTriangles, soupOf } from '../helpers/shapes'
+import { boxTube, cubeTriangles, soupOf } from '../helpers/shapes'
 
 const CREASE_DEG = 30
 
@@ -117,6 +117,37 @@ describe('findContactEdges', () => {
     const model = buildMeshModel(turned, 1)
     expect(model.bodies.count).toBe(2)
     expect(findContactEdges(model, computeFaceData(model.mesh), buildBodyBvhs(model), CREASE_DEG).edgeIds).toHaveLength(0)
+  })
+})
+
+describe('flush contact edges', () => {
+  const flushOf = (...solids: number[][][]) => {
+    const model = buildMeshModel(soupOf(solids.flat()), 1)
+    const found = findContactEdges(model, computeFaceData(model.mesh), buildBodyBvhs(model), CREASE_DEG)
+    const lengths = (ids: Uint32Array) =>
+      Array.from(ids, (id) => {
+        const [a, b] = [model.edges.edgeA[id]! * 3, model.edges.edgeB[id]! * 3]
+        const p = model.mesh.positions
+        return Math.round(Math.hypot(p[a]! - p[b]!, p[a + 1]! - p[b + 1]!, p[a + 2]! - p[b + 2]!) * 100) / 100
+      }).sort((x, y) => x - y)
+    return { contact: lengths(found.edgeIds), flush: lengths(found.flush.edgeIds), touched: Array.from(found.flush.touchedNormal) }
+  }
+
+  it('reports the flush ends of a web on a plate apart from the contact edges', () => {
+    const { contact, flush } = flushOf(plate, webAt(-100, 100))
+    expect(contact).toEqual([200, 200])
+    expect(flush).toEqual([10, 10])
+  })
+
+  // A 1 in tube butting the side of another: its end is as tall as the other tube, so the top and bottom sides of the
+  // end lie on the far edges of the touched face. The closest face there could be the top of the other tube.
+  it('reads the side face, not the top, as the touched surface of the flush sides of a tube end butting a tube', () => {
+    const rail = boxTube(25.4, 25.4, 3.18, 600, (u, v, w) => [w, u, v])
+    const rung = boxTube(25.4, 25.4, 3.18, 249.2, (u, v, w) => [287.3 + u, 25.4 + w, v])
+    const { contact, flush, touched } = flushOf(rail, rung)
+    expect(contact).toEqual([19.04, 19.04, 19.04, 19.04, 25.4, 25.4])
+    expect(flush).toEqual([25.4, 25.4])
+    for (let k = 0; k < touched.length; k += 3) expect(touched.slice(k, k + 3)).toEqual([0, 1, 0])
   })
 })
 

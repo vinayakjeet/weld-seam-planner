@@ -67,3 +67,40 @@ describe('resamplePolyline', () => {
     expect(r.segment[r.p.length - 1]).toBe(3)
   })
 })
+
+describe('resamplePolyline with pinned corners', () => {
+  const square: Vec3[] = [[0, 0, 0], [25.4, 0, 0], [25.4, 25.4, 0], [0, 25.4, 0]]
+
+  it('keeps every vertex that turns more than the given angle as a sample, sides evenly spaced on their own', () => {
+    const r = resamplePolyline(square, true, 2, 40)
+    for (const corner of square) expect(r.p.some((p) => p.every((x, c) => x === corner[c]))).toBe(true)
+    expect(r.length).toBeCloseTo(101.6, 9)
+    for (const side of [0, 1, 2, 3]) expect(r.s.some((s) => Math.abs(s - 25.4 * side) < 1e-9), String(side)).toBe(true)
+    const gaps = r.s.map((s, i) => (i + 1 < r.s.length ? r.s[i + 1]! : r.length) - s)
+    for (const gap of gaps) {
+      expect(gap).toBeGreaterThan(0)
+      expect(gap).toBeLessThanOrEqual(2 + 1e-9)
+    }
+  })
+
+  it('puts each corner sample on the side that leaves it', () => {
+    const r = resamplePolyline(square, true, 2, 40)
+    const at = (arc: number) => r.segment[r.s.findIndex((s) => Math.abs(s - arc) < 1e-9)]
+    expect([0, 1, 2, 3].map((side) => at(25.4 * side))).toEqual([0, 1, 2, 3])
+  })
+
+  it('leaves a polyline without such a turn exactly as before', () => {
+    const arc: Vec3[] = Array.from({ length: 9 }, (_, i) => [100 * Math.cos(i / 10), 100 * Math.sin(i / 10), 0])
+    expect(resamplePolyline(arc, false, 2, 40)).toEqual(resamplePolyline(arc, false))
+    expect(resamplePolyline(square, true, 2, 120)).toEqual(resamplePolyline(square, true))
+  })
+
+  it('pins an inside vertex of an open polyline but never needs to pin its ends', () => {
+    const l: Vec3[] = [[0, 0, 0], [10.3, 0, 0], [10.3, 7.1, 0]]
+    const r = resamplePolyline(l, false, 2, 40)
+    expect(r.p[0]).toEqual([0, 0, 0])
+    expect(r.p[r.p.length - 1]).toEqual([10.3, 7.1, 0])
+    expect(r.s.some((s) => Math.abs(s - 10.3) < 1e-6)).toBe(true)
+  })
+})
+

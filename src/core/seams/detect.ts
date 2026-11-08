@@ -4,6 +4,7 @@ import { computeFaceData, type FaceData } from '../mesh/faces'
 import { LARGE_PART_TRIANGLES } from '../mesh/health'
 import type { MeshModel } from '../mesh/model'
 import type { PlateThickness } from '../process/filletRules'
+import { allAroundLoops, withFlush } from './allAround'
 import { buildBodyBvhs, insideByParity, wholeBvhFor, type BodyBvh } from './bodyBvh'
 import { chainEdges, edgeEnds, type Chain } from './chain'
 import { acrossFace, classifyJoint, isLap, meetsSecondPlate, patchWidth, thicknessBehind, type JointType } from './classify'
@@ -108,7 +109,11 @@ export function detectSeams(model: MeshModel, settings: DetectSettings, context:
   }
 
   const creases = extractCreaseEdges(model, faces, settings.creaseAngleDeg)
-  const contact = bvhs.length > 1 ? findContactEdges(model, faces, bvhs, settings.creaseAngleDeg) : null
+  const contact = bvhs.length > 1 ? withFlush(findContactEdges(model, faces, bvhs, settings.creaseAngleDeg)) : null
+  const loops = contact ? allAroundLoops(model, faces, contact.edges, contact.flushFrom, TURN_BREAK_DEG) : []
+  // A convex edge that is part of a contact seam is already listed as one, so it is not a corner as well.
+  const taken = new Set(contact?.edges.edgeIds.subarray(0, contact.flushFrom))
+  for (const loop of loops) for (const k of loop.edges) taken.add(contact!.edges.edgeIds[k]!)
 
   const found: RawSeam[] = seamsFromEdges('crease', creases, model, faces, minLength, {
     thicknessOf,
@@ -122,12 +127,12 @@ export function detectSeams(model: MeshModel, settings: DetectSettings, context:
     },
   })
   if (model.mesh.triangleCount <= (context.maxCornerTriangles ?? LARGE_PART_TRIANGLES)) {
-    found.push(...cornerSeams(model, faces, creases, contact, minLength, rayProbe, depthMm, thicknessOf))
+    found.push(...cornerSeams(model, faces, creases, taken, minLength, rayProbe, depthMm, thicknessOf))
   }
   found.push(...nonManifoldSeams(model, faces, settings, minLength, bvhOf, thicknessOf))
 
   if (contact) {
-    const touching = contactSeams(model, faces, contact, minLength, strips, thicknessOf, hollowProbe, depthMm)
+    const touching = contactSeams(model, faces, contact.edges, contact.flushFrom, loops, minLength, strips, thicknessOf, hollowProbe, depthMm)
     found.push(...dropDuplicateSeams(touching, contactTolerance(model.bounds.diagonal)), ...intersectionSeams(model, bvhs, minLength, thicknessOf))
   }
 
@@ -160,14 +165,12 @@ function cornerSeams(
   model: MeshModel,
   faces: FaceData,
   creases: CreaseResult,
-  contact: ContactEdges | null,
+  taken: Set<number>,
   minLength: number,
   rayProbe: () => RayProbe | null,
   depthMm: number,
   thicknessOf: ThicknessOf,
 ): RawSeam[] {
-  // A convex edge that is a contact seam is already listed as one, so it is not a corner as well.
-  const taken = new Set(contact?.edgeIds)
   const outside = creases.convex.edgeIds.filter((e) => !taken.has(e))
   if (outside.length === 0) return []
   const probe = rayProbe()
@@ -229,11 +232,15 @@ function segmentDistance(p: Vec3, a: Vec3, b: Vec3): number {
 }
 
 // The plate normals of a contact seam are the free face of the touching body and the surface it touches, so the
-// opening angle is measured between those two, not between the two faces of the touching body's own edge.
+// opening angle is measured between those two, not between the two faces of the touching body's own edge. The loops
+// all round a member end come first, as they are; the other contact edges are chained as usual and flush edges outside
+// a loop are no seam. Edge numbers index contact, whose entries from flushFrom on are flush.
 function contactSeams(
   model: MeshModel,
   faces: FaceData,
   contact: ContactEdges,
+  flushFrom: number,
+  loops: Chain[],
   minLength: number,
   strips: StripProbe,
   thicknessOf: ThicknessOf,
@@ -253,7 +260,14 @@ function contactSeams(
     return (Math.acos(Math.max(-1, Math.min(1, cos))) * 180) / Math.PI
   })
   const unknown = new Uint8Array(contact.edgeIds.length)
-  return seamsFromEdges('contact', { edgeIds: contact.edgeIds, dihedralDeg, unknown }, model, faces, minLength, {
+  const inLoop = new Set(loops.flatMap((loop) => loop.edges))
+  const rest = Array.from({ length: flushFrom }, (_, k) => k).filter((k) => !inLoop.has(k))
+  const restIds = Uint32Array.from(rest, (k) => contact.edgeIds[k]!)
+  const chains = [
+    ...loops,
+    ...chainEdges(model.mesh.positions, edgeEnds(model.edges, restIds), TURN_BREAK_DEG).map((chain) => ({ ...chain, edges: chain.edges.map((i) => rest[i]!) })),
+  ]
+  return seamsFromChains('contact', chains, { edgeIds: contact.edgeIds, dihedralDeg, unknown }, model, faces, minLength, {
     normalsOfEdge,
     thicknessOf,
     jointOf: (k, seam) => {
@@ -378,19 +392,25 @@ interface EdgeOptions {
 }
 
 // Chains the edges, drops chains under minLength and describes the rest. Edge numbers in the options index the edge list.
-function seamsFromEdges(
+function seamsFromEdges(source: SeamSource, edges: CreaseEdges, model: MeshModel, faces: FaceData, minLength: number, options: EdgeOptions): RawSeam[] {
+  const chains = chainEdges(model.mesh.positions, edgeEnds(model.edges, edges.edgeIds), TURN_BREAK_DEG)
+  return seamsFromChains(source, chains, edges, model, faces, minLength, options)
+}
+
+// Chain edges, and edge numbers in the options, index the edge list.
+function seamsFromChains(
   source: SeamSource,
+  chains: Chain[],
   edges: CreaseEdges,
   model: MeshModel,
   faces: FaceData,
   minLength: number,
   { normalsOfEdge, jointOf, thicknessOf, keep, hollow }: EdgeOptions,
 ): RawSeam[] {
-  const chains = chainEdges(model.mesh.positions, edgeEnds(model.edges, edges.edgeIds), TURN_BREAK_DEG)
   const seams: RawSeam[] = []
   for (const chain of chains) {
     const normalsOf: NormalsOf | undefined = normalsOfEdge && ((segment) => normalsOfEdge(chain.edges[segment]!))
-    const { points, lengthMm, surface = points } = buildSeamPoints(chain, edges.edgeIds, model, faces, normalsOf, { smooth: true })
+    const { points, lengthMm, surface = points } = buildSeamPoints(chain, edges.edgeIds, model, faces, normalsOf, { smooth: true, cornerDeg: TURN_BREAK_DEG })
     if (lengthMm < minLength) continue
     if (keep && !keep({ closed: chain.closed, points: surface })) continue
     const { openingAngleDeg, medianAdjacentAreaMm2 } = describeChain(chain, edges, model, faces)
