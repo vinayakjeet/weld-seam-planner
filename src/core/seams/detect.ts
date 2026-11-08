@@ -1,5 +1,5 @@
 import type { MeshBVH } from 'three-mesh-bvh'
-import { dot, length, normalize, sub, type Vec3 } from '../math/vec3'
+import { add, dot, length, normalize, scale, sub, type Vec3 } from '../math/vec3'
 import { computeFaceData, type FaceData } from '../mesh/faces'
 import { LARGE_PART_TRIANGLES } from '../mesh/health'
 import type { MeshModel } from '../mesh/model'
@@ -11,7 +11,7 @@ import { confidence } from './confidence'
 import { contactTolerance, findContactEdges, type ContactEdges } from './contact'
 import { extractCreaseEdges, type CreaseEdges, type CreaseResult } from './crease'
 import { buildSeamPoints, pointsFromPolyline, type NormalsOf, type SeamPoint } from './frames'
-import { creaseInHollow, type HollowProbe } from './hollow'
+import { contactInHollow, creaseInHollow, HOLLOW_STATIONS, type ContactStation, type HollowProbe } from './hollow'
 import { chainSegments, findIntersectionSegments } from './intersect'
 import { extractNonManifoldWedges, openBodies, type SolidTest } from './nonManifold'
 import { seamId } from './seamId'
@@ -116,8 +116,8 @@ export function detectSeams(model: MeshModel, settings: DetectSettings, context:
       const strip = strips.ofCrease(creases.edgeIds[edge]!)
       return { jointType: classifyJoint({ source: 'crease', ...seam, ...strip, convex: false }), strip }
     },
-    hollow: (edge, { surface, lengthMm }) => {
-      const probe = hollowProbe(model.bodies.triangleBody[model.edges.faceA[creases.edgeIds[edge]!]!]!)
+    hollow: (chain, { surface, lengthMm }) => {
+      const probe = hollowProbe(model.bodies.triangleBody[model.edges.faceA[creases.edgeIds[chain.edges[0]!]!]!]!)
       return probe !== null && creaseInHollow(surface, lengthMm, probe, depthMm)
     },
   })
@@ -127,7 +127,7 @@ export function detectSeams(model: MeshModel, settings: DetectSettings, context:
   found.push(...nonManifoldSeams(model, faces, settings, minLength, bvhOf, thicknessOf))
 
   if (contact) {
-    const touching = contactSeams(model, faces, contact, minLength, strips, thicknessOf)
+    const touching = contactSeams(model, faces, contact, minLength, strips, thicknessOf, hollowProbe, depthMm)
     found.push(...dropDuplicateSeams(touching, contactTolerance(model.bounds.diagonal)), ...intersectionSeams(model, bvhs, minLength, thicknessOf))
   }
 
@@ -237,6 +237,8 @@ function contactSeams(
   minLength: number,
   strips: StripProbe,
   thicknessOf: ThicknessOf,
+  hollowProbe: (body: number) => HollowProbe | null,
+  offsetMm: number,
 ): RawSeam[] {
   const normalsOfEdge = (k: number): [Vec3, Vec3] => {
     const free = contact.freeFace[k]! * 3
@@ -257,6 +259,23 @@ function contactSeams(
     jointOf: (k, seam) => {
       const strip = strips.ofContact(contact, k)
       return { jointType: classifyJoint({ source: 'contact', ...seam, ...strip, convex: false }), strip }
+    },
+    hollow: (chain) => {
+      const probe = hollowProbe(model.bodies.triangleBody[contact.freeFace[chain.edges[0]!]!]!)
+      if (probe === null) return false
+      const station = (k: number): ContactStation & { face: number } => {
+        const [free, touched] = normalsOfEdge(k)
+        const e = contact.edgeIds[k]!
+        const a = model.edges.edgeA[e]! * 3
+        const b = model.edges.edgeB[e]! * 3
+        const { positions } = model.mesh
+        const p: Vec3 = [positions[a]!, positions[a + 1]!, positions[a + 2]!]
+        const q: Vec3 = [positions[b]!, positions[b + 1]!, positions[b + 2]!]
+        return { p: scale(add(p, q), 0.5), t: normalize(sub(q, p)), free, touched, face: contact.freeFace[k]! }
+      }
+      const stations = HOLLOW_STATIONS.map((f) => station(chain.edges[Math.round(f * (chain.edges.length - 1))]!))
+      const deepEnough = (widestMm: number) => stations.every((s) => patchWidth(model, faces, s.face, s.p, s.t, widestMm) >= widestMm)
+      return contactInHollow(stations, deepEnough, probe, offsetMm)
     },
   })
 }
@@ -354,9 +373,8 @@ interface EdgeOptions {
   jointOf?: (edge: number, seam: { closed: boolean; points: SeamPoint[] }) => JointInfo
   // Whether a chain that is long enough is a seam at all. Every chain is when absent.
   keep?: (seam: { closed: boolean; points: SeamPoint[] }) => boolean
-  // Whether the seam lies inside a hollow section, decided from its middle entry of the edge list and the samples on
-  // the mesh edges. Never when absent.
-  hollow?: (edge: number, seam: { surface: SeamPoint[]; lengthMm: number }) => boolean
+  // Whether the seam lies inside a hollow section, from its chain and the samples on the mesh edges. Never when absent.
+  hollow?: (chain: Chain, seam: { surface: SeamPoint[]; lengthMm: number }) => boolean
 }
 
 // Chains the edges, drops chains under minLength and describes the rest. Edge numbers in the options index the edge list.
@@ -383,7 +401,7 @@ function seamsFromEdges(
       source,
       concavity: chain.edges.some((i) => edges.unknown[i] === 1) ? 'unknown' : 'known',
       jointType,
-      hidden: jointType === 'corner' ? 'corner' : hollow?.(middle, { surface, lengthMm }) ? 'hollow' : false,
+      hidden: jointType === 'corner' ? 'corner' : hollow?.(chain, { surface, lengthMm }) ? 'hollow' : false,
       confidence: confidence({
         lengthMm,
         openingDeg: openingAngleDeg,

@@ -525,11 +525,11 @@ describe('seams inside hollow sections', () => {
   // wide or open inside, so none of their seams is hidden as hollow.
   const HOLLOW: Record<string, number> = {}
 
-  it('finds the hollow seams each sample has, as fillet creases kept out of the visible counts', () => {
+  it('finds the hollow seams each sample has, as fillets kept out of the visible counts', () => {
     for (const { id } of readManifest().samples) {
       const hollow = detectAll(id).filter((s) => s.hidden === 'hollow')
       expect(hollow.length, id).toBe(HOLLOW[id] ?? 0)
-      for (const seam of hollow) expect([seam.source, seam.jointType], id).toEqual(['crease', 'fillet'])
+      for (const seam of hollow) expect(['crease', 'contact'].includes(seam.source) && seam.jointType === 'fillet', `${id} ${seam.label}`).toBe(true)
     }
   })
 })

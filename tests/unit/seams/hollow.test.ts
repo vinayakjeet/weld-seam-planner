@@ -3,7 +3,7 @@ import { dot, type Vec3 } from '../../../src/core/math/vec3'
 import { buildMeshModel } from '../../../src/core/mesh/model'
 import { DEFAULT_DETECT_SETTINGS, detectSeams, type SeamCandidate } from '../../../src/core/seams/detect'
 import type { SeamPoint } from '../../../src/core/seams/frames'
-import { creaseInHollow, HOLLOW_SPAN_MM, type HollowProbe } from '../../../src/core/seams/hollow'
+import { contactInHollow, creaseInHollow, HOLLOW_SPAN_MM, type ContactStation, type HollowProbe } from '../../../src/core/seams/hollow'
 import type { Tri } from '../helpers/stl'
 import { boxTube, channel, cubeTriangles, soupOf } from '../helpers/shapes'
 
@@ -79,5 +79,63 @@ describe('creases inside a hollow section', () => {
     const inside = creases(detectTris([...channel(), ...cubeTriangles([-10, -10, 40], [620, 80, 6])]))
     expect(inside).toHaveLength(2)
     for (const seam of inside) expect(seam.hidden).toBe(false)
+  })
+})
+
+describe('contactInHollow', () => {
+  // The inside edge of a tube wall along x, standing on a surface facing +z: the wall's free face faces +y.
+  const stations: ContactStation[] = [{ p: [0, 0, 0], t: [1, 0, 0], free: [0, 1, 0], touched: [0, 0, 1] }]
+  const probe = (own: number, others: number | null = null): HollowProbe => ({ own: () => own, others: others === null ? null : () => others })
+  const deep = () => true
+
+  it('calls the inside of a member end hollow when every ray meets the member within the span and its bore is deep enough', () => {
+    expect(contactInHollow(stations, deep, probe(27), 0.05)).toBe(true)
+    expect(contactInHollow(stations, (widest) => widest <= 20, probe(27), 0.05)).toBe(false)
+  })
+
+  it('is not hollow when a ray runs past the span, leaves the part or meets another body first', () => {
+    expect(contactInHollow(stations, deep, probe(HOLLOW_SPAN_MM + 1), 0.05)).toBe(false)
+    expect(contactInHollow(stations, deep, probe(Infinity), 0.05)).toBe(false)
+    expect(contactInHollow(stations, deep, probe(27, 26), 0.05)).toBe(false)
+  })
+
+  it('fans the rays across the touched surface on the free side, from just off the edge', () => {
+    const rays: Array<{ origin: Vec3; dir: Vec3 }> = []
+    const own = (origin: Vec3, dir: Vec3) => {
+      rays.push({ origin, dir })
+      return 20
+    }
+    contactInHollow(stations, deep, { own, others: null }, 0.05)
+    expect(rays.length).toBeGreaterThanOrEqual(5)
+    for (const { origin, dir } of rays) {
+      expect(dot(dir, [0, 0, 1])).toBeCloseTo(0, 12)
+      expect(dot(dir, [0, 1, 0])).toBeGreaterThan(0.4)
+      expect(origin[1]).toBeCloseTo(0.05, 9)
+      expect(origin[2]).toBeCloseTo(0.05, 9)
+    }
+    expect(rays.some(({ dir }) => dir[0] > 0.5) && rays.some(({ dir }) => dir[0] < -0.5)).toBe(true)
+  })
+})
+
+describe('contact seams inside the end of a hollow member', () => {
+  const plate = cubeTriangles([-100, -100, 0], [200, 200, 10])
+  const standing = (height: number) => boxTube(25.4, 25.4, 3.18, height, (u, v, w) => [u - 12.7, v - 12.7, 10 + w])
+  const contact = (seams: SeamCandidate[]) => seams.filter((s) => s.source === 'contact')
+
+  it('hides the inside edges of an open tube end standing on a plate and keeps the outside ones', () => {
+    const seams = contact(detectTris([...plate, ...standing(300)]))
+    const inside = seams.filter((s) => Math.abs(s.lengthMm - 19.04) < 0.05)
+    const outside = seams.filter((s) => Math.abs(s.lengthMm - 25.4) < 0.05)
+    expect(inside).toHaveLength(4)
+    expect(outside).toHaveLength(4)
+    for (const seam of inside) expect(seam.hidden, seam.label).toBe('hollow')
+    for (const seam of outside) expect(seam.hidden, seam.label).toBe(false)
+  })
+
+  it('keeps the inside edges of a stub shallower than its bore is wide: the torch reaches in from the open end', () => {
+    const seams = contact(detectTris([...plate, ...standing(15)]))
+    const inside = seams.filter((s) => Math.abs(s.lengthMm - 19.04) < 0.05)
+    expect(inside).toHaveLength(4)
+    for (const seam of inside) expect(seam.hidden, seam.label).toBe(false)
   })
 })

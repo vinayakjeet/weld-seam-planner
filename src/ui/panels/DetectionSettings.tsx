@@ -93,7 +93,7 @@ export function DetectionSettings() {
         <label htmlFor="show-hollow" className="flex flex-col gap-0.5">
           <span className="text-ink-0">Show seams inside hollow sections</span>
           <span className="text-ink-2">
-            Inside corners of tubes and closed boxes under {HOLLOW_SPAN_MM} mm across. {hollowCount === 1 ? '1 found' : `${hollowCount} found`}; hidden because no torch fits inside, and never taken by Accept all.
+            Inside corners of tubes and closed boxes, and the inside edges of tube ends, under {HOLLOW_SPAN_MM} mm across. {hollowCount === 1 ? '1 found' : `${hollowCount} found`}; hidden because no torch fits inside, and never taken by Accept all.
           </span>
         </label>
       </div>
