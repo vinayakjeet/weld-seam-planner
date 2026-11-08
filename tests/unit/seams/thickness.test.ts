@@ -149,6 +149,27 @@ describe('seamThickness on a loop with corners', () => {
   })
 })
 
+describe('a plate reading under 1 mm', () => {
+  const corner: Vec3[] = [[0, 0, 0], [40, 0, 0]]
+  const { points } = pointsFromPolyline(corner, false, () => [[0, 0, 1], [0, 1, 0]])
+
+  it('is unknown in a seam: the ray met a sliver or an edge, not a plate', () => {
+    expect(seamThickness(points, () => 0.62)).toEqual([null, null])
+    expect(seamThickness(points, () => 0.999)).toEqual([null, null])
+    expect(seamThickness(points, () => 1)).toEqual([1, 1])
+  })
+
+  it('leaves the other stations to decide when only some read under 1 mm', () => {
+    const readings = [0.62, 3.18, 3.18, 3.18, 3.18, 3.18]
+    expect(seamThickness(points, () => readings.shift()!)).toEqual([3.18, 3.18])
+  })
+
+  it('is unknown at an outside corner too', () => {
+    const heel = [{ s: 0, p: [0, 0, 0] as Vec3, t: [1, 0, 0] as Vec3, n1: [0, 0, 1] as Vec3, n2: [0, 1, 0] as Vec3 }]
+    expect(cornerThickness(heel, () => 0.62, 0.05)).toEqual([null, null])
+  })
+})
+
 describe('seamThickness on a loop whose sides read differently', () => {
   it('measures the middle of every side, so a loop with flush sides still reads its one real side', () => {
     const square: Vec3[] = [[0, 0, 0], [40, 0, 0], [40, 40, 0], [0, 40, 0]]

@@ -2,7 +2,7 @@ import { Box3, DoubleSide, Ray, Vector3 } from 'three'
 import type { MeshBVH } from 'three-mesh-bvh'
 import { add, cross, dot, normalize, scale, sub, type Vec3 } from '../math/vec3'
 import type { PlateThickness } from '../process/filletRules'
-import { cornerFaces, thicknessBehind } from './classify'
+import { cornerFaces, MIN_PLATE_MM, thicknessBehind } from './classify'
 import type { SeamPoint } from './frames'
 
 // Distance from a point on a plate surface, along direction, through the material to where it leaves. Infinity on a miss.
@@ -100,7 +100,8 @@ export function seamThickness(points: SeamPoint[], probe: RayProbe, offsetMm = 1
       if (towardOther < 0) along = scale(along, -1)
       const origin: Vec3 = [p[0] + along[0] * offsetMm, p[1] + along[1] * offsetMm, p[2] + along[2] * offsetMm]
       const distance = probe(origin, scale(normal, -1))
-      if (Number.isFinite(distance) && distance > 0) found[k]!.push(distance)
+      // Under the thinnest plate the ray met a sliver or an edge; unknown is the honest answer, and pre-flight warns of it.
+      if (Number.isFinite(distance) && distance >= MIN_PLATE_MM) found[k]!.push(distance)
     })
   }
   const [a, b] = [median(found[0]), median(found[1])]
@@ -130,7 +131,7 @@ export function cornerThickness(points: SeamPoint[], probe: RayProbe, depthMm: n
   for (const fraction of SAMPLE_FRACTIONS) {
     const faces = cornerFaces(points[Math.round(fraction * (points.length - 1))]!, probe, depthMm)
     faces?.forEach(({ thicknessMm }, k) => {
-      if (Number.isFinite(thicknessMm) && thicknessMm > 0) found[k as 0 | 1].push(thicknessMm)
+      if (Number.isFinite(thicknessMm) && thicknessMm >= MIN_PLATE_MM) found[k as 0 | 1].push(thicknessMm)
     })
   }
   const [a, b] = [median(found[0]), median(found[1])]
